@@ -1,0 +1,88 @@
+{
+  "name": "agent-motion-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental local video storyboard and MP4 editor for people and AI agents",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "bin": {
+    "agent-motion-studio": "dist/cli.js"
+  },
+  "exports": {
+    ".": "./dist/spec.js"
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "assets/fonts",
+    "examples/*/manifest.json",
+    "examples/orbit-demo/project.json",
+    "examples/orbit-demo/PROVENANCE.md",
+    "examples/orbit-demo/LICENSE",
+    "examples/orbit-demo/README_RU.md",
+    "examples/orbit-demo/assets/*",
+    "examples/coffee-ritual/project.json",
+    "examples/coffee-ritual/assets/*",
+    "examples/coffee-ritual/CREDITS.md",
+    "examples/coffee-ritual/LICENSE.md",
+    "examples/coffee-ritual/provenance.json",
+    "examples/coffee-ritual/README.md",
+    "examples/repo-promo/assets/*",
+    "examples/product-ad/assets/*",
+    "examples/feature-explainer/assets/*",
+    "examples/kinetic-promo/assets/*",
+    "skills",
+    "docs/GETTING_STARTED.md",
+    "docs/MANIFEST.md",
+    "docs/SCENES.md",
+    "docs/AUDIO.md",
+    "docs/edge-requirements.txt",
+    "docs/STUDIO_RU.md",
+    "docs/media/coffee-contact.jpg",
+    "docs/media/CREDITS.md",
+    "docs/media/coffee-original.mp4",
+    "docs/media/coffee-changed.mp4",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "ROADMAP.md",
+    "SECURITY.md",
+    "docs/COMPATIBILITY.md",
+    "docs/RELEASING.md",
+    "docs/releases/v0.1.0.md"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "node --test tests/unit/*.test.mjs",
+    "doctor": "node dist/cli.js doctor --json",
+    "studio": "node dist/cli.js studio examples/coffee-ritual/project.json",
+    "studio:orbit": "node dist/cli.js studio examples/orbit-demo/project.json",
+    "demo:sources": "node scripts/create-orbit-sources.mjs",
+    "test:studio": "node --test tests/integration/studio.test.mjs",
+    "verify:studio": "node scripts/verify-studio.mjs",
+    "check:release": "node scripts/check-release.mjs",
+    "check": "npm run build && npm test && npm run check:release",
+    "test:integration": "node --test --test-concurrency=1 tests/integration/audio.test.mjs tests/integration/cache.test.mjs tests/integration/conflict.test.mjs tests/integration/kinetic.test.mjs tests/integration/preview.test.mjs tests/integration/renderer.test.mjs tests/integration/studio.test.mjs",
+    "test:edge": "node --test tests/integration/edge.test.mjs",
+    "test:windows": "node --test tests/integration/windows-cancellation.test.mjs",
+    "release:prepare": "node scripts/prepare-release.mjs",
+    "verify:package": "node scripts/verify-release-package.mjs"
+  },
+  "dependencies": {
+    "ajv": "8.20.0",
+    "image-size": "2.0.4",
+    "puppeteer-core": "25.12.0"
+  },
+  "devDependencies": {
+    "@fontsource/noto-sans": "5.2.6",
+    "@fontsource/oswald": "5.3.0",
+    "@types/node": "22.14.1",
+    "esbuild": "0.25.2",
+    "typescript": "5.8.3"
+  }
+}

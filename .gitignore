@@ -1,0 +1,48 @@
+# Dependencies, generated output and personal projects
+node_modules/
+/dist/
+/artifacts/
+.cache/
+/projects/
+/out/
+exports/
+*.tgz
+*.log
+*.edit-lock
+.render.lock
+.preview-*.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Local agent configuration and research copies are not part of this project.
+/.agents/
+/references/
+
+# Historical local briefs/reports refer to private paths and unshipped evidence.
+# Keep them on disk; publish the portable docs and release notes instead.
+/AGENT_TASK.md
+/AI_BUILD_BRIEF_RU.md
+/NEXT_ITERATION_BRIEF_RU.md
+/GENERATION_ITERATION_BRIEF_RU.md
+/PROJECT_STRATEGY_RU.md
+/IMPLEMENTATION_PLAN.md
+/docs/ACCEPTANCE.md
+/docs/VERIFICATION.md
+/docs/PROTOTYPE_*.md
+/docs/ITERATION_*.md
+/docs/STRATEGY_REVIEW_*.md
+/scripts/deliver-*.mjs
+/scripts/finalize-*.mjs
+/scripts/write-*-report.mjs
+/scripts/finish-studio-verification.mjs
+/scripts/record-agent-session.mjs
+/scripts/report-agent-session.mjs
+/scripts/run-acceptance-checks.mjs
+/scripts/verify-final-package.mjs

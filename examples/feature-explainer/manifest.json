@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1, "id": "feature-explainer", "seed": 11,
+  "video": { "aspectRatio": "9:16", "fps": 30, "style": "kinetic" },
+  "brand": { "theme": "dark", "background": "#111426", "foreground": "#F3F3F9", "accent": "#B5A1F8", "font": "builtin-sans" },
+  "assets": { "product": { "type": "image", "path": "./assets/timeline.png" }, "voice": { "type": "audio", "path": "./assets/voice.wav" } },
+  "audio": { "narration": { "provider": "file", "gainDb": -3 }, "music": { "provider": "procedural", "gainDb": -9 } },
+  "scenes": [
+    { "id": "hook", "type": "kinetic_title", "durationFrames": 75, "text": "Измени JSON.\nОбнови видео.", "highlight": "видео." },
+    { "id": "overview", "type": "product_zoom", "durationFrames": 90, "asset": "product", "caption": "Один manifest.\nТри типа сцен.", "fit": "contain" },
+    { "id": "product", "type": "product_zoom", "durationFrames": 180, "asset": "product", "caption": "Текст.\nИзображение.\nРезультат.", "fit": "cover", "focalPoint": { "x": 0.50, "y": 0.50 }, "narration": { "asset": "voice" }, "captions": [ { "startMs": 0, "endMs": 2500, "text": "Измените текст в JSON." }, { "startMs": 2500, "endMs": 5440, "text": "Движок соберёт новый ролик." } ] },
+    { "id": "cta", "type": "cta", "durationFrames": 105, "text": "Твоё видео.\nТвои правки.", "label": "Текст · Материалы · Длительность" }
+  ]
+}

@@ -1,0 +1,809 @@
+{
+  "schemaVersion": 2,
+  "id": "orbit-synthetic-study",
+  "seed": 7,
+  "revision": "f141ff01-d8b6-4a6a-b993-f118cd9714af",
+  "history": [
+    {
+      "id": "628f8779-258c-4841-b8cc-69352443e69b",
+      "label": "import jade.mp4",
+      "createdAt": "2026-10-05T16:43:33.463Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "Новый фильм",
+          "durationFrames": 120
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "31f60ae0-8d2d-4f22-8b53-a26c6d50a6b3",
+      "label": "import amber.mp4",
+      "createdAt": "2026-10-05T16:43:33.772Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "Новый фильм",
+          "durationFrames": 120
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "848beb65-747c-4b54-9b80-91829b19668c",
+      "label": "import field.mp4",
+      "createdAt": "2026-10-05T16:43:34.216Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "Новый фильм",
+          "durationFrames": 120
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "061c4fd8-fac5-4969-855d-3960257bb8b7",
+      "label": "import orbit.png",
+      "createdAt": "2026-10-05T16:43:34.953Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "Новый фильм",
+          "durationFrames": 120
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "37bc6dda-c019-46b7-b5e9-f6c9e9c95b8e",
+      "label": "import orbit-score.wav",
+      "createdAt": "2026-10-05T16:43:35.821Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "Новый фильм",
+          "durationFrames": 120
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "5d3dc245-57fb-4c8d-b4e2-d7ff38691428",
+      "label": "edit-scene",
+      "createdAt": "2026-10-05T16:43:37.137Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "Новый фильм",
+          "durationFrames": 120
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "86df70ec-4391-487d-afed-9aed10819e64",
+      "label": "add-scene",
+      "createdAt": "2026-10-05T16:43:38.072Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "8a778340-4746-4d9e-9fe0-9e7f01988bff",
+      "label": "edit-scene",
+      "createdAt": "2026-10-05T16:43:39.244Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 150,
+          "fit": "cover",
+          "trimStartSeconds": 0
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "a04edddc-681d-465b-9c24-d2ad39b1a2d3",
+      "label": "add-scene",
+      "createdAt": "2026-10-05T16:43:40.184Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "17993657-5b08-481e-a3b0-70ce8e1c8b99",
+      "label": "edit-scene",
+      "createdAt": "2026-10-05T16:43:41.474Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "id": "shot-03632681",
+          "type": "video",
+          "asset": "media-936dd1ed87117abd8d7157c3",
+          "durationFrames": 150,
+          "fit": "cover",
+          "trimStartSeconds": 0
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "10a5957b-7adc-4143-8c70-64c1b198cf80",
+      "label": "add-scene",
+      "createdAt": "2026-10-05T16:43:42.455Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "id": "shot-03632681",
+          "type": "video",
+          "asset": "media-936dd1ed87117abd8d7157c3",
+          "durationFrames": 180,
+          "fit": "cover",
+          "trimStartSeconds": 0.5,
+          "focalPoint": {
+            "x": 0.45,
+            "y": 0.42
+          }
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "21a35b7b-ada5-470c-aeae-087f53332072",
+      "label": "edit-scene",
+      "createdAt": "2026-10-05T16:43:43.493Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "id": "shot-03632681",
+          "type": "video",
+          "asset": "media-936dd1ed87117abd8d7157c3",
+          "durationFrames": 180,
+          "fit": "cover",
+          "trimStartSeconds": 0.5,
+          "focalPoint": {
+            "x": 0.45,
+            "y": 0.42
+          }
+        },
+        {
+          "id": "shot-08ae73ea",
+          "type": "product_zoom",
+          "asset": "media-ec61a81b37cc257b9cd1447e",
+          "durationFrames": 150,
+          "fit": "cover",
+          "caption": "Новый кадр"
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "57c0d8c8-372d-4601-8a1a-9f86b587021d",
+      "label": "music",
+      "createdAt": "2026-10-05T16:43:44.434Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "id": "shot-03632681",
+          "type": "video",
+          "asset": "media-936dd1ed87117abd8d7157c3",
+          "durationFrames": 180,
+          "fit": "cover",
+          "trimStartSeconds": 0.5,
+          "focalPoint": {
+            "x": 0.45,
+            "y": 0.42
+          }
+        },
+        {
+          "id": "shot-08ae73ea",
+          "type": "product_zoom",
+          "asset": "media-ec61a81b37cc257b9cd1447e",
+          "durationFrames": 120,
+          "fit": "cover",
+          "caption": "Свет\nобретает форму",
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "none"
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "d3115f1b-779e-4341-a202-bcb4a9464c53",
+      "label": "edit-scene",
+      "createdAt": "2026-10-05T16:44:42.319Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-0f5e210a855b6b76b853cb5b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "id": "shot-03632681",
+          "type": "video",
+          "asset": "media-936dd1ed87117abd8d7157c3",
+          "durationFrames": 180,
+          "fit": "cover",
+          "trimStartSeconds": 0.5,
+          "focalPoint": {
+            "x": 0.45,
+            "y": 0.42
+          }
+        },
+        {
+          "id": "shot-08ae73ea",
+          "type": "product_zoom",
+          "asset": "media-ec61a81b37cc257b9cd1447e",
+          "durationFrames": 120,
+          "fit": "cover",
+          "caption": "Свет\nобретает форму",
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "file",
+          "asset": "media-c01c70f221e3ff534b5ce8ee",
+          "gainDb": -8
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    },
+    {
+      "id": "e4f724e0-2976-4d4b-befc-7758cf844ec6",
+      "label": "restore-scene",
+      "createdAt": "2026-10-05T16:45:39.969Z",
+      "scenes": [
+        {
+          "id": "opening",
+          "type": "kinetic_title",
+          "text": "ORBIT\nLIGHT STUDY",
+          "durationFrames": 90
+        },
+        {
+          "id": "shot-74a9f6d7",
+          "type": "video",
+          "asset": "media-d250c7f2688250c637dead2b",
+          "durationFrames": 210,
+          "fit": "cover",
+          "trimStartSeconds": 1,
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        },
+        {
+          "id": "shot-03632681",
+          "type": "video",
+          "asset": "media-936dd1ed87117abd8d7157c3",
+          "durationFrames": 180,
+          "fit": "cover",
+          "trimStartSeconds": 0.5,
+          "focalPoint": {
+            "x": 0.45,
+            "y": 0.42
+          }
+        },
+        {
+          "id": "shot-08ae73ea",
+          "type": "product_zoom",
+          "asset": "media-ec61a81b37cc257b9cd1447e",
+          "durationFrames": 120,
+          "fit": "cover",
+          "caption": "Свет\nобретает форму",
+          "focalPoint": {
+            "x": 0.5,
+            "y": 0.5
+          }
+        }
+      ],
+      "video": {
+        "aspectRatio": "16:9",
+        "fps": 30,
+        "style": "kinetic"
+      },
+      "audio": {
+        "narration": {
+          "provider": "none"
+        },
+        "music": {
+          "provider": "file",
+          "asset": "media-c01c70f221e3ff534b5ce8ee",
+          "gainDb": -8
+        }
+      },
+      "brand": {
+        "theme": "dark",
+        "background": "#10171C",
+        "foreground": "#F4F1E9",
+        "accent": "#D9EE86",
+        "font": "builtin-sans"
+      }
+    }
+  ],
+  "video": {
+    "aspectRatio": "16:9",
+    "fps": 30,
+    "style": "kinetic"
+  },
+  "brand": {
+    "theme": "dark",
+    "background": "#10171C",
+    "foreground": "#F4F1E9",
+    "accent": "#D9EE86",
+    "font": "builtin-sans"
+  },
+  "assets": {
+    "media-0f5e210a855b6b76b853cb5b": {
+      "type": "video",
+      "path": "assets/0f5e210a855b6b76b853cb5b228b8ad45d9e9d43a44f75a724a89118107687cb.mp4",
+      "sha256": "0f5e210a855b6b76b853cb5b228b8ad45d9e9d43a44f75a724a89118107687cb",
+      "name": "jade.mp4"
+    },
+    "media-d250c7f2688250c637dead2b": {
+      "type": "video",
+      "path": "assets/d250c7f2688250c637dead2b2629650b34a29b0954c61141cc57a84647a56de2.mp4",
+      "sha256": "d250c7f2688250c637dead2b2629650b34a29b0954c61141cc57a84647a56de2",
+      "name": "amber.mp4"
+    },
+    "media-936dd1ed87117abd8d7157c3": {
+      "type": "video",
+      "path": "assets/936dd1ed87117abd8d7157c370d1764988c687bf4183c1031c92bd7362045e24.mp4",
+      "sha256": "936dd1ed87117abd8d7157c370d1764988c687bf4183c1031c92bd7362045e24",
+      "name": "field.mp4"
+    },
+    "media-ec61a81b37cc257b9cd1447e": {
+      "type": "image",
+      "path": "assets/ec61a81b37cc257b9cd1447e51be607bbe1e80a52f6e5a4d7f082b4701bf034c.png",
+      "sha256": "ec61a81b37cc257b9cd1447e51be607bbe1e80a52f6e5a4d7f082b4701bf034c",
+      "name": "orbit.png"
+    },
+    "media-c01c70f221e3ff534b5ce8ee": {
+      "type": "audio",
+      "path": "assets/c01c70f221e3ff534b5ce8eef32c93936a8f8f57185dbc4768dfbd5ae6a9ee76.wav",
+      "sha256": "c01c70f221e3ff534b5ce8eef32c93936a8f8f57185dbc4768dfbd5ae6a9ee76",
+      "name": "orbit-score.wav"
+    }
+  },
+  "audio": {
+    "narration": {
+      "provider": "none"
+    },
+    "music": {
+      "provider": "file",
+      "asset": "media-c01c70f221e3ff534b5ce8ee",
+      "gainDb": -8
+    }
+  },
+  "scenes": [
+    {
+      "id": "opening",
+      "type": "kinetic_title",
+      "text": "ORBIT\nLIGHT STUDY",
+      "durationFrames": 90
+    },
+    {
+      "id": "shot-74a9f6d7",
+      "type": "video",
+      "asset": "media-0f5e210a855b6b76b853cb5b",
+      "durationFrames": 210,
+      "fit": "cover",
+      "trimStartSeconds": 1,
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    {
+      "id": "shot-03632681",
+      "type": "video",
+      "asset": "media-936dd1ed87117abd8d7157c3",
+      "durationFrames": 180,
+      "fit": "cover",
+      "trimStartSeconds": 0.5,
+      "focalPoint": {
+        "x": 0.45,
+        "y": 0.42
+      }
+    },
+    {
+      "id": "shot-08ae73ea",
+      "type": "product_zoom",
+      "asset": "media-ec61a81b37cc257b9cd1447e",
+      "durationFrames": 120,
+      "fit": "cover",
+      "caption": "Свет\nобретает форму",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  ]
+}

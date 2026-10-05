@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1, "id": "product-ad", "seed": 3,
+  "video": { "aspectRatio": "16:9", "fps": 30, "style": "kinetic" },
+  "brand": { "theme": "light", "background": "#F6F4EF", "foreground": "#182630", "accent": "#276C59", "font": "builtin-sans" },
+  "assets": { "product": { "type": "image", "path": "./assets/planner.png" } },
+  "audio": { "narration": { "provider": "none" }, "music": { "provider": "procedural", "gainDb": -3 } },
+  "scenes": [
+    { "id": "hook", "type": "kinetic_title", "durationFrames": 75, "text": "Планы.\nБез шума.", "highlight": "шума." },
+    { "id": "product", "type": "product_zoom", "durationFrames": 90, "asset": "product", "caption": "Весь день.\nВ одном месте.", "fit": "contain" },
+    { "id": "workflow", "type": "kinetic_title", "durationFrames": 75, "text": "Сегодня.\nВ работе.\nГотово.", "highlight": "Готово." },
+    { "id": "detail", "type": "product_zoom", "durationFrames": 120, "asset": "product", "caption": "Одна задача.\nОдин фокус.", "fit": "cover", "focalPoint": { "x": 0.16, "y": 0.41 } },
+    { "id": "cta", "type": "cta", "durationFrames": 90, "text": "Начни\nс одного плана.", "label": "Твой спокойный рабочий день" }
+  ]
+}

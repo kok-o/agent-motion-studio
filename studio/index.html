@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Motion Studio</title><link rel="stylesheet" href="/style.css"></head>
+<body>
+<header><div class="identity"><span class="mark">am</span><div><strong>Agent Motion Studio</strong><small>Локальная монтажная студия · прототип</small></div></div><div class="actions"><button id="reload">Перечитать проект</button><button id="export" class="primary">Экспорт MP4 ↗</button></div></header>
+<main>
+  <div class="project-line"><div><span class="eyebrow">PROJECT / LOCAL</span><h1 id="project-title">Открываем проект…</h1></div><div id="stats" class="stats"></div></div>
+  <div id="notice" role="status" aria-live="polite">Откройте ссылку сессии из терминала.</div>
+  <div class="workspace">
+    <section class="cut">
+      <div class="panel player-panel"><div class="panel-heading"><span>Просмотр монтажа</span><span id="export-state" class="badge">Нет экспорта</span></div>
+        <div class="screen"><video id="player" controls playsinline preload="metadata"></video><div id="empty-player"><span class="orbit">◯</span><h2>Фильм начинается со сцены</h2><p>Импортируйте материалы, соберите раскадровку<br>и экспортируйте для просмотра полной композиции.</p></div></div>
+        <div class="player-footer"><label>Экспорт <select id="exports" aria-label="Выбрать экспорт"></select></label><a id="download" hidden download="film.mp4">Скачать MP4 ↓</a></div>
+      </div>
+      <div class="story-heading"><div><h2>Раскадровка</h2><p>Выберите сцену, чтобы изменить её или вернуть предыдущий дубль.</p></div><button id="add-title">+ Титр</button></div>
+      <div id="storyboard" class="storyboard"></div>
+      <section class="panel library"><div class="panel-heading"><div>Материалы <span class="muted">· копии сохраняются в проекте</span></div><label class="import-button" for="import">+ Импорт файлов<input id="import" type="file" accept=".mp4,.png,.jpg,.jpeg,.wav,.mp3,.m4a,.aac,.ogg,.flac" multiple></label></div>
+        <p class="muted">MP4, PNG/JPEG и аудио. Нажмите «В сцену» для добавления материала.</p><div id="library"></div>
+        <div class="music-controls"><label>Музыка<select id="music"></select></label><label>Уровень, dB<input id="gain" type="number" min="-60" max="0" value="-12"></label><button id="save-music">Применить музыку</button></div>
+        <p class="note">Звук исходных видеоклипов отключён. В экспорт входит выбранная музыкальная дорожка.</p>
+      </section>
+      <details class="panel history"><summary>История монтажа</summary><div id="history"></div></details>
+      <p id="project-path" class="path"></p>
+    </section>
+    <aside class="panel inspector"><div class="panel-heading"><span id="selection-title">Параметры сцены</span><span class="badge">30 fps</span></div>
+      <div id="source-preview"></div><p class="note">Исходник без правок. Чтобы увидеть обрезку, кадрирование и motion, соберите предпросмотр сцены ниже.</p>
+      <form id="scene-form"><label>Длительность, с<input id="duration" type="number" min="0.033333" max="60" step="any" required></label>
+        <div id="text-fields"><label>Текст<textarea id="scene-text" rows="3"></textarea></label><label id="highlight-field">Выделить слова (необязательно)<input id="scene-highlight"></label><label id="label-field">Подпись<input id="scene-label"></label></div>
+        <div id="asset-fields"><label>Выбранный исходник / дубль<select id="scene-asset"></select></label><label id="caption-field">Motion-титр<textarea id="scene-caption" rows="2"></textarea></label>
+          <label id="trim-field">Начало обрезки, с<input id="trim" type="number" min="0" step="any"></label>
+          <label>Кадрирование<select id="fit"><option value="cover">Заполнить кадр</option><option value="contain">Вписать целиком</option></select></label>
+          <div class="two"><label>Фокус X (0–1)<input id="focal-x" type="number" min="0" max="1" step="0.05"></label><label>Фокус Y (0–1)<input id="focal-y" type="number" min="0" max="1" step="0.05"></label></div>
+        </div>
+        <button type="submit" id="save-scene" class="primary wide">Сохранить сцену</button><p id="draft-status" class="note">Все изменения сохранены</p>
+      </form>
+      <button id="preview-scene" class="wide">Предпросмотр сцены</button><p id="preview-bounds" class="note"></p>
+      <video id="scene-preview" controls playsinline muted hidden></video><p id="preview-status" class="note">Только выбранная сцена, 1080p/30 fps, без звука. Проект не сохраняется. Это рендер сцены, не realtime.</p>
+      <button id="restore-scene" class="wide">Вернуть предыдущий вариант</button>
+      <div class="two scene-order"><button id="move-left">← Раньше</button><button id="move-right">Позже →</button></div><button id="remove-scene" class="quiet wide">Удалить сцену из монтажа</button>
+      <hr><label>Формат фильма<select id="aspect"><option value="16:9">16:9 · 1920 × 1080</option><option value="9:16">9:16 · 1080 × 1920</option></select></label><p class="note">Простые склейки. Исходники остаются доступными после правок и возврата версии.</p>
+    </aside>
+  </div>
+</main>
+<dialog id="conflict-dialog" aria-labelledby="conflict-title"><h2 id="conflict-title">Проект изменён извне</h2><p>Ваш черновик сохранён в этой вкладке. На диске остаётся внешняя версия. Выберите, как продолжить.</p><div id="conflict-details"></div><p id="conflict-note" class="note"></p><div class="conflict-actions"><button id="conflict-local" class="primary">Применить мои изменённые поля</button><button id="conflict-external">Принять внешнюю, отбросить черновик</button><button id="conflict-cancel">Вернуться к черновику</button></div></dialog>
+<script src="/app.js" type="module"></script>
+</body></html>

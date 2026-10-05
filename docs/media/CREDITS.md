@@ -1,0 +1,11 @@
+# DAILY RITUAL — footage and music credits
+
+Real camera footage: **Scott Schiller**, “Morning Espresso Routine: Progress, Results, Observations and Miscellany”. [Original on Flickr](https://www.flickr.com/photos/schill/14588642105/) · [Wikimedia Commons copy and license review](https://commons.wikimedia.org/wiki/File:Morning_Espresso_Routine_-_Progress,_Results,_Observations_and_Miscellany.webm). Verified 5 October 2026. The current Flickr license link points to **[Creative Commons Attribution-ShareAlike 2.0](https://creativecommons.org/licenses/by-sa/2.0/)**. Commons retains an earlier CC BY 2.0 record, reviewed on 30 April 2015. This distribution follows the current author's **CC BY-SA 2.0** terms for the footage derivatives, still and finished remix, including share-alike.
+
+Changes: selected 9-second excerpts starting at 28, 32 and 43 seconds; removed original audio; converted VP8/WebM to H.264/MP4 at 30 fps; cropped the detail shot to 1280×720 at (280,230) then scaled to 1920×1080; extracted a still at 48 seconds. The film adds motion typography, trims, cuts and a procedural music track. This is a remix, not the author's original film. No endorsement by the photographer or equipment brands is implied.
+
+Music: original procedural composition from Agent Motion Studio, distributed separately as `ritual-score.wav` (MIT). It is synthetic music; the espresso footage is real filming. The finished audiovisual remix, its edited footage/still and example composition are distributed under CC BY-SA 2.0. The application code and separate original music remain MIT. Sharing an adaptation of the finished film requires the same license and attribution.
+
+When sharing a rendered film, include this credit or equivalent links next to the video: **Footage: Scott Schiller, “Morning Espresso Routine”; excerpts, crop, titles and music added with Agent Motion Studio. Film remix: CC BY-SA 2.0.** Keep links to the original and license. When sharing the editable project, retain this file and `provenance.json`.
+
+Full source mapping, transformations and SHA-256 values are in `provenance.json`. This example demonstrates a remix of one filmed setup, not independent camera angles or generated footage. Its visual and musical appeal remains a human judgment.

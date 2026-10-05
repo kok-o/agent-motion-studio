@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 2,
+  "id": "daily-ritual",
+  "seed": 7,
+  "revision": "12461aa2-d02d-42fa-add7-a802b0087c9a",
+  "history": [],
+  "video": {
+    "aspectRatio": "16:9",
+    "fps": 30,
+    "style": "kinetic"
+  },
+  "brand": {
+    "theme": "dark",
+    "background": "#171411",
+    "foreground": "#F5EADD",
+    "accent": "#E7AA66",
+    "font": "builtin-sans"
+  },
+  "assets": {
+    "media-052fbf81e7340d7edff49391": {
+      "type": "video",
+      "path": "assets/052fbf81e7340d7edff49391c2fe83e6d6472fd26b05a22665e51b39ae32dc9f.mp4",
+      "sha256": "052fbf81e7340d7edff49391c2fe83e6d6472fd26b05a22665e51b39ae32dc9f",
+      "name": "extraction-wide.mp4"
+    },
+    "media-db4f7f939841fbda97f0879c": {
+      "type": "video",
+      "path": "assets/db4f7f939841fbda97f0879c81f5787a10b128d4c49bcf244094833d9312db60.mp4",
+      "sha256": "db4f7f939841fbda97f0879c81f5787a10b128d4c49bcf244094833d9312db60",
+      "name": "first-drops.mp4"
+    },
+    "media-f9c5087d1edfcd8d14136118": {
+      "type": "video",
+      "path": "assets/f9c5087d1edfcd8d141361185e658c562ac60ae7709f53d9996f45d371227624.mp4",
+      "sha256": "f9c5087d1edfcd8d141361185e658c562ac60ae7709f53d9996f45d371227624",
+      "name": "extraction-detail.mp4"
+    },
+    "media-fa36bf66e29b7c0b322b91ff": {
+      "type": "image",
+      "path": "assets/fa36bf66e29b7c0b322b91fff0e1ba1931d620fc0943cda74d74c48b3070bd5d.png",
+      "sha256": "fa36bf66e29b7c0b322b91fff0e1ba1931d620fc0943cda74d74c48b3070bd5d",
+      "name": "espresso.png"
+    },
+    "media-c01c70f221e3ff534b5ce8ee": {
+      "type": "audio",
+      "path": "assets/c01c70f221e3ff534b5ce8eef32c93936a8f8f57185dbc4768dfbd5ae6a9ee76.wav",
+      "sha256": "c01c70f221e3ff534b5ce8eef32c93936a8f8f57185dbc4768dfbd5ae6a9ee76",
+      "name": "ritual-score.wav"
+    }
+  },
+  "audio": {
+    "narration": {
+      "provider": "none"
+    },
+    "music": {
+      "provider": "file",
+      "asset": "media-c01c70f221e3ff534b5ce8ee",
+      "gainDb": -10
+    }
+  },
+  "scenes": [
+    {
+      "id": "opening",
+      "type": "kinetic_title",
+      "text": "DAILY\nRITUAL",
+      "durationFrames": 90,
+      "highlight": "RITUAL"
+    },
+    {
+      "id": "first-pour",
+      "type": "video",
+      "asset": "media-052fbf81e7340d7edff49391",
+      "trimStartSeconds": 1,
+      "durationFrames": 210,
+      "fit": "cover",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    {
+      "id": "closer",
+      "type": "video",
+      "asset": "media-f9c5087d1edfcd8d14136118",
+      "trimStartSeconds": 1,
+      "durationFrames": 180,
+      "fit": "cover",
+      "focalPoint": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    {
+      "id": "take-a-moment",
+      "type": "product_zoom",
+      "asset": "media-fa36bf66e29b7c0b322b91ff",
+      "caption": "TAKE A\nMOMENT",
+      "durationFrames": 120,
+      "fit": "cover",
+      "focalPoint": {
+        "x": 0.53,
+        "y": 0.56
+      }
+    }
+  ]
+}

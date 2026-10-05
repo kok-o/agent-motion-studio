@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "id": "kinetic-promo",
+  "seed": 17,
+  "video": { "aspectRatio": "9:16", "fps": 30, "style": "kinetic" },
+  "brand": { "theme": "dark", "background": "#101110", "foreground": "#F1EEE6", "accent": "#DDF53D", "font": "builtin-sans" },
+  "assets": { "product": { "type": "image", "path": "./assets/studio.png" } },
+  "audio": { "narration": { "provider": "none" }, "music": { "provider": "procedural", "gainDb": -3 } },
+  "scenes": [
+    { "id": "hook", "type": "kinetic_title", "durationFrames": 75, "text": "Идея.\nКадр.\nДвижение.", "highlight": "Движение." },
+    { "id": "materials", "type": "product_zoom", "durationFrames": 75, "asset": "product", "caption": "Твои материалы.\nВ центре кадра.", "fit": "contain" },
+    { "id": "revision", "type": "kinetic_title", "durationFrames": 60, "text": "Текст.\nРитм.\nПравки.", "highlight": "Ритм." },
+    { "id": "detail", "type": "product_zoom", "durationFrames": 90, "asset": "product", "caption": "Покажи\nглавное.", "fit": "cover", "focalPoint": { "x": 0.65, "y": 0.40 } },
+    { "id": "cta", "type": "cta", "durationFrames": 90, "text": "Собери\nсвой\nролик.", "label": "Начни с одного изображения" }
+  ]
+}

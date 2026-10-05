@@ -1,0 +1,64 @@
+{
+  "author": "Scott Schiller",
+  "title": "Morning Espresso Routine: Progress, Results, Observations and Miscellany",
+  "original": "https://www.flickr.com/photos/schill/14588642105/",
+  "download": "https://upload.wikimedia.org/wikipedia/commons/3/36/Morning_Espresso_Routine_-_Progress%2C_Results%2C_Observations_and_Miscellany.webm",
+  "commons": "https://commons.wikimedia.org/wiki/File:Morning_Espresso_Routine_-_Progress,_Results,_Observations_and_Miscellany.webm",
+  "license": "CC BY-SA 2.0",
+  "licenseUrl": "https://creativecommons.org/licenses/by-sa/2.0/",
+  "checkedOn": "2026-10-05",
+  "upstreamSha256": "2a82dcd02ed7f606f94f78b0c282fc9c277002fc670a33eb245b969e844ad9f4",
+  "transformations": [
+    {
+      "name": "extraction-wide.mp4",
+      "start": 32,
+      "filter": "scale=1920:1080"
+    },
+    {
+      "name": "first-drops.mp4",
+      "start": 28,
+      "filter": "scale=1920:1080"
+    },
+    {
+      "name": "extraction-detail.mp4",
+      "start": 43,
+      "filter": "crop=1280:720:280:230,scale=1920:1080"
+    }
+  ],
+  "stillSeconds": 48,
+  "originalAudio": "removed",
+  "music": "Original deterministic procedural score from Agent Motion Studio (MIT); no sampled recording",
+  "assets": {
+    "media-052fbf81e7340d7edff49391": {
+      "type": "video",
+      "path": "assets/052fbf81e7340d7edff49391c2fe83e6d6472fd26b05a22665e51b39ae32dc9f.mp4",
+      "sha256": "052fbf81e7340d7edff49391c2fe83e6d6472fd26b05a22665e51b39ae32dc9f",
+      "name": "extraction-wide.mp4"
+    },
+    "media-db4f7f939841fbda97f0879c": {
+      "type": "video",
+      "path": "assets/db4f7f939841fbda97f0879c81f5787a10b128d4c49bcf244094833d9312db60.mp4",
+      "sha256": "db4f7f939841fbda97f0879c81f5787a10b128d4c49bcf244094833d9312db60",
+      "name": "first-drops.mp4"
+    },
+    "media-f9c5087d1edfcd8d14136118": {
+      "type": "video",
+      "path": "assets/f9c5087d1edfcd8d141361185e658c562ac60ae7709f53d9996f45d371227624.mp4",
+      "sha256": "f9c5087d1edfcd8d141361185e658c562ac60ae7709f53d9996f45d371227624",
+      "name": "extraction-detail.mp4"
+    },
+    "media-fa36bf66e29b7c0b322b91ff": {
+      "type": "image",
+      "path": "assets/fa36bf66e29b7c0b322b91fff0e1ba1931d620fc0943cda74d74c48b3070bd5d.png",
+      "sha256": "fa36bf66e29b7c0b322b91fff0e1ba1931d620fc0943cda74d74c48b3070bd5d",
+      "name": "espresso.png"
+    },
+    "media-c01c70f221e3ff534b5ce8ee": {
+      "type": "audio",
+      "path": "assets/c01c70f221e3ff534b5ce8eef32c93936a8f8f57185dbc4768dfbd5ae6a9ee76.wav",
+      "sha256": "c01c70f221e3ff534b5ce8eef32c93936a8f8f57185dbc4768dfbd5ae6a9ee76",
+      "name": "ritual-score.wav"
+    }
+  },
+  "licenseDiscrepancy": "Commons lists a CC BY 2.0 license reviewed on 2015-04-30. The current Flickr author license link points to CC BY-SA 2.0. This distribution follows CC BY-SA 2.0 for derivatives and finished remix, while separate original music and application code remain MIT."
+}

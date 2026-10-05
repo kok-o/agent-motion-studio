@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "first-motion",
+  "seed": 7,
+  "video": { "aspectRatio": "9:16", "fps": 30 },
+  "brand": { "theme": "dark", "background": "#0B1020", "foreground": "#F4F7FB", "accent": "#9EE86F", "font": "builtin-sans" },
+  "assets": {},
+  "audio": { "narration": { "provider": "none" }, "music": { "provider": "none" } },
+  "scenes": [{ "id": "hook", "type": "kinetic_title", "durationFrames": 120, "text": "Твой продукт в движении", "highlight": "в движении" }]
+}

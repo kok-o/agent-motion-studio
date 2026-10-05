@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1, "id": "repo-promo", "seed": 7,
+  "video": { "aspectRatio": "9:16", "fps": 30, "style": "kinetic" },
+  "brand": { "theme": "dark", "background": "#0B1020", "foreground": "#F4F7FB", "accent": "#9EE86F", "font": "builtin-sans" },
+  "assets": { "product": { "type": "image", "path": "./assets/studio.png" } },
+  "audio": { "narration": { "provider": "none" }, "music": { "provider": "procedural", "gainDb": -3 } },
+  "scenes": [
+    { "id": "hook", "type": "kinetic_title", "durationFrames": 75, "text": "Твой проект.\nВ движении.", "highlight": "движении." },
+    { "id": "product", "type": "product_zoom", "durationFrames": 90, "asset": "product", "caption": "Твои материалы.\nВ центре кадра.", "fit": "contain" },
+    { "id": "revision", "type": "kinetic_title", "durationFrames": 75, "text": "Текст.\nМатериалы.\nРитм.", "highlight": "Ритм." },
+    { "id": "detail", "type": "product_zoom", "durationFrames": 120, "asset": "product", "caption": "Покажи\nглавное.", "fit": "cover", "focalPoint": { "x": 0.65, "y": 0.40 } },
+    { "id": "cta", "type": "cta", "durationFrames": 90, "text": "Собери\nпервый\nролик.", "label": "Локально. Открытый код." }
+  ]
+}

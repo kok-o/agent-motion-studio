@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "edge-speech",
+  "seed": 7,
+  "video": { "aspectRatio": "9:16", "fps": 30 },
+  "brand": { "theme": "dark", "background": "#0B1020", "foreground": "#F4F7FB", "accent": "#8878FF", "font": "builtin-sans" },
+  "assets": {},
+  "audio": {
+    "narration": { "provider": "edge", "voice": "ru-RU-SvetlanaNeural", "rate": "+0%", "pitch": "+0Hz", "gainDb": -3 },
+    "music": { "provider": "procedural", "gainDb": -22 }
+  },
+  "scenes": [{
+    "id": "hook", "type": "kinetic_title", "durationFrames": 240,
+    "text": "Твой продукт в движении", "highlight": "в движении",
+    "narration": { "text": "Измените текст в JSON. Движок соберёт новый ролик." }
+  }]
+}

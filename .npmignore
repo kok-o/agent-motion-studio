@@ -1,0 +1,11 @@
+**/.cache/**
+**/.cache
+**/node_modules/**
+**/out/**
+**/.git/**
+artifacts/**
+references/**
+.agents/**
+tests/**
+src/**
+renderer/**
