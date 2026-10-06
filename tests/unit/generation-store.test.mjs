@@ -7,21 +7,24 @@ import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { GenerationStore } from '../../dist/generation-store.js';
 
-test('generation ownership excludes another process and crashed lock never silently replays a job', async () => {
+test('generation ownership excludes another process and crashed lock never silently replays a job', { timeout: 10_000 }, async () => {
   const root = await mkdtemp(join(tmpdir(), 'ams-lock-')), project = join(root, 'project.json');
   await writeFile(project, '{}');
   const store = new GenerationStore(project), module = pathToFileURL(resolve('dist/generation-store.js')).href;
-  const child = spawn(process.execPath, ['--input-type=module', '-e', `import { GenerationStore } from ${JSON.stringify(module)}; const store = new GenerationStore(${JSON.stringify(project)}); await store.locked(async()=>{await store.write('saved-job',{status:'submitting',submissions:1}); console.log('owned'); await new Promise(()=>{});});`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  // An unresolved Promise alone does not keep Node's event loop alive. Keep
+  // the owner running until we explicitly kill it to simulate a crashed job.
+  const child = spawn(process.execPath, ['--input-type=module', '-e', `import { GenerationStore } from ${JSON.stringify(module)}; const store = new GenerationStore(${JSON.stringify(project)}); await store.locked(async()=>{await store.write('saved-job',{status:'submitting',submissions:1}); setInterval(()=>{},1000); console.log('owned'); await new Promise(()=>{});});`], { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+  const closed = new Promise(ok => child.once('close', ok));
   try {
     await new Promise((ok, bad) => { child.stdout.once('data', ok); child.once('error', bad); child.once('exit', code => bad(new Error(`child exited ${code}`))); });
     await assert.rejects(store.locked(async () => assert.fail('competing writer ran')), error => error.code === 'GENERATION_BUSY');
-    const exited = new Promise(ok => child.once('exit', ok)); child.kill(); await exited;
+    child.kill(); await closed;
     await assert.rejects(store.locked(async () => assert.fail('crashed job silently replayed')), error => error.code === 'GENERATION_BUSY');
     assert.deepEqual(await store.read('saved-job'), { status: 'submitting', submissions: 1 });
     // Explicit recovery after observing the owning process exit: keep all job data.
     await rm(join(root, '.studio/generation/runner.lock'));
     await store.locked(async () => assert.deepEqual(await store.read('saved-job'), { status: 'submitting', submissions: 1 }));
-  } finally { child.kill(); await rm(root, { recursive: true, force: true }); }
+  } finally { child.kill(); await closed; await rm(root, { recursive: true, force: true }); }
 });
 
 test('generation store retains corrupt state and rejects traversal and a linked private directory', async () => {
