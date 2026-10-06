@@ -4,15 +4,29 @@
 
 An open-source local studio for short films made by people and their AI agents. Import clips, images and music, assemble a storyboard, compare takes and export a real MP4. The studio is free; cloud generation uses your provider account and its charges. Your official external agent can use the CLI and skill. Local video-model inference is a future capability.
 
-The product goal is to make and revise a film from a brief through your own Claude Code, Codex or another supported agent, using your subscription or API access. Procedural motion, titles and editing supplied footage use the local renderer and do not require a video-generation key. A Codex desktop session and a real API-agent have demonstrated film creation; two demonstration edits, restore and reopen are verified. Fresh Codex native skill discovery is checked; fresh model continuation and Claude Code remain open. [Exact verification scope](docs/AGENT_VALIDATION.md). Optional neural-video generation has a separate Replicate integration.
+The product goal is to make and revise a film from a brief through your own Claude Code, Codex or another supported agent, using your subscription or API access. Procedural motion, titles and editing supplied footage use the local renderer and do not require a video-generation key. A Codex desktop session and a real API-agent have demonstrated film creation; two demonstration edits, restore and reopen are verified. A fresh official Codex CLI session, resumed after developer repairs to its temporary budget transport, created a new meetup film, handled three subsequent corrections and reopened it from an installed runtime. On 7 October 2026 the project owner accepted the final fastgrep after two personally requested alignment corrections and a sound revision. An independent new user, Claude Code, a live run of the new API-agent actions and other operating systems remain separate unverified checks. [Exact verification scope](docs/AGENT_VALIDATION.md). Optional neural-video generation has a separate Replicate integration.
 
-**0.1.0 · Experimental developer preview** · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Release notes](docs/releases/v0.1.0.md)
+**0.1.0 · Experimental developer preview** · [Current status](docs/STATUS.md) · [Development plan](docs/PLAN_V0.2_RU.md) · [Contributing](CONTRIBUTING.md) · [Release notes](docs/releases/v0.1.0.md)
 
 ![DAILY RITUAL: real espresso footage and motion typography](docs/media/coffee-contact.jpg)
 
 [Watch the 20-second original](docs/media/coffee-original.mp4) · [Watch the second-scene remix](docs/media/coffee-changed.mp4) · [Editable example](examples/coffee-ritual/project.json)
 
 Footage by **Scott Schiller**, [Morning Espresso Routine](https://www.flickr.com/photos/schill/14588642105/). Excerpts, crop, titles and procedural music added with Agent Motion Studio. Film remix: **[CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0/)**. [Full credits](examples/coffee-ritual/CREDITS.md). This is real filming of one setup; no AI video model was used for the example.
+
+## Make a film with your agent
+
+Follow [installation and agent setup](docs/GETTING_STARTED.md), install the bundled skill, then open your official agent in that workspace. Invoke `$agent-motion-studio` in Codex or `/agent-motion-studio` in Claude Code and give it a brief:
+
+> Create a 15-second vertical film for the fictional Frontend Night meetup: 14 November, 19:00, Almaty, free entry. Use #101820 background and #FEE715 accent. Save a local MP4 and an editable project with sources and history. No external media calls.
+
+After watching the original, send two separate corrections:
+
+> Shorten the second scene by one second.
+
+> Switch to a light theme with #FFF8E1 background, #101820 text and #8A4900 accent.
+
+The agent uses the local renderer, previews ordinary scene corrections and exports separate versions. Ask it to reopen the saved project or restore a scene/full film through history. Keep the complete project folder with assets and credits when moving it. For an existing film, supply its `project.json` path and continue it; `new` is for a new brief. [Detailed agent workflow and API limits](docs/AGENT_WORKFLOW_RU.md).
 
 ## Try your first remix
 
@@ -31,7 +45,7 @@ node dist/cli.js studio projects/my-first-remix/project.json
 
 Continue when doctor reports `ready:true` (exit 0); exit 3 lists dependency errors and fixes. [Installation and troubleshooting](docs/GETTING_STARTED.md). Skill installation is optional for manual editing; use `--client claude` for Claude Code. Start the official agent in this workspace; Codex uses `$agent-motion-studio`, Claude Code `/agent-motion-studio`.
 
-Open the **complete session URL** printed by the CLI. Keep it private. The editor currently uses Russian labels:
+Open the **complete session URL** printed by the CLI. Keep it private. The editor supports RU/EN and remembers your choice; select RU for the labels below:
 
 1. Select scene 2, `first-pour`.
 2. Change **Выбранный исходник / дубль** (source/take) to `first-drops.mp4`; use trim start `1` second and duration `7` seconds.
@@ -66,6 +80,8 @@ Replace the archive path with its location on your computer; quote paths contain
 - Compare local and external-agent edits and explicitly resolve conflicts.
 - Restore previous takes, reopen projects and export H.264/AAC MP4.
 - Edit through the CLI with the same validation and history as the browser.
+- Create in either aspect, apply a brand palette and accept an initial storyboard atomically.
+- Keep authored title casing and supporting text; select a saved RU/EN editor language.
 
 Agents can use `state`, `import`, `edit --action action.json --if-match ETAG`, `validate` and `render`. [Agent skill](skills/agent-motion-studio/SKILL.md) · [Project format](docs/MANIFEST.md). Local editing and export need no model key.
 
@@ -84,6 +100,8 @@ If a submission response is lost, check the same provider account and explicitly
 Default tests use a controlled provider and require no paid calls. This checkout's offline implementation is distinct from **real provider verified** and **full workflow verified**, which require an authorized live run and its evidence. A key by itself grants no spending or reference-upload permission. The local agent-film demonstration is complete within its stated client limits; P2 focuses on a new user following this README independently.
 
 ## Current limits
+
+The current checkout also supports [editable object compositions](docs/COMPOSITION.md): independently positioned/animated text, rect/ellipse graphics and local images. Agents author objects through normal scene actions; the browser opens, previews, shortens, restores and exports them. This is a data-driven extension, with fixed fonts/aspects and no realtime object editor.
 
 - Preview is silent and generated on demand. Viewing the entire film requires export.
 - Source-video audio is muted; use a file music track. Narration/captions require full export.

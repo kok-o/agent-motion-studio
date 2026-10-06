@@ -1,6 +1,6 @@
 # Contributing
 
-Agent Motion Studio 0.1 is an experimental local editor. Start with the [first remix](README.md#try-your-first-remix), then choose a small task from the [roadmap](ROADMAP.md). Bug reports with a small reproducible project are especially useful.
+Agent Motion Studio 0.1 is an experimental local editor. Start with the [first remix](README.md#try-your-first-remix), read the [current status](docs/STATUS.md), then take the next incomplete step of the [single development plan](docs/PLAN_V0.2_RU.md). Bug reports with a small reproducible project are especially useful.
 
 ## Development setup
 
@@ -32,7 +32,7 @@ node dist/cli.js studio projects/my-remix/project.json
 4. Open a pull request with the problem, resulting behavior and evidence. The other person reviews it and repeats the changed scenario where practical.
 5. Merge after the required checks and review pass, preferably with squash merge. Pull `main` before the next task. Avoid force-pushing shared branches.
 
-Suggested initial split: one person owns the first provider/job-resume workflow; the other owns first-run usability, English UI and user trials. Agree on the project-edit contract before implementing both sides. This is a starting arrangement, not permanent ownership.
+When several people contribute, agree on ownership of the affected files and the project-edit contract. The existing provider/job-resume implementation is preserved; current priorities come from the development plan. Historical briefs are not additional assignments.
 
 Once the repository exists, invite the second maintainer with Write access, enable private vulnerability reporting and protect `main` with pull requests, one review and the CI checks. These are repository settings; files in this checkout do not enable them automatically. Do not require an approving review from the PR author. Add CODEOWNERS only after agreeing on the actual GitHub handles.
 

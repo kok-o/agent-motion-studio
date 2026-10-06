@@ -2,6 +2,8 @@
 
 This is a local Node.js/TypeScript video editor. Read README.md and CONTRIBUTING.md before changing it. Keep work scoped to the issue; preserve unrelated edits and user projects.
 
+For development, `docs/PLAN_V0.2_RU.md` is the single current execution plan and `docs/STATUS.md` records current evidence. Archived plans and historical local briefs are references, not new assignments. This does not authorize running the plan when the user asked only for review or documentation.
+
 - `src/project.ts` owns accepted edits, history and immutable source imports. Use these APIs instead of bypassing validation or writing accepted projects directly.
 - `src/preview.ts` and `src/pipeline.ts` share scene encoding. Preview must not save a draft. Preserve frame timing, trim, crop and v1/v2 compatibility.
 - `studio/` is plain HTML/CSS/JavaScript. Do not add a UI framework for incidental changes.

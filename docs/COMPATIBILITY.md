@@ -5,7 +5,7 @@ Version 0.1.0 is an experimental developer preview. The release candidate has be
 | Surface | Scope |
 | --- | --- |
 | Windows x64 | Main local verification environment; system tools already installed |
-| Linux | CI exercises the offline media suite; configuration alone does not prove a completed hosted run |
+| Linux | Hosted offline media and installed-package checks passed for `84bc838`; see [dated status and CI evidence](STATUS.md). Interactive desktop use and clean user installation remain separate checks |
 | macOS | Not verified for this release |
 | Clean OS setup | No bundled Chrome/FFmpeg installer; dependency setup needs separate user testing |
 | v1/v2 projects | v1 remains readable; accepted editor changes migrate to v2 with history |

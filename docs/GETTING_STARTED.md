@@ -1,6 +1,6 @@
 # Install, open and revise a film
 
-Local editing needs Node.js ≥22.12, Chrome/Chromium and FFmpeg/ffprobe with libx264/AAC. No Python, model key or media-provider account is needed. Your external agent uses its own official authentication and quota/billing. The editor has Russian labels; translations below cover the first workflow.
+Local editing needs Node.js ≥22.12, Chrome/Chromium and FFmpeg/ffprobe with libx264/AAC. No Python, model key or media-provider account is needed. Your external agent uses its own official authentication and quota/billing. The editor supports RU/EN; choose RU for the labels below. The language choice is saved in your browser.
 
 ## Install from source
 
