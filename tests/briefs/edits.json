@@ -1,0 +1,10 @@
+{
+  "E1":{"type":"edit-scene","sceneId":"opening","patch":{"text":"Начни с главного"}},
+  "E2":{"type":"edit-scene","sceneId":"$second","patch":{"durationFrames":"$shorter"}},
+  "E3":{"type":"brand","patch":{"theme":"light","background":"#FFF8E1","foreground":"#101820","accent":"#8A4900"}},
+  "E4":{"type":"move-scene","sceneId":"$third","index":1},
+  "E5":{"type":"edit-scene","sceneId":"opening","patch":{"fontSize":130}},
+  "E6":{"type":"edit-scene","sceneId":"planner","patch":{"asset":"$replacement"}},
+  "E7":{"type":"restore-scene","sceneId":"$second","revisionId":"$beforeE2"},
+  "E8":{"type":"composition","video":{"aspectRatio":"9:16","fps":30,"style":"$style"}}
+}

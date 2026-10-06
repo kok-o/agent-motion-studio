@@ -12,6 +12,20 @@ async function fixture() {
 }
 const args = (operation, extra = {}) => ({ operation, action: null, etag: null, label: null, previewToken: null, ...extra });
 
+test('API initial mode accepts brand/composition/batch; existing mode cannot disable its batch-preview guard', async () => {
+  const { output, project } = await fixture(); const before = await readProject(project);
+  const initial = await createStudioTool(project, output, { requirePreview: false });
+  const action = { type: 'batch', actions: [{ type: 'brand', patch: { theme: 'light', accent: '#123456' } }, { type: 'composition', video: { aspectRatio: '9:16', fps: 30 } }, { type: 'edit-scene', sceneId: 'opening', patch: { text: 'NEW API FILM', durationFrames: 30 } }, ...['two', 'three', 'four'].map(id => ({ type: 'add-scene', scene: { id, type: 'kinetic_title', text: id, durationFrames: 30 } }))] };
+  const accepted = await initial.execute(args('edit', { etag: before.etag, action: JSON.stringify(action) }));
+  assert.equal(accepted.manifest.scenes.length, 4); assert.equal(accepted.manifest.history.length, 1); assert.equal(accepted.manifest.video.aspectRatio, '9:16'); assert.equal(accepted.manifest.brand.accent, '#123456');
+  const existing = await createStudioTool(project, output), bytes = await readFile(project);
+  await assert.rejects(existing.execute(args('edit', { etag: accepted.etag, action: JSON.stringify(action) })), /Batch is unavailable/);
+  await assert.rejects(existing.execute({ ...args('edit', { etag: accepted.etag, action: JSON.stringify(action) }), requirePreview: false }), /Invalid tool arguments/);
+  assert.ok((await readFile(project)).equals(bytes));
+  const brand = await existing.execute(args('edit', { etag: accepted.etag, action: JSON.stringify({ type: 'brand', patch: { background: '#FFFFFF' } }) }));
+  assert.equal(brand.manifest.brand.background, '#FFFFFF'); assert.equal(brand.manifest.brand.accent, '#123456');
+});
+
 test('API tool calls mutate through shared project operations; a final message cannot claim an unexported film', async () => {
   const { output, project } = await fixture(); let requests = 0;
   const apiKey = 'unit-test-credential-never-publish', before = await readProject(project);

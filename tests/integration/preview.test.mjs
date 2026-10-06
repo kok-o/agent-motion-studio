@@ -59,7 +59,7 @@ test('unsaved UI scene previews match full export frames for trim, crop, contain
   const hashes = async path => { const r = await runProcess(tools.ffmpeg,['-v','error','-threads','1','-i',path,'-map','0:v:0','-f','framemd5','-']); return r.stdout.split('\n').filter(l=>l&&!l.startsWith('#')).map(l=>l.split(',').at(-1).trim()); };
   page.on('pageerror', error => errors.push(error.message));
   try {
-    await page.setViewport({width:1440,height:1100}); await page.goto(studio.url,{waitUntil:'networkidle0'});
+    await page.setViewport({width:1440,height:1100}); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'ru')); await page.goto(studio.url,{waitUntil:'networkidle0'});
     async function preview(name,sceneId,start,count) {
       const before = await readFile(file); await page.click('#preview-scene');
       await page.waitForFunction(()=>document.querySelector('#notice').textContent.startsWith('Предпросмотр готов')||document.querySelector('#notice').classList.contains('error'),{timeout:90000}); await idle();

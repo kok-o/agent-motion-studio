@@ -208,11 +208,22 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["operationId", "requestHash", "revisionId"],
+        "required": [
+          "operationId",
+          "requestHash",
+          "revisionId"
+        ],
         "properties": {
-          "operationId": { "$ref": "#/definitions/id" },
-          "requestHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-          "revisionId": { "$ref": "#/definitions/id" }
+          "operationId": {
+            "$ref": "#/definitions/id"
+          },
+          "requestHash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "revisionId": {
+            "$ref": "#/definitions/id"
+          }
         }
       }
     },
@@ -295,7 +306,8 @@
             "kinetic_title",
             "product_zoom",
             "cta",
-            "video"
+            "video",
+            "composition"
           ]
         },
         "durationFrames": {
@@ -395,6 +407,28 @@
           "type": "number",
           "minimum": 0,
           "maximum": 3600
+        },
+        "objects": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 96,
+          "items": {
+            "$ref": "#/definitions/compositionObject"
+          }
+        },
+        "background": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/color"
+            },
+            {
+              "enum": [
+                "background",
+                "foreground",
+                "accent"
+              ]
+            }
+          ]
         }
       },
       "allOf": [
@@ -415,11 +449,6 @@
                 {
                   "required": [
                     "asset"
-                  ]
-                },
-                {
-                  "required": [
-                    "label"
                   ]
                 },
                 {
@@ -561,6 +590,524 @@
               ]
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "composition"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "objects"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "highlight"
+                  ]
+                },
+                {
+                  "required": [
+                    "label"
+                  ]
+                },
+                {
+                  "required": [
+                    "asset"
+                  ]
+                },
+                {
+                  "required": [
+                    "caption"
+                  ]
+                },
+                {
+                  "required": [
+                    "fit"
+                  ]
+                },
+                {
+                  "required": [
+                    "focalPoint"
+                  ]
+                },
+                {
+                  "required": [
+                    "fontSize"
+                  ]
+                },
+                {
+                  "required": [
+                    "trimStartSeconds"
+                  ]
+                }
+              ]
+            }
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "objects"
+                  ]
+                },
+                {
+                  "required": [
+                    "background"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "objectKeyframe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "frame"
+      ],
+      "properties": {
+        "frame": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1800
+        },
+        "easing": {
+          "enum": [
+            "linear",
+            "outCubic",
+            "inOutCubic",
+            "step"
+          ]
+        },
+        "x": {
+          "type": "number",
+          "minimum": -3840,
+          "maximum": 3840
+        },
+        "y": {
+          "type": "number",
+          "minimum": -3840,
+          "maximum": 3840
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3840
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3840
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "reveal": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "anyOf": [
+        {
+          "required": [
+            "x"
+          ]
+        },
+        {
+          "required": [
+            "y"
+          ]
+        },
+        {
+          "required": [
+            "width"
+          ]
+        },
+        {
+          "required": [
+            "height"
+          ]
+        },
+        {
+          "required": [
+            "opacity"
+          ]
+        },
+        {
+          "required": [
+            "rotation"
+          ]
+        },
+        {
+          "required": [
+            "reveal"
+          ]
+        }
+      ]
+    },
+    "compositionObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "type",
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/id"
+        },
+        "type": {
+          "enum": [
+            "text",
+            "shape",
+            "image"
+          ]
+        },
+        "x": {
+          "type": "number",
+          "minimum": -3840,
+          "maximum": 3840
+        },
+        "y": {
+          "type": "number",
+          "minimum": -3840,
+          "maximum": 3840
+        },
+        "width": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3840
+        },
+        "height": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 3840
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "rotation": {
+          "type": "number",
+          "minimum": -3600,
+          "maximum": 3600
+        },
+        "reveal": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "keyframes": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/definitions/objectKeyframe"
+          }
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "fontSize": {
+          "type": "integer",
+          "minimum": 18,
+          "maximum": 300
+        },
+        "weight": {
+          "enum": [
+            400,
+            700
+          ]
+        },
+        "align": {
+          "enum": [
+            "left",
+            "center",
+            "right"
+          ]
+        },
+        "color": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/color"
+            },
+            {
+              "enum": [
+                "background",
+                "foreground",
+                "accent"
+              ]
+            }
+          ]
+        },
+        "stroke": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/color"
+            },
+            {
+              "enum": [
+                "background",
+                "foreground",
+                "accent"
+              ]
+            }
+          ]
+        },
+        "strokeWidth": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 300
+        },
+        "shape": {
+          "enum": [
+            "rect",
+            "ellipse"
+          ]
+        },
+        "asset": {
+          "$ref": "#/definitions/id"
+        },
+        "fit": {
+          "enum": [
+            "contain",
+            "cover"
+          ]
+        },
+        "focalPoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "text"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "text"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "shape"
+                  ]
+                },
+                {
+                  "required": [
+                    "asset"
+                  ]
+                },
+                {
+                  "required": [
+                    "fit"
+                  ]
+                },
+                {
+                  "required": [
+                    "focalPoint"
+                  ]
+                },
+                {
+                  "required": [
+                    "stroke"
+                  ]
+                },
+                {
+                  "required": [
+                    "strokeWidth"
+                  ]
+                },
+                {
+                  "required": [
+                    "radius"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "shape"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "shape"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "fontSize"
+                  ]
+                },
+                {
+                  "required": [
+                    "weight"
+                  ]
+                },
+                {
+                  "required": [
+                    "align"
+                  ]
+                },
+                {
+                  "required": [
+                    "asset"
+                  ]
+                },
+                {
+                  "required": [
+                    "fit"
+                  ]
+                },
+                {
+                  "required": [
+                    "focalPoint"
+                  ]
+                }
+              ]
+            },
+            "anyOf": [
+              {
+                "required": [
+                  "color"
+                ]
+              },
+              {
+                "required": [
+                  "stroke"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "image"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "asset"
+            ],
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "text"
+                  ]
+                },
+                {
+                  "required": [
+                    "fontSize"
+                  ]
+                },
+                {
+                  "required": [
+                    "weight"
+                  ]
+                },
+                {
+                  "required": [
+                    "align"
+                  ]
+                },
+                {
+                  "required": [
+                    "shape"
+                  ]
+                },
+                {
+                  "required": [
+                    "color"
+                  ]
+                },
+                {
+                  "required": [
+                    "stroke"
+                  ]
+                },
+                {
+                  "required": [
+                    "strokeWidth"
+                  ]
+                },
+                {
+                  "required": [
+                    "radius"
+                  ]
+                }
+              ]
+            }
+          }
         }
       ]
     }
@@ -636,7 +1183,25 @@
                 "required": [
                   "trimStartSeconds"
                 ]
-              }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "type": {
+                        "const": "kinetic_title"
+                      }
+                    }
+                  },
+                  "then": {
+                    "not": {
+                      "required": [
+                        "label"
+                      ]
+                    }
+                  }
+                }
+              ]
             }
           }
         }

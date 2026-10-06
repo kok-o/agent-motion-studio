@@ -32,6 +32,9 @@ try {
   await writeFile(join(consumer, 'package.json'), JSON.stringify({ name: 'ams-release-consumer', version: '1.0.0', private: true }));
   await run([npm, 'install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', archive], 'install');
   const app = join(consumer, 'node_modules/agent-motion-studio'), cli = join(app, 'dist/cli.js');
+  assert.ok((await readFile(join(app, 'dist/studio/i18n.js'), 'utf8')).includes('initializeI18n'));
+  assert.ok((await readFile(join(app, 'dist/studio/index.html'), 'utf8')).includes('id="language"'));
+  assert.ok((await readFile(join(app, 'skills/agent-motion-studio/references/edits.md'), 'utf8')).includes('E8'));
   const cliRun = async (args, label) => JSON.parse(await run([cli, ...args, '--json'], label));
   const doctor = await cliRun(['doctor'], 'doctor'); assert.ok(doctor.ready); report.environment = doctor;
   await run([npm, 'exec', '--offline', '--no', '--', 'agent-motion-studio', 'doctor', '--json'], 'bin');

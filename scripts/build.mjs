@@ -12,7 +12,7 @@ await build({ entryPoints: entries, outdir: 'dist', platform: 'node', format: 'e
 await build({ entryPoints: ['renderer/entry.ts'], outfile: 'dist/renderer/entry.js', platform: 'browser', format: 'iife', target: 'chrome120', bundle: true });
 await copyFile('renderer/index.html', 'dist/renderer/index.html');
 await mkdir('dist/studio', { recursive: true });
-for (const file of ['index.html', 'app.js', 'generation-ui.js', 'style.css']) await copyFile(`studio/${file}`, `dist/studio/${file}`);
+for (const file of ['index.html', 'app.js', 'i18n.js', 'generation-ui.js', 'style.css']) await copyFile(`studio/${file}`, `dist/studio/${file}`);
 for (const subset of ['latin', 'cyrillic', 'cyrillic-ext']) for (const weight of [400, 700]) {
   const file = `noto-sans-${subset}-${weight}-normal.woff2`;
   await copyFile(`node_modules/@fontsource/noto-sans/files/${file}`, `assets/fonts/${file}`);

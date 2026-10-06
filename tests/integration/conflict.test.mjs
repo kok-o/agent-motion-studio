@@ -19,7 +19,7 @@ test('dirty UI and agent edits resolve explicitly, survive reload, and recheck a
   const dialog = () => page.waitForFunction(() => document.querySelector('#conflict-dialog').open);
   try {
     await page.setViewport({ width: 1440, height: 1100 });
-    await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click(`[data-scene-id="${sceneId}"]`); await idle();
+    await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'ru')); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click(`[data-scene-id="${sceneId}"]`); await idle();
     await fill('6'); await editProject(file, { type: 'edit-scene', sceneId: 'opening', patch: { text: 'AGENT OPENING' } });
     const before = await readFile(file);
     await page.click('#reload'); await dialog(); await idle(); assert.ok((await readFile(file)).equals(before));

@@ -1,5 +1,6 @@
 import type { ResolvedSpec, ResolvedScene, TextLayout } from '../src/types.js';
 import { drawKineticFrame, kineticLayouts } from './kinetic.js';
+import { drawComposition, validateCompositionLayout } from './composition.js';
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
 // Export reads back every frame. Keep one software raster path instead of
 // Chrome switching the canvas backend partway through an indexed render.
@@ -35,7 +36,8 @@ function layouts(scene: ResolvedScene) {
   const portrait = w < h, margin = Math.round(w * (spec.video.safeArea ?? 0.09));
   const width = w - margin * 2;
   if (spec.video.style !== 'kinetic') {
-  if (scene.type === 'kinetic_title') scene.layout = fitText(scene.text!, { x: margin, y: h * (portrait ? 0.3 : 0.2), width, height: h * (portrait ? 0.36 : 0.56) }, scene.fontSize ?? (portrait ? 116 : 152), 60, portrait ? 5 : 3);
+  if (scene.type === 'kinetic_title') scene.layout = fitText(scene.text!, { x: margin, y: h * (portrait ? 0.3 : 0.2), width, height: h * (scene.label ? portrait ? 0.34 : 0.45 : portrait ? 0.36 : 0.56) }, scene.fontSize ?? (portrait ? 116 : 152), 60, portrait ? 5 : 3);
+  if (scene.type === 'kinetic_title' && scene.label) scene.labelLayout = fitText(scene.label, { x: margin, y: h * 0.70, width, height: h * 0.09 }, portrait ? 42 : 48, 28, 2, 'left', 400);
   if (scene.type === 'cta') {
     scene.layout = fitText(scene.text!, { x: margin, y: h * (portrait ? 0.25 : 0.18), width, height: h * (portrait ? 0.34 : 0.4) }, scene.fontSize ?? (portrait ? 106 : 138), 60, portrait ? 4 : 2, 'center');
     scene.labelLayout = fitText(scene.label!, { x: margin + 32, y: h * 0.64, width: width - 64, height: h * 0.1 }, portrait ? 42 : 48, 30, 2, 'center', 400);
@@ -110,10 +112,11 @@ function drawFrame(frameIndex: number) {
   const scene = spec.scenes.find(candidate => frameIndex >= candidate.startFrame && frameIndex < candidate.endFrame)!;
   const local = frameIndex - scene.startFrame;
   ctx.save();
-  if (spec.video.style === 'kinetic') drawKineticFrame(ctx, spec, images, frameIndex);
+  if (scene.type === 'composition') drawComposition(ctx, spec, scene, images, local);
+  else if (spec.video.style === 'kinetic') drawKineticFrame(ctx, spec, images, frameIndex);
   else { background(local, scene);
   if (scene.type === 'kinetic_title') {
-    textBlock(scene.layout!, local, scene.durationFrames, scene.highlight);
+    textBlock(scene.layout!, local, scene.durationFrames, scene.highlight); if (scene.labelLayout) textBlock(scene.labelLayout, local, scene.durationFrames, undefined, 400);
     const layout = scene.layout!;
     ctx.fillStyle = spec.brand.accent; ctx.globalAlpha = 1 - ease((local - (scene.durationFrames - 12)) / 12);
     ctx.fillRect(layout.x, layout.y + layout.height + 36, 180 * ease((local - 22) / 18), 8);
@@ -147,7 +150,7 @@ async function initialize(value: ResolvedSpec) {
     const image = new Image(); image.src = `/assets/${encodeURIComponent(id)}`; await image.decode();
     if (!image.naturalWidth || !image.naturalHeight) throw new Error(`IMAGE_DECODE_FAILED: ${id}`); images[id] = image;
   }));
-  for (const scene of spec.scenes) layouts(scene);
+  for (const scene of spec.scenes) { layouts(scene); if (scene.type === 'composition') validateCompositionLayout(ctx, scene); }
   if (spec.video.style === 'kinetic') kineticLayouts(ctx, spec);
   return { scenes: spec.scenes, captionLayouts: Array.from(captionLayouts.entries()) };
 }

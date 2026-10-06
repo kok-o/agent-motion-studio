@@ -6,13 +6,25 @@ import { Ajv } from 'ajv';
 import { imageSize } from 'image-size';
 import { StudioError } from './errors.js';
 import { probeSource } from './media.js';
+import { parseJsonInput } from './json-input.js';
 import type { Manifest, ResolvedSpec, ResolvedAsset } from './types.js';
 export const ENGINE_VERSION = '0.1.0';
-export const SCENE_VERSION = '2';
+export const SCENE_VERSION = '4';
 export const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 export function hashBytes(bytes: Uint8Array | string) { return createHash('sha256').update(bytes).digest('hex'); }
 const schema = JSON.parse(await readFile(resolve(packageRoot, 'schemas/manifest.schema.json'), 'utf8'));
 const validateSchema = new Ajv({ allErrors: true, strict: false }).compile(schema);
+const fragment = (part: object) => new Ajv({ allErrors: true, strict: false }).compile({ ...part, definitions: schema.definitions });
+const actionShapes = {
+  scene: fragment(schema.definitions.scene),
+  video: fragment(schema.properties.video),
+  brand: fragment({ type: 'object', additionalProperties: false, minProperties: 1, properties: Object.fromEntries(Object.entries(schema.properties.brand.properties).filter(([key]) => key !== 'font')) }),
+  patch: fragment({ type: 'object', additionalProperties: false, properties: Object.fromEntries(Object.entries(schema.definitions.scene.properties).filter(([key]) => !['id', 'type'].includes(key)).map(([key, value]) => [key, { anyOf: [value, { type: 'null' }] }])) })
+};
+export function validateActionShape(kind: keyof typeof actionShapes, value: unknown) {
+  const validate = actionShapes[kind];
+  if (!validate(value)) throw new StudioError('PROJECT_EDIT', 'project', `Invalid ${kind}: ${validate.errors!.map(error => `${error.instancePath || '/'} ${error.message}`).join('; ')}`, 2);
+}
 export function assertSupportedText(text: string, field: string) {
   if (!text.trim()) throw new StudioError('EMPTY_TEXT', 'validate', `${field}: provide visible text, not only whitespace.`, 2, field);
   if (!/^[\u0020-\u007E\u00A0-\u00FF\u0400-\u052F\u2000-\u206F\u2116\n\r\t]+$/u.test(text)) {
@@ -30,6 +42,18 @@ export function validateManifest(value: unknown): Manifest {
     const field = `scenes[${index}]`;
     if (ids.has(scene.id)) throw new StudioError('DUPLICATE_SCENE_ID', 'validate', `${field}.id: duplicate id ${scene.id}.`, 2, `${field}.id`);
     ids.add(scene.id); total += scene.durationFrames;
+    const objectIds = new Set<string>();
+    for (const object of scene.objects ?? []) {
+      if (objectIds.has(object.id)) throw new StudioError('DUPLICATE_OBJECT_ID', 'validate', `${field}: duplicate object ${object.id}.`, 2, field);
+      objectIds.add(object.id);
+      if (object.type === 'text') assertSupportedText(object.text!, `${field}.objects.${object.id}.text`);
+      if (object.type === 'image' && manifest.assets[object.asset!]?.type !== 'image') throw new StudioError('MISSING_IMAGE', 'validate', `${field}.objects.${object.id}: asset must identify an imported image.`, 2, field);
+      let prior = -1;
+      for (const key of object.keyframes ?? []) {
+        if (key.frame <= prior) throw new StudioError('INVALID_KEYFRAMES', 'validate', `${field}.objects.${object.id}: keyframe indices must be strictly increasing.`, 2, field);
+        prior = key.frame;
+      }
+    }
     if (scene.type !== 'video' && scene.trimStartSeconds !== undefined) throw new StudioError('INVALID_TRIM', 'validate', 'trimStartSeconds only applies to video scenes.', 2, field);
     if (scene.type === 'video' && manifest.assets[scene.asset!]?.type !== 'video') throw new StudioError('MISSING_VIDEO', 'validate', `${field}.asset must identify a video asset.`, 2, field);
     if (scene.type === 'video' && (scene.captions || scene.narration)) throw new StudioError('VIDEO_OVERLAY_UNSUPPORTED', 'validate', 'This iteration supports file music over video and narration/captions on motion scenes.', 2, field);
@@ -72,7 +96,7 @@ export async function loadManifest(manifestPath: string): Promise<ResolvedSpec> 
   try { if ((await stat(absoluteManifest)).size > 1024 * 1024) throw new Error('exceeds 1 MiB'); bytes = await readFile(absoluteManifest); }
   catch (error) { throw new StudioError('MANIFEST_READ_FAILED', 'validate', `Cannot read manifest ${absoluteManifest}: ${error instanceof Error ? error.message : String(error)}`, 2); }
   let input: unknown;
-  try { input = JSON.parse(bytes.toString('utf8')); } catch { throw new StudioError('INVALID_JSON', 'validate', 'Manifest must be valid JSON.', 2); }
+  input = parseJsonInput(bytes.toString('utf8'), absoluteManifest);
   const manifest = validateManifest(input);
   const projectDir = await realpath(dirname(absoluteManifest));
   const assets: Record<string, ResolvedAsset> = {};

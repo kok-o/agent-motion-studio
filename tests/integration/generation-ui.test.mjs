@@ -44,7 +44,7 @@ test('generation UI keeps candidate separate, resumes one saved submission, and 
     const localOrigin = new URL(studio.url).origin;
     assert.equal((await fetch(`${localOrigin}/api/generation/jobs`)).status, 401);
     assert.equal(await new Promise((ok, bad) => { const req = httpRequest(localOrigin + '/api/generation/capabilities', { headers: { Host: 'untrusted.invalid' } }, res => { res.resume(); ok(res.statusCode); }); req.on('error', bad); req.end(); }), 403);
-    await page.setViewport({ width: 1440, height: 1100 }); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
+    await page.setViewport({ width: 1440, height: 1100 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'ru')); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
     const cookies = await page.cookies(); assert.equal((await fetch(`${localOrigin}/api/generation/prepare`, { method: 'POST', headers: { Cookie: cookies.map(item => `${item.name}=${item.value}`).join('; '), 'Content-Type': 'application/json' }, body: '{}' })).status, 403);
     const traversal = await page.evaluate(async () => (await fetch('/api/generation/%2e%2e/candidate')).status); assert.ok(traversal >= 400);
     observations.push('new API requires session, real Host and same-origin POST; candidate traversal denied');
@@ -55,7 +55,7 @@ test('generation UI keeps candidate separate, resumes one saved submission, and 
     await click('#generation-consent'); await set('generation-budget', '.05');
     await page.$eval('#generation-submit', element => { element.click(); element.click(); }); await page.waitForFunction(() => document.querySelector('#generation-status').textContent.includes('В очереди')); await idle(); assert.equal(count('/submit'), 1);
     await page.reload({ waitUntil: 'networkidle0' }); await selectShot(); assert.equal(count('/submit'), 1); assert.equal(count('/status/controlled-job-1'), 0);
-    await studio.close(); studio = await startStudio(file, 0, { provider }); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
+    await studio.close(); studio = await startStudio(file, 0, { provider }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'ru')); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
     await click('#generation-resume'); await page.waitForFunction(() => document.querySelector('#generation-status').textContent.includes('Результат готов')); await idle(); assert.equal(count('/status/controlled-job-1'), 1); assert.equal(count('/submit'), 1);
     observations.push('prepare has no remote traffic; double click and UI/server restart retain one submission and known remote status');
     await click('#generation-download'); await idle(); assert.ok((await readFile(file)).equals(initialBytes)); assert.equal(await page.$eval('#generation-download', element => element.disabled), false);
@@ -136,14 +136,14 @@ test('unknown submission UI preserves possible charge and needs explicit resolut
   const prepare = async () => { await click('#generation-prepare'); await page.waitForFunction(() => document.querySelector('#generation-status').textContent.includes('Подготовлено')); await idle(); return diagnostic(); };
   const approveAndSubmit = async () => { await click('#generation-consent'); await page.$eval('#generation-budget', element => { element.value = '.05'; element.dispatchEvent(new Event('input', { bubbles: true })); }); await click('#generation-submit'); await idle(); };
   try {
-    await page.setViewport({ width: 1440, height: 1100 }); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
+    await page.setViewport({ width: 1440, height: 1100 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'ru')); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
     await page.$eval('#generation-prompt', element => { element.value = 'Controlled unknown outcome test'; element.dispatchEvent(new Event('input', { bubbles: true })); }); await page.select('#generation-reference', reference.importedId);
     const original = await prepare(); await approveAndSubmit();
     await page.waitForFunction(() => document.querySelector('#generation-status').textContent.includes('Исход первой отправки неизвестен')); await idle();
     let unknown = await diagnostic(); assert.equal(unknown.status, 'submission_unknown'); assert.equal(unknown.submissions, 1); assert.equal(unknown.unknownResolution, undefined); assert.equal(requests.length, 1);
     assert.equal(await page.$eval('#generation-prepare', element => element.disabled), true);
     await click('#generation-stop'); await idle(); assert.equal((await diagnostic()).status, 'submission_unknown'); assert.equal(await page.$eval('#generation-prepare', element => element.disabled), true);
-    await studio.close(); studio = await startStudio(file, 0, { provider }); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
+    await studio.close(); studio = await startStudio(file, 0, { provider }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'ru')); await page.goto(studio.url, { waitUntil: 'networkidle0' }); await selectShot();
     assert.equal(requests.length, 1); assert.equal(await page.$eval('#generation-prepare', element => element.disabled), true); assert.equal(await page.$eval('#generation-resolve-unknown', element => element.disabled), true);
     await click('#generation-account-checked'); assert.equal(await page.$eval('#generation-resolve-unknown', element => element.disabled), true);
     await click('#generation-possible-charge'); await click('#generation-resolve-unknown'); await idle();
