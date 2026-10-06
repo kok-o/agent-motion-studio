@@ -41,10 +41,32 @@ jobs:
         with:
           chrome-version: stable
           install-dependencies: true
+      - name: Allow the CI Chrome binary to use its namespace sandbox
+        shell: bash
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+        run: |
+          # Ubuntu restricts user namespaces for downloaded Chrome builds.
+          # Allow only this runner's exact executable; keep Chrome's sandbox
+          # and the host-wide AppArmor restriction enabled. No app launch flags change.
+          chrome_binary="$(realpath "$CHROME_PATH")"
+          test -x "$chrome_binary"
+          sudo tee /etc/apparmor.d/agent-motion-studio-ci-chrome > /dev/null <<EOF
+          abi <abi/4.0>,
+          include <tunables/global>
+          profile agent-motion-studio-ci-chrome "$chrome_binary" flags=(unconfined) {
+            userns,
+          }
+          EOF
+          sudo apparmor_parser -r /etc/apparmor.d/agent-motion-studio-ci-chrome
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg zip
       - run: npm ci --ignore-scripts
       - run: npm run build
       - run: npm run doctor
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - name: Verify Chrome namespace and seccomp sandboxes
+        run: node .github/scripts/check-chrome-sandbox.mjs
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - run: npm run test:integration
