@@ -13,26 +13,27 @@ import { GenerationService } from './generation.js';
 import { createReplicateProvider } from './generation-provider.js';
 import { GenerationStore } from './generation-store.js';
 import { previewScene } from './preview.js';
+import { readJsonInput } from './json-input.js';
 
-const usage = 'agent-motion-studio doctor | new --dir <project> | state <project.json> | import <project.json> --file <media> [--if-match <etag>] | edit <project.json> --action <action.json> [--if-match <etag>] | preview <project.json> --action <action.json> --if-match <etag> --out <new-directory> | generation <capabilities|prepare|list|status|submit|resume|download|preview|accept|reject|stop|resolve-unknown|bind-store> <project.json> [--job <id>] [--request <file>] [--approval <file>] [--resolution <file>] [--draft <file>] [--preview <id>] [--if-match <etag>] [--operation-id <id>] [--out <directory>] | studio <project.json> [--port 4173] | init <template> --dir <project> | validate <manifest.json> | render <manifest.json> --out <directory> [--overwrite] [--no-cache] | verify <output.mp4> [--json]';
+const usage = 'agent-motion-studio doctor | new --dir <project> [--aspect 9:16|16:9] [--title TEXT] | state <project.json> | import <project.json> --file <media> [--if-match <etag>] | edit <project.json> --action <action.json> [--if-match <etag>] | preview <project.json> --action <action.json> --if-match <etag> --out <new-directory> | generation <capabilities|prepare|list|status|submit|resume|download|preview|accept|reject|stop|resolve-unknown|bind-store> <project.json> [--job <id>] [--request <file>] [--approval <file>] [--resolution <file>] [--draft <file>] [--preview <id>] [--if-match <etag>] [--operation-id <id>] [--out <directory>] | studio <project.json> [--port 4173] | init <template> --dir <project> | validate <manifest.json> | render <manifest.json> --out <directory> [--overwrite] [--no-cache] | verify <output.mp4> [--json]';
 process.on('SIGINT', () => cancelProcesses()); process.on('SIGTERM', () => cancelProcesses());
 try {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { json: { type: 'boolean' }, out: { type: 'string' }, dir: { type: 'string' }, file: { type: 'string' }, action: { type: 'string' }, port: { type: 'string' }, request: { type: 'string' }, approval: { type: 'string' }, resolution: { type: 'string' }, job: { type: 'string' }, draft: { type: 'string' }, preview: { type: 'string' }, 'if-match': { type: 'string' }, 'operation-id': { type: 'string' }, overwrite: { type: 'boolean' }, 'no-cache': { type: 'boolean' }, help: { type: 'boolean', short: 'h' } } });
+  const { values, positionals } = parseArgs({ allowPositionals: true, options: { json: { type: 'boolean' }, out: { type: 'string' }, dir: { type: 'string' }, aspect: { type: 'string' }, title: { type: 'string' }, file: { type: 'string' }, action: { type: 'string' }, port: { type: 'string' }, request: { type: 'string' }, approval: { type: 'string' }, resolution: { type: 'string' }, job: { type: 'string' }, draft: { type: 'string' }, preview: { type: 'string' }, 'if-match': { type: 'string' }, 'operation-id': { type: 'string' }, overwrite: { type: 'boolean' }, 'no-cache': { type: 'boolean' }, help: { type: 'boolean', short: 'h' } } });
   const [command, input] = positionals;
   if (values.help || !command) { console.log(usage); }
   else {
     let result: unknown;
     if (command === 'doctor') { result = await doctor(); if (!(result as {ready:boolean}).ready) process.exitCode = 3; }
-    else if (command === 'new' && values.dir) result = await createProject(values.dir);
+    else if (command === 'new' && values.dir) result = await createProject(values.dir, { aspect: values.aspect as '9:16' | '16:9' | undefined, title: values.title });
     else if (command === 'state' && input) result = await readProject(resolve(input));
     else if (command === 'import' && input && values.file) {
       if ((await stat(values.file)).size > 512 * 1024 * 1024) throw new StudioError('ASSET_LIMIT', 'import', 'Maximum import size is 512 MiB.', 2);
       result = await importMedia(input, values.file, await readFile(values.file), values['if-match']);
     }
-    else if (command === 'edit' && input && values.action) result = await editProject(input, JSON.parse(await readFile(values.action, 'utf8')), values['if-match']);
+    else if (command === 'edit' && input && values.action) result = await editProject(input, await readJsonInput(values.action) as Parameters<typeof editProject>[1], values['if-match']);
     else if (command === 'preview' && input) {
       if (!values.action || !values['if-match'] || !values.out) throw new StudioError('INVALID_COMMAND', 'input', 'preview requires --action, --if-match and --out (a new directory).', 2);
-      const action = JSON.parse(await readFile(values.action, 'utf8')), output = resolve(values.out);
+      const action = await readJsonInput(values.action) as Parameters<typeof previewScene>[1], output = resolve(values.out);
       // Reserve a fresh output directory. A local draft must never overwrite an
       // accepted source or an earlier export selected accidentally as --out.
       await mkdir(dirname(output), { recursive: true });
@@ -44,7 +45,7 @@ try {
     else if (command === 'generation' && input === 'bind-store' && positionals[2]) result = await new GenerationStore(resolve(positionals[2])).bindLegacy();
     else if (command === 'generation' && input && positionals[2]) {
       const service = new GenerationService(resolve(positionals[2]));
-      const readJson = async (path: string) => JSON.parse(await readFile(resolve(path), 'utf8'));
+      const readJson = async (path: string) => await readJsonInput(resolve(path)) as any;
       const required = (name: 'job' | 'request' | 'approval' | 'resolution' | 'draft' | 'preview' | 'if-match' | 'operation-id' | 'out') => {
         const value = values[name]; if (!value) throw new StudioError('INVALID_COMMAND', 'input', `generation ${input} requires --${name}.`, 2); return value;
       };

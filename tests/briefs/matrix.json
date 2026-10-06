@@ -1,0 +1,214 @@
+{
+  "B1": {
+    "title": "fastgrep",
+    "aspect": "9:16",
+    "seconds": 15,
+    "theme": "dark",
+    "scenes": [
+      {
+        "id": "opening",
+        "type": "kinetic_title",
+        "text": "fastgrep",
+        "label": "ПОИСК ПО ФАЙЛАМ",
+        "durationFrames": 120,
+        "fontSize": 110
+      },
+      {
+        "id": "search",
+        "type": "kinetic_title",
+        "text": "Найди нужную\nстроку",
+        "label": "В СВОЁМ ПРОЕКТЕ",
+        "durationFrames": 120
+      },
+      {
+        "id": "install",
+        "type": "kinetic_title",
+        "text": "npm i -g fastgrep",
+        "label": "ОДНА КОМАНДА",
+        "durationFrames": 120
+      },
+      {
+        "id": "closing",
+        "type": "cta",
+        "text": "Попробуй fastgrep",
+        "label": "Вымышленная CLI-утилита",
+        "durationFrames": 90
+      }
+    ],
+    "music": "procedural",
+    "edits": [
+      "E1",
+      "E2",
+      "E5",
+      "E7"
+    ]
+  },
+  "B2": {
+    "title": "План на день",
+    "aspect": "16:9",
+    "seconds": 20,
+    "theme": "light",
+    "scenes": [
+      {
+        "id": "opening",
+        "type": "kinetic_title",
+        "text": "День перед глазами",
+        "durationFrames": 120
+      },
+      {
+        "id": "planner",
+        "type": "product_zoom",
+        "asset": "$planner",
+        "caption": "ТВОЙ ПЛАН НА СЕГОДНЯ",
+        "fit": "contain",
+        "durationFrames": 240
+      },
+      {
+        "id": "focus",
+        "type": "kinetic_title",
+        "text": "Выбери главное",
+        "label": "Задачи. Встречи. Время для себя.",
+        "durationFrames": 120
+      },
+      {
+        "id": "closing",
+        "type": "cta",
+        "text": "Попробуй планер",
+        "label": "Вымышленный продукт",
+        "durationFrames": 120
+      }
+    ],
+    "edits": [
+      "E6",
+      "E1"
+    ]
+  },
+  "B3": {
+    "title": "Файл в отчёт",
+    "aspect": "16:9",
+    "seconds": 25,
+    "theme": "light",
+    "scenes": [
+      {
+        "id": "opening",
+        "type": "kinetic_title",
+        "text": "Из файла в отчёт",
+        "label": "ТРИ ПРОСТЫХ ШАГА",
+        "durationFrames": 150
+      },
+      {
+        "id": "register",
+        "type": "kinetic_title",
+        "text": "1. Зарегистрируйтесь",
+        "label": "Создайте свой аккаунт",
+        "durationFrames": 180
+      },
+      {
+        "id": "upload",
+        "type": "kinetic_title",
+        "text": "2. Загрузите файл",
+        "label": "Выберите документ",
+        "durationFrames": 180
+      },
+      {
+        "id": "closing",
+        "type": "cta",
+        "text": "3. Получите отчёт",
+        "label": "Результат в одном месте",
+        "durationFrames": 240
+      }
+    ],
+    "edits": [
+      "E8",
+      "E2"
+    ],
+    "style": "studio"
+  },
+  "B4": {
+    "title": "Frontend Night",
+    "aspect": "9:16",
+    "seconds": 15,
+    "theme": "dark",
+    "brand": {
+      "background": "#101820",
+      "foreground": "#FFFFFF",
+      "accent": "#FEE715"
+    },
+    "scenes": [
+      {
+        "id": "opening",
+        "type": "kinetic_title",
+        "text": "Frontend\nNight",
+        "durationFrames": 120
+      },
+      {
+        "id": "when",
+        "type": "kinetic_title",
+        "text": "14 ноября\n19:00",
+        "label": "АЛМАТЫ",
+        "durationFrames": 120
+      },
+      {
+        "id": "meet",
+        "type": "kinetic_title",
+        "text": "Встречаемся\nи обсуждаем",
+        "label": "FRONTEND",
+        "durationFrames": 120
+      },
+      {
+        "id": "closing",
+        "type": "cta",
+        "text": "Вход свободный",
+        "label": "Вымышленный митап",
+        "durationFrames": 90
+      }
+    ],
+    "edits": [
+      "E2",
+      "E3",
+      "E7"
+    ]
+  },
+  "B5": {
+    "title": "Утренний кофе",
+    "aspect": "16:9",
+    "seconds": 20,
+    "theme": "dark",
+    "scenes": [
+      {
+        "id": "opening",
+        "type": "kinetic_title",
+        "text": "Утренний\nритуал",
+        "durationFrames": 90
+      },
+      {
+        "id": "pour",
+        "type": "video",
+        "asset": "$wide",
+        "trimStartSeconds": 1,
+        "fit": "cover",
+        "durationFrames": 210
+      },
+      {
+        "id": "detail",
+        "type": "video",
+        "asset": "$detail",
+        "trimStartSeconds": 1,
+        "fit": "cover",
+        "durationFrames": 180
+      },
+      {
+        "id": "closing",
+        "type": "cta",
+        "text": "Минута для себя",
+        "label": "Начните день спокойно",
+        "durationFrames": 120
+      }
+    ],
+    "music": "$score",
+    "edits": [
+      "E4",
+      "E1"
+    ]
+  }
+}

@@ -1,7 +1,8 @@
 import { mkdir, readFile, writeFile, rename, rm, realpath, open, stat } from 'node:fs/promises';
 import { resolve, dirname, join, extname, basename, relative, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { hashBytes, loadManifest, validateManifest } from './spec.js';
+import { hashBytes, loadManifest, validateManifest, validateActionShape, assertSupportedText } from './spec.js';
+import { parseJsonInput } from './json-input.js';
 import { StudioError } from './errors.js';
 import type { Manifest, Scene, Asset, Revision, OperationReceipt } from './types.js';
 
@@ -19,23 +20,24 @@ export class ProjectPrecommitError extends StudioError {
   }
 }
 
-export async function createProject(directory: string) {
+export async function createProject(directory: string, options: { aspect?: Manifest['video']['aspectRatio']; title?: string } = {}) {
   const dir = resolve(directory); await mkdir(dir, { recursive: true });
   const file = join(dir, 'project.json');
   const manifest: Manifest = {
     schemaVersion: 2, id: 'my-film', seed: 7, revision: randomUUID(), history: [],
-    video: { aspectRatio: '16:9', fps: 30, style: 'kinetic' },
+    video: { aspectRatio: options.aspect ?? '16:9', fps: 30, style: 'kinetic' },
     brand: { theme: 'dark', background: '#10171C', foreground: '#F4F1E9', accent: '#D9EE86', font: 'builtin-sans' },
     assets: {}, audio: { narration: { provider: 'none' }, music: { provider: 'none' } },
-    scenes: [{ id: 'opening', type: 'kinetic_title', text: 'Новый фильм', durationFrames: 120 }]
+    scenes: [{ id: 'opening', type: 'kinetic_title', text: options.title ?? 'Новый фильм', durationFrames: 120 }]
   };
+  validateManifest(manifest);
   await writeFile(file, json(manifest), { flag: 'wx' });
   return { created: true, project: file };
 }
 
 export async function readProject(file: string) {
   const content = await readFile(file);
-  const manifest = validateManifest(JSON.parse(content.toString('utf8')));
+  const manifest = validateManifest(parseJsonInput(content.toString('utf8'), file));
   return { manifest, etag: hashBytes(content) };
 }
 
@@ -69,23 +71,90 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
   return readProject(file);
 }
 
-export type ProjectAction =
+export type OrdinaryAction =
   | { type: 'add-scene'; scene: Scene }
   | { type: 'edit-scene'; sceneId: string; patch: { [Key in keyof Scene]?: Scene[Key] | null } }
   | { type: 'remove-scene'; sceneId: string }
   | { type: 'move-scene'; sceneId: string; index: number }
   | { type: 'music'; asset?: string; gainDb?: number; provider?: 'none' | 'procedural' }
   | { type: 'composition'; video: Manifest['video'] }
+  | { type: 'brand'; patch: Partial<Omit<Manifest['brand'], 'font'>> };
+export type ProjectAction = OrdinaryAction
+  | { type: 'batch'; actions: OrdinaryAction[]; label?: string }
   | { type: 'restore'; revisionId: string }
   | { type: 'restore-scene'; revisionId: string; sceneId: string };
 
 /** Shared by accepted edits and unsaved scene previews. No persistence here. */
 export function patchScene(scene: Scene, patch: Extract<ProjectAction, { type: 'edit-scene' }>['patch']): Scene {
   if (!patch || Object.hasOwn(patch, 'id') || Object.hasOwn(patch, 'type')) throw fail('Scene id/type are stable; add a scene to change its type.');
-  if (Object.keys(patch).some(key => !['durationFrames', 'trimStartSeconds', 'text', 'highlight', 'label', 'asset', 'caption', 'fit', 'focalPoint', 'fontSize', 'narration', 'captions'].includes(key))) throw fail('Scene patch contains unknown additional properties.');
+  if (Object.keys(patch).some(key => !['durationFrames', 'trimStartSeconds', 'text', 'highlight', 'label', 'asset', 'caption', 'fit', 'focalPoint', 'fontSize', 'narration', 'captions', 'objects', 'background'].includes(key))) throw fail('Scene patch contains unknown additional properties.');
+  if (scene.type !== 'video' && patch.trimStartSeconds !== undefined && patch.trimStartSeconds !== null) throw fail('trimStartSeconds only applies to video scenes.');
+  validateActionShape('patch', patch);
   const revised = { ...scene } as Record<string, unknown>;
   for (const [key, value] of Object.entries(patch)) { if (value === null) delete revised[key]; else revised[key] = value; }
+  validateActionShape('scene', revised);
   return revised as Scene;
+}
+
+const palettes = {
+  dark: { background: '#10171C', foreground: '#F4F1E9', accent: '#D9EE86' },
+  light: { background: '#F4F1E9', foreground: '#10171C', accent: '#285A36' }
+};
+
+/** Shared validation/application for single edits and each batch child. No IO. */
+function applyAction(next: Manifest, before: Manifest, action: ProjectAction, inBatch = false) {
+  const allowed: Record<ProjectAction['type'], string[]> = {
+    'add-scene': ['type', 'scene'], 'edit-scene': ['type', 'sceneId', 'patch'], 'remove-scene': ['type', 'sceneId'], 'move-scene': ['type', 'sceneId', 'index'],
+    music: ['type', 'asset', 'gainDb', 'provider'], composition: ['type', 'video'], brand: ['type', 'patch'], batch: ['type', 'actions', 'label'], restore: ['type', 'revisionId'], 'restore-scene': ['type', 'revisionId', 'sceneId']
+  };
+  if (!action || typeof action !== 'object' || Array.isArray(action) || !Object.hasOwn(allowed, action.type) || Object.keys(action).some(key => !allowed[action.type].includes(key))) throw fail('Unknown action or fields.');
+  if (inBatch && ['batch', 'restore', 'restore-scene'].includes(action.type)) throw fail('Nested batch and restore actions are forbidden inside batch.');
+  const id = (value: unknown) => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value);
+  if (['edit-scene', 'remove-scene', 'move-scene', 'restore-scene'].includes(action.type) && (!('sceneId' in action) || !id(action.sceneId))) throw fail('A valid sceneId is required.');
+  if (['restore', 'restore-scene'].includes(action.type) && (!('revisionId' in action) || typeof action.revisionId !== 'string' || !action.revisionId)) throw fail('A revisionId is required.');
+  const index = 'sceneId' in action ? next.scenes.findIndex(scene => scene.id === action.sceneId) : -1;
+  if ('sceneId' in action && index < 0) throw fail('Scene does not exist.');
+  const sceneReferences = (scene: Scene) => {
+    if (scene.asset && next.assets[scene.asset]?.type !== (scene.type === 'video' ? 'video' : 'image')) throw fail('Scene requires an imported source of the right type.');
+    for (const key of ['text', 'highlight', 'label', 'caption'] as const) if (scene[key]) assertSupportedText(scene[key]!, key);
+    if (scene.highlight && !scene.text?.includes(scene.highlight)) throw fail('highlight must occur in text.');
+  };
+  switch (action.type) {
+    case 'batch': {
+      if (!Array.isArray(action.actions) || action.actions.length < 1 || action.actions.length > 32 || (action.label !== undefined && (typeof action.label !== 'string' || !action.label.trim() || action.label.length > 80 || /[\r\n]/.test(action.label)))) throw fail('Batch requires 1–32 ordinary actions and an optional 1–80 character single-line label.');
+      action.actions.forEach((child, childIndex) => {
+        try { applyAction(next, before, child, true); }
+        catch (error) { throw fail(`Batch action[${childIndex}]: ${error instanceof Error ? error.message : String(error)}`); }
+      }); break;
+    }
+    case 'add-scene':
+      validateActionShape('scene', action.scene); sceneReferences(action.scene);
+      if (next.scenes.some(scene => scene.id === action.scene.id)) throw fail('Duplicate scene ID.');
+      next.scenes.push(structuredClone(action.scene)); break;
+    case 'edit-scene': {
+      const revised = patchScene(next.scenes[index], action.patch); sceneReferences(revised); next.scenes[index] = revised; break;
+    }
+    case 'remove-scene': next.scenes.splice(index, 1); break;
+    case 'move-scene':
+      if (!Number.isInteger(action.index) || action.index < 0 || action.index >= next.scenes.length) throw fail('Invalid scene position.');
+      next.scenes.splice(action.index, 0, next.scenes.splice(index, 1)[0]); break;
+    case 'music':
+      if ((action.asset !== undefined && !id(action.asset)) || (action.provider !== undefined && !['none', 'procedural'].includes(action.provider)) || (action.gainDb !== undefined && (!Number.isFinite(action.gainDb) || action.gainDb < -60 || action.gainDb > 0))) throw fail('Invalid music asset, provider or gainDb.');
+      if (action.asset && action.provider) throw fail('Choose either a file asset or a music provider.');
+      if (action.asset && next.assets[action.asset]?.type !== 'audio') throw fail('Music requires an imported audio asset.');
+      next.audio.music = action.asset ? { provider: 'file', asset: action.asset, gainDb: action.gainDb ?? -12 } : { provider: action.provider ?? 'none', gainDb: action.gainDb ?? -12 }; break;
+    case 'composition': validateActionShape('video', action.video); next.video = structuredClone(action.video); break;
+    case 'brand':
+      validateActionShape('brand', action.patch);
+      next.brand = { ...next.brand, ...(action.patch.theme ? palettes[action.patch.theme] : {}), ...action.patch }; break;
+    case 'restore': case 'restore-scene': {
+      const revision = before.history?.find(item => item.id === action.revisionId);
+      if (!revision) throw fail('Revision does not exist.');
+      if (action.type === 'restore') { next.scenes = structuredClone(revision.scenes); next.video = structuredClone(revision.video); next.audio = structuredClone(revision.audio); next.brand = structuredClone(revision.brand); }
+      else { const scene = revision.scenes.find(item => item.id === action.sceneId); if (!scene) throw fail('Scene did not exist in that revision.'); next.scenes[index] = structuredClone(scene); }
+      break;
+    }
+  }
 }
 
 export async function editProject(file: string, action: ProjectAction, expectedEtag?: string) {
@@ -93,40 +162,8 @@ export async function editProject(file: string, action: ProjectAction, expectedE
     const { manifest: before, etag } = await readProject(file);
     if (expectedEtag && expectedEtag !== etag) throw new StudioError('PROJECT_CONFLICT', 'project', 'Project changed elsewhere. Reload before editing.', 2);
     const next = structuredClone(before);
-    const allowed: Record<ProjectAction['type'], string[]> = {
-      'add-scene': ['type', 'scene'], 'edit-scene': ['type', 'sceneId', 'patch'], 'remove-scene': ['type', 'sceneId'], 'move-scene': ['type', 'sceneId', 'index'],
-      music: ['type', 'asset', 'gainDb', 'provider'], composition: ['type', 'video'], restore: ['type', 'revisionId'], 'restore-scene': ['type', 'revisionId', 'sceneId']
-    };
-    if (!action || !allowed[action.type] || Object.keys(action).some(key => !allowed[action.type].includes(key))) throw fail('Unknown action or fields.');
-    const index = 'sceneId' in action ? next.scenes.findIndex(scene => scene.id === action.sceneId) : -1;
-    if ('sceneId' in action && index < 0) throw fail('Scene does not exist.');
-    switch (action.type) {
-      case 'add-scene': next.scenes.push(action.scene); break;
-      case 'edit-scene': {
-        next.scenes[index] = patchScene(next.scenes[index], action.patch); break;
-      }
-      case 'remove-scene': next.scenes.splice(index, 1); break;
-      case 'move-scene':
-        if (!Number.isInteger(action.index) || action.index < 0 || action.index >= next.scenes.length) throw fail('Invalid scene position.');
-        next.scenes.splice(action.index, 0, next.scenes.splice(index, 1)[0]); break;
-      case 'music':
-        if (action.asset && action.provider) throw fail('Choose either a file asset or a music provider.');
-        next.audio.music = action.asset ? { provider: 'file', asset: action.asset, gainDb: action.gainDb ?? -12 } : { provider: action.provider ?? 'none', gainDb: action.gainDb ?? -12 }; break;
-      case 'composition': next.video = action.video; break;
-      case 'restore': case 'restore-scene': {
-        const revision = before.history?.find(item => item.id === action.revisionId);
-        if (!revision) throw fail('Revision does not exist.');
-        if (action.type === 'restore') {
-          next.scenes = revision.scenes; next.video = revision.video; next.audio = revision.audio; next.brand = revision.brand;
-        } else {
-          const scene = revision.scenes.find(item => item.id === action.sceneId);
-          if (!scene) throw fail('Scene did not exist in that revision.');
-          next.scenes[index] = scene;
-        }
-        break;
-      }
-    }
-    return commit(file, before, next, action.type);
+    applyAction(next, before, action);
+    return commit(file, before, next, action.type === 'batch' ? action.label ?? 'batch' : action.type);
   });
 }
 

@@ -24,10 +24,10 @@ export async function previewGeneratedTake(file: string, draft: GeneratedTakeDra
   let id = `candidate-${randomUUID()}`;
   while (manifest.assets[id]) id = `candidate-${randomUUID()}`;
   const used = new Set<string>();
-  for (const item of manifest.scenes) { if (item.asset) used.add(item.asset); if (item.narration?.asset) used.add(item.narration.asset); }
+  for (const item of manifest.scenes) { if (item.asset) used.add(item.asset); if (item.narration?.asset) used.add(item.narration.asset); for (const object of item.objects ?? []) if (object.asset) used.add(object.asset); }
   if (manifest.audio.music.asset) used.add(manifest.audio.music.asset);
   // The old target source can be pruned only when no other scene references it.
-  if (scene.asset && !manifest.scenes.some(item => item.id !== scene.id && (item.asset === scene.asset || item.narration?.asset === scene.asset)) && manifest.audio.music.asset !== scene.asset) used.delete(scene.asset);
+  if (scene.asset && !manifest.scenes.some(item => item.id !== scene.id && (item.asset === scene.asset || item.narration?.asset === scene.asset || item.objects?.some(object => object.asset === scene.asset))) && manifest.audio.music.asset !== scene.asset) used.delete(scene.asset);
   manifest.assets = Object.fromEntries(Object.entries(manifest.assets).filter(([key]) => used.has(key)));
   manifest.assets[id] = { type: 'video', path, sha256: draft.candidateSha256 };
   scene.asset = id; scene.trimStartSeconds = draft.trimStartSeconds; scene.fit = draft.fit; scene.focalPoint = draft.focalPoint;

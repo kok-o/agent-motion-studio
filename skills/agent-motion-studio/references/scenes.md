@@ -1,8 +1,10 @@
 # Choose a scene
 
+`composition` (v2): independent editable text, rect/ellipse and image objects, with ordered keyframes in output pixels. Use for visible product actions and document state changes; no automatic decor. Read [composition](composition.md) for authoring, timing, exact preview and ordinary object edits.
+
 `video` (v2): required video asset; optional trimStartSeconds defaults to 0, fit is contain/cover, focalPoint uses coordinates 0-1. Preserve duration when replacing a take. The source interval must fit within measured duration; no automatic loop, stretch or frozen padding. Normalize fps to 30; source audio is muted. Preview actual trim/crop and use project API actions for acceptance. Generated take uses separate staging and atomic generation accept: [generation](generation.md).
 
-`kinetic_title`: required `text`; optional `highlight` must occur inside that text. Use a short hook or a single clear feature statement. Optional `fontSize` is 48–160; fit may reduce the chosen size for readability.
+`kinetic_title`: required `text`; optional `highlight` must occur inside that text. v2 permits an optional supporting `label`, drawn separately. v2 preserves authored heading casing, including CLI commands; v1 kinetic headings retain their uppercase recipe. Use a short hook or a single clear feature statement. Optional `fontSize` is 48–160; it is a maximum and fit may reduce it. Read actual resolved layout before claiming an enlargement.
 
 `product_zoom`: required image `asset` and `caption`; optional `fit` is `contain` or `cover`, and `focalPoint` is `{x, y}` with each coordinate from 0 to 1. Use contain for screenshots that must be readable in full. Use cover for photos when cropping is intentional, and inspect the actual crop.
 

@@ -59,9 +59,12 @@ export function findTools(): ToolPaths {
 }
 export async function launchBrowser(chrome: string) {
   throwIfCancelled();
+  // Optional for hosts near their OS commit limit. Keep the browser sandbox,
+  // one isolated rendering page and the same indexed Canvas/export path.
+  const memoryArgs = process.env.AMS_LOW_MEMORY === '1' ? ['--disable-gpu', '--renderer-process-limit=1'] : [];
   try { return await puppeteer.launch({ executablePath: chrome, headless: true, timeout: 30_000, protocolTimeout: 60_000,
     handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, signal: cancellationController.signal,
-    args: ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run', '--disable-default-apps'] }); }
+    args: ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run', '--disable-default-apps', ...memoryArgs] }); }
   catch (error) { throwIfCancelled(); throw new StudioError('BROWSER_START_FAILED', 'doctor', `Cannot launch the browser: ${error instanceof Error ? error.message : String(error)}`, 3); }
 }
 export async function doctor() {

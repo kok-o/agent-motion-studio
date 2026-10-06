@@ -84,7 +84,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
     try {
       if (request.headers.host !== new URL(origin).host || (request.headers.origin && request.headers.origin !== origin)) { send({ error: 'Origin/Host rejected' }, 403); return; }
       const url = new URL(request.url ?? '/', origin);
-      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/generation-ui.js': 'generation-ui.js', '/style.css': 'style.css' };
+      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/style.css': 'style.css' };
       if (publicFiles[url.pathname] && (request.method === 'GET' || request.method === 'HEAD')) { await sendFile(request, response, join(packageRoot, 'dist/studio', publicFiles[url.pathname])); return; }
       if (request.method === 'POST' && url.pathname === '/api/session') {
         if (request.headers.origin !== origin) { send({ error: 'Origin required' }, 403); return; }

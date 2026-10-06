@@ -38,13 +38,13 @@ export function kineticLayouts(ctx: CanvasRenderingContext2D, spec: ResolvedSpec
   const { width: w, height: h } = spec, portrait = w < h;
   const margin = w * (spec.video.safeArea ?? (portrait ? 0.08 : 0.075));
   for (const scene of spec.scenes) {
-    if (scene.type === 'video') continue;
+    if (scene.type === 'video' || scene.type === 'composition') continue;
     if (scene.type === 'kinetic_title' || scene.type === 'cta') {
-      scene.layout = fit(ctx, scene.text!.toLocaleUpperCase('ru-RU'), {
+      scene.layout = fit(ctx, spec.schemaVersion === 1 ? scene.text!.toLocaleUpperCase('ru-RU') : scene.text!, {
         x: margin, y: h * (portrait ? 0.19 : 0.18), w: w - margin * 2, h: h * (portrait ? 0.46 : 0.52),
       }, scene.fontSize ?? (portrait ? 248 : 286), portrait ? 4 : 3);
-      if (scene.type === 'cta') scene.labelLayout = fit(ctx, scene.label!, {
-        x: margin + 30, y: h * (scene.resolvedCaptions?.length ? 0.68 : portrait ? 0.71 : 0.76), w: w - 2 * margin - (portrait ? 128 : w * 0.30), h: h * (scene.resolvedCaptions?.length ? 0.065 : 0.09),
+      if (scene.label) scene.labelLayout = fit(ctx, scene.label!, {
+        x: margin + 30, y: h * (scene.type === 'kinetic_title' ? 0.68 : scene.resolvedCaptions?.length ? 0.68 : portrait ? 0.71 : 0.76), w: w - 2 * margin - (portrait ? 128 : w * 0.30), h: h * (scene.resolvedCaptions?.length ? 0.065 : 0.09),
       }, portrait ? 38 : 36, 2, false);
     } else {
       scene.captionLayout = fit(ctx, scene.caption!.toLocaleUpperCase('ru-RU'), {
@@ -84,8 +84,8 @@ function dotField(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, local: numb
   ctx.restore();
 }
 
-function type(ctx: CanvasRenderingContext2D, layout: TextLayout, local: number, color: string, accent: string, highlight?: string, duration = 90) {
-  const words = new Set(highlight?.toLocaleUpperCase('ru-RU').split(/\s+/) ?? []);
+function type(ctx: CanvasRenderingContext2D, layout: TextLayout, local: number, color: string, accent: string, highlight?: string, duration = 90, preserveCase = false) {
+  const words = new Set((preserveCase ? highlight : highlight?.toLocaleUpperCase('ru-RU'))?.split(/\s+/) ?? []);
   ctx.font = `700 ${layout.fontSize}px StudioDisplay`; ctx.textBaseline = 'top';
   layout.lines.forEach((line, row) => {
     const y = layout.y + row * layout.lineHeight;
@@ -117,16 +117,16 @@ function hud(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: ResolvedS
   const index = spec.scenes.indexOf(scene);
   ctx.save(); ctx.fillStyle = color; ctx.strokeStyle = color; ctx.globalAlpha = 0.65;
   ctx.font = `400 ${portrait ? 26 : 22}px StudioSans`; ctx.textBaseline = 'top';
-  ctx.fillText(`${String(index + 1).padStart(2, '0')} / ${String(spec.scenes.length).padStart(2, '0')}`, margin, h * 0.055);
+  ctx.fillText(spec.schemaVersion === 2 ? scene.id : `${String(index + 1).padStart(2, '0')} / ${String(spec.scenes.length).padStart(2, '0')}`, margin, h * 0.055);
   ctx.lineWidth = 2;
   const corners = [[margin, h * 0.04, 1, 1], [w - margin, h * 0.04, -1, 1], [margin, h * 0.94, 1, -1], [w - margin, h * 0.94, -1, -1]];
   for (const [x, y, dx, dy] of corners) {
     ctx.beginPath(); ctx.moveTo(x + dx * 18, y); ctx.lineTo(x, y); ctx.lineTo(x, y + dy * 18); ctx.stroke();
   }
   const width = w - 2 * margin, gap = 8;
-  for (const item of spec.scenes) {
-    const x = margin + width * item.startFrame / spec.totalFrames;
-    const length = width * item.durationFrames / spec.totalFrames - gap;
+  for (const item of spec.schemaVersion === 2 ? [scene] : spec.scenes) {
+    const x = spec.schemaVersion === 2 ? margin : margin + width * item.startFrame / spec.totalFrames;
+    const length = spec.schemaVersion === 2 ? width : width * item.durationFrames / spec.totalFrames - gap;
     if (length <= 0) continue;
     ctx.globalAlpha = 0.16; ctx.fillRect(x, h * 0.91, length, 4);
     ctx.globalAlpha = 0.9; ctx.fillRect(x, h * 0.91, length * clamp((frame - item.startFrame + 1) / item.durationFrames), 4);
@@ -210,9 +210,15 @@ function shot(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: Resolved
       const echo = layout.lines.at(-1)!;
       ctx.strokeText(echo, layout.x, layout.y + layout.height + 18); ctx.restore();
     }
-    type(ctx, scene.layout!, local, fg, spec.brand.accent, scene.highlight, scene.durationFrames);
+    type(ctx, scene.layout!, local, fg, spec.brand.accent, scene.highlight, scene.durationFrames, spec.schemaVersion === 2);
     const radius = w * (portrait ? 0.105 : 0.073);
     if (!scene.resolvedCaptions?.length) star(ctx, w * 0.78, h * (portrait ? cta ? 0.84 : 0.76 : 0.75), radius, local / 30 * 0.45, cta ? fg : spec.brand.accent);
+    if (!cta && scene.labelLayout) {
+      const label = scene.labelLayout;
+      ctx.save(); ctx.globalAlpha = scene.durationFrames < 24 ? 1 : expo((local - 8) / 12); ctx.fillStyle = fg;
+      ctx.font = `400 ${label.fontSize}px StudioSans`; ctx.textBaseline = 'top';
+      label.lines.forEach((line, index) => ctx.fillText(line, label.x, label.y + label.lineHeight * index)); ctx.restore();
+    }
     if (cta) {
       const label = scene.labelLayout!, k = scene.durationFrames < 24 ? 1 : expo((local - 8) / 12);
       ctx.save(); ctx.globalAlpha = k; ctx.fillStyle = fg;

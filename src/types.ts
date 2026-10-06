@@ -1,7 +1,16 @@
 export type Asset = { type: 'image' | 'audio' | 'video'; path: string; sha256?: string; name?: string };
 export type Caption = { startMs: number; endMs: number; text: string };
+export type ObjectState = { x: number; y: number; width: number; height: number; opacity: number; rotation: number; reveal: number };
+export type ObjectKeyframe = Partial<ObjectState> & { frame: number; easing?: 'linear' | 'outCubic' | 'inOutCubic' | 'step' };
+export type CompositionObject = Pick<ObjectState, 'x' | 'y' | 'width' | 'height'> & Partial<Pick<ObjectState, 'opacity' | 'rotation' | 'reveal'>> & {
+  id: string; type: 'text' | 'shape' | 'image'; keyframes?: ObjectKeyframe[];
+  text?: string; fontSize?: number; weight?: 400 | 700; align?: 'left' | 'center' | 'right';
+  color?: string; stroke?: string; strokeWidth?: number; radius?: number; shape?: 'rect' | 'ellipse';
+  asset?: string; fit?: 'contain' | 'cover'; focalPoint?: { x: number; y: number };
+};
 export type Scene = {
-  id: string; type: 'kinetic_title' | 'product_zoom' | 'cta' | 'video'; durationFrames: number;
+  id: string; type: 'kinetic_title' | 'product_zoom' | 'cta' | 'video' | 'composition'; durationFrames: number;
+  objects?: CompositionObject[]; background?: string;
   trimStartSeconds?: number;
   text?: string; highlight?: string; label?: string; asset?: string; caption?: string;
   fit?: 'contain' | 'cover'; focalPoint?: { x: number; y: number };

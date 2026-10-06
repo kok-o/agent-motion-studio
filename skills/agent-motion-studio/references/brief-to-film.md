@@ -1,5 +1,7 @@
 # From a new brief to an editable film
 
+When the brief needs product actions rather than title templates, read [object composition](composition.md). Save a storyboard and three key frames before assembly; use independent objects to show states and vary plans. Ordinary text/movement revisions change project data through edit-scene, not renderer code.
+
 Work from the studio checkout or installed package workspace. The copied skill directory contains guidance, not the executable. In the examples below replace `agent-motion-studio` with `node dist/cli.js` in a built checkout, or `npx --no-install agent-motion-studio` in an installed workspace.
 
 Record the user's brief and a short shot plan outside the accepted project: audience, one message, aspect ratio, exact text, duration in frames, permitted materials and authorized external calls. Choose supported scenes; ordinary film work must not require renderer changes. For a 20-second film, 120/210/150/120 frames gives four shots at 30 fps. These are an example, not a required template.
@@ -7,11 +9,11 @@ Record the user's brief and a short shot plan outside the accepted project: audi
 Create a fresh v2 project and read its state:
 
 ```sh
-agent-motion-studio new --dir projects/film --json
+agent-motion-studio new --dir projects/film --aspect 16:9 --title "Opening text" --json
 agent-motion-studio state projects/film/project.json --json
 ```
 
-The new project starts with one `opening` title. Use `edit-scene` to replace its text and timing. Import permitted local media with `import --file FILE --if-match ETAG`, then use the returned `importedId` in an `add-scene` action. Refresh state after every accepted operation. `composition` sets aspect ratio/style; `music` can select local `procedural` music. Keep narration provider `none` unless the user requests a supported speech path. A new motion film needs no media-provider key.
+The new project starts with one `opening` title. Import permitted local media with `import --file FILE --if-match ETAG`, then use returned `importedId` values in scene actions. Accept the logical first assembly with one `batch` (edit opening, add remaining scenes, set brand/music). Refresh state after every accepted operation. `composition` sets aspect ratio/style; `music` can select local `procedural` music. Keep narration provider `none` unless the user requests supported speech. A new motion film needs no media-provider key. The API runner already creates/imports the authorized materials; it has no shell/import tool and allows initial batch only until first render.
 
 Write action JSON to a separate file, then call `edit PROJECT --action ACTION --if-match ETAG --json`. For example:
 

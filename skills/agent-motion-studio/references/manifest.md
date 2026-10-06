@@ -1,5 +1,13 @@
 # Accepted v2 project and separate drafts
 
+v2 also accepts the additive `composition` scene with `objects` and optional `background`. Use [object composition](composition.md) for text/shapes/images and data-only keyframes. `edit-scene.patch.objects` replaces the complete array under the same ETag/preview/history contract. Old project rendering stays unchanged; old binaries cannot read this new type.
+
+`new --dir film --aspect 9:16 --title "Frontend Night"` sets format and opening text, preserving ID `my-film`. JSON input files accept UTF-8 with optional BOM; malformed input returns INVALID_JSON/exit 2 without its contents.
+
+`brand` patches theme/background/foreground/accent (six-digit hex; font preserved). Supplying theme resets its palette before explicit colors override it: dark #10171C/#F4F1E9/#D9EE86, light #F4F1E9/#10171C/#285A36. Colors without theme preserve other settings. Full restore restores brand; restore-scene preserves current brand/video.
+
+`batch` accepts 1–32 ordinary actions, optional single-line label ≤80 characters, one ETag/lock/commit and +1 history snapshot. Each child's fields/IDs are checked; an error identifies action[index] and leaves accepted state unchanged. Nested batch and restore/restore-scene are forbidden. Imports are separate operations. API initial creation permits batch only before first render; existing-film preview mode rejects it. Use separate exact preview/edit instead. See [edit catalog](edits.md).
+
 The distributed schemas/manifest.schema.json is authoritative; unknown fields fail. Existing v1 motion projects remain readable. Accepted editor/CLI changes migrate them to v2 with history. Old binaries may reject optional operationReceipts; new-app backward reading does not promise old-app forward compatibility.
 
 Required fields are schemaVersion, ASCII id, integer seed, video, brand, assets, audio and scenes. v2 additionally permits revision, bounded history and operationReceipts. Use new or a copied init example; never rewrite an accepted manifest directly.

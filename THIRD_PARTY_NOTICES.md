@@ -19,6 +19,8 @@ Three unmodified Oswald WOFF2 subsets (Latin, Cyrillic, Cyrillic Extended; weigh
 
 ## Demo materials
 
+`examples/product-ad/assets/planner-alternative.png` is an original fictional planner drawing created locally by `scripts/create-planner-variant.mjs` for scene-replacement validation (MIT). No media API or external source was used.
+
 `examples/repo-promo/assets/studio.png`, `examples/product-ad/assets/planner.png`, and `examples/feature-explainer/assets/timeline.png` are original synthetic drawings created by `scripts/create-demo-assets.mjs`. They depict fictional demo content, not a screenshot of an implemented visual editor. They are distributed under the project's MIT license.
 
 `examples/feature-explainer/assets/voice.wav` is locally synthesized output of the original text “Измените текст в JSON. Движок соберёт новый ролик.” using the installed Windows SAPI Microsoft Irina Desktop voice, with FFmpeg loudness normalization targeting -16 LUFS / -2 dBTP. It is a test fixture, not a recorded person or a cloned voice. The generation script is `scripts/create-demo-voice.ps1`; Windows speech engine binaries are not distributed. Sentence captions are approximate supplied timings. Edge output is a separately generated verification artifact and is excluded from the package.

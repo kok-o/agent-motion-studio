@@ -49,3 +49,10 @@ Thumbs.db
 /scripts/report-agent-session.mjs
 /scripts/run-acceptance-checks.mjs
 /scripts/verify-final-package.mjs
+
+# One-off authoring/recovery helpers depend on private accepted projects and
+# stored host-specific evidence. Preserve them locally, outside source commits.
+/scripts/refine-expression-films.mjs
+/scripts/verify-expression-consumer.mjs
+/scripts/resume-expression-consumer.mjs
+/scripts/verify-low-memory-frames.mjs

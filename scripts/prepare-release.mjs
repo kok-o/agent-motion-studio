@@ -25,7 +25,7 @@ else run('zip', ['-q', '-r', join(out, sourceZip), sourceName], staging);
 const pack = JSON.parse(run(process.execPath, [npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', out]))[0];
 const names = pack.files.map(f => f.path);
 const modules = (await readdir(join(root, 'src'))).filter(name => name.endsWith('.ts')).map(name => `dist/${name.slice(0, -3)}.js`);
-const applicationFiles = new Set([...modules, 'dist/renderer/entry.js', 'dist/renderer/index.html', 'dist/studio/index.html', 'dist/studio/app.js', 'dist/studio/generation-ui.js', 'dist/studio/style.css']);
+const applicationFiles = new Set([...modules, 'dist/renderer/entry.js', 'dist/renderer/index.html', 'dist/studio/index.html', 'dist/studio/app.js', 'dist/studio/i18n.js', 'dist/studio/generation-ui.js', 'dist/studio/style.css']);
 for (const needed of applicationFiles) assert.ok(names.includes(needed), `Runtime missing application file: ${needed}; update package.json files when adding modules.`);
 for (const name of names.filter(name => name.startsWith('dist/'))) assert.ok(applicationFiles.has(name), `Runtime includes non-application output: ${name}`);
 await audit(names, root, { runtime: true });
