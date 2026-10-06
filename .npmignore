@@ -1,11 +1,15 @@
 **/.cache/**
 **/.cache
+**/.studio/**
+**/.studio
+**/.candidate-preview-*.json
 **/node_modules/**
 **/out/**
 **/.git/**
 artifacts/**
 references/**
 .agents/**
+.claude/**
 tests/**
 src/**
 renderer/**

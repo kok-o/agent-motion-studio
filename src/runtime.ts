@@ -42,7 +42,7 @@ export async function runProcess(command: string, args: string[], options: { tim
     });
   });
 }
-export function findTools(): ToolPaths {
+function findBrowser(): string {
   const candidates = [process.env.CHROME_PATH,
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
@@ -52,7 +52,10 @@ export function findTools(): ToolPaths {
     '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
   const chrome = process.env.CHROME_PATH ? (existsSync(process.env.CHROME_PATH) ? process.env.CHROME_PATH : undefined) : candidates.find(candidate => candidate && existsSync(candidate));
   if (!chrome) throw new StudioError('BROWSER_MISSING', 'doctor', 'Chrome/Chromium was not found. Install Chrome or set CHROME_PATH to its executable.', 3);
-  return { chrome, ffmpeg: process.env.FFMPEG_PATH || 'ffmpeg', ffprobe: process.env.FFPROBE_PATH || 'ffprobe' };
+  return chrome;
+}
+export function findTools(): ToolPaths {
+  return { chrome: findBrowser(), ffmpeg: process.env.FFMPEG_PATH || 'ffmpeg', ffprobe: process.env.FFPROBE_PATH || 'ffprobe' };
 }
 export async function launchBrowser(chrome: string) {
   throwIfCancelled();
@@ -64,14 +67,30 @@ export async function launchBrowser(chrome: string) {
 export async function doctor() {
   const [major, minor] = process.versions.node.split('.').map(Number);
   const nodeSupported = major > 22 || (major === 22 && minor >= 12);
-  const tools = findTools();
+  const ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg', ffprobe = process.env.FFPROBE_PATH || 'ffprobe';
+  let chrome: string | undefined;
   const results = await Promise.allSettled([
-    runProcess(tools.ffmpeg, ['-version'], { timeoutMs: 15_000 }),
-    runProcess(tools.ffprobe, ['-version'], { timeoutMs: 15_000 }),
-    (async () => { const browser = await launchBrowser(tools.chrome); try { return await browser.version(); } finally { await browser.close(); } })()
+    (async () => {
+      const version = await runProcess(ffmpeg, ['-version'], { timeoutMs: 15_000 });
+      const encoders = await runProcess(ffmpeg, ['-hide_banner', '-encoders'], { timeoutMs: 15_000 });
+      if (!/\blibx264\b/.test(encoders.stdout) || !/^\s*A\S*\s+aac\s/m.test(encoders.stdout)) {
+        throw new Error('FFmpeg needs both libx264 and AAC encoders for MP4 export.');
+      }
+      return version;
+    })(),
+    runProcess(ffprobe, ['-version'], { timeoutMs: 15_000 }),
+    (async () => { chrome = findBrowser(); const browser = await launchBrowser(chrome); try { return await browser.version(); } finally { await browser.close(); } })()
   ]);
   const inspect = (index: number) => results[index].status === 'fulfilled'
     ? { ready: true, version: typeof (results[index] as PromiseFulfilledResult<unknown>).value === 'string' ? (results[index] as PromiseFulfilledResult<string>).value : (results[index] as PromiseFulfilledResult<{stdout:string}>).value.stdout.split('\n')[0] }
     : { ready: false, error: String((results[index] as PromiseRejectedResult).reason) };
-  return { ready: nodeSupported && results.every(result => result.status === 'fulfilled'), node: { version: process.version, supported: nodeSupported }, os: { platform: platform(), arch: arch() }, browser: { path: tools.chrome, ...inspect(2) }, ffmpeg: { path: tools.ffmpeg, ...inspect(0) }, ffprobe: { path: tools.ffprobe, ...inspect(1) }, optionalTts: { edge: 'not-required; run an explicitly configured addon separately' } };
+  return {
+    ready: nodeSupported && results.every(result => result.status === 'fulfilled'),
+    node: { version: process.version, supported: nodeSupported, ...(!nodeSupported && { hint: 'Install Node.js 22.12 or newer, reopen the terminal, then reinstall dependencies.' }) },
+    os: { platform: platform(), arch: arch() },
+    browser: { path: chrome ?? process.env.CHROME_PATH ?? null, ...inspect(2), ...(results[2].status === 'rejected' && { hint: 'Install Chrome/Chromium, or set CHROME_PATH to the browser executable. See docs/GETTING_STARTED.md.' }) },
+    ffmpeg: { path: ffmpeg, ...inspect(0), ...(results[0].status === 'rejected' && { hint: 'Install FFmpeg with libx264/AAC; add its bin folder to PATH or set FFMPEG_PATH to the executable.' }) },
+    ffprobe: { path: ffprobe, ...inspect(1), ...(results[1].status === 'rejected' && { hint: 'Install ffprobe (included with FFmpeg); add its bin folder to PATH or set FFPROBE_PATH to the executable.' }) },
+    optionalTts: { edge: 'not-required; run an explicitly configured addon separately' }
+  };
 }

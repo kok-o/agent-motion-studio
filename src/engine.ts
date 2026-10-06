@@ -9,6 +9,7 @@ import { openRenderer } from './browser.js';
 import { verifyVideo } from './media.js';
 import { prepareAudio, audioDuration, resolveCaptions } from './audio.js';
 import { renderMixed } from './pipeline.js';
+import { publishCache, type CachePublication } from './cache-publication.js';
 import type { ResolvedSpec } from './types.js';
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
@@ -67,7 +68,7 @@ export async function render(manifestPath: string, outputDir: string, options: {
     spec.fontsHash = hashBytes(Buffer.concat(await Promise.all(fontFiles.map(file => readFile(join(packageRoot, 'assets/fonts', file))))));
     const engineFiles = (await treeFiles(join(packageRoot, 'dist'))).filter(file => file.endsWith('.js') || file.endsWith('.html'));
     const engineHash = hashBytes(Buffer.concat(await Promise.all(engineFiles.map(file => readFile(join(packageRoot, 'dist', file))))));
-    const fingerprintSpec = { ...spec, history: undefined, revision: undefined, projectDir: undefined, assets: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { ...asset, path: undefined, absolutePath: undefined }])) };
+    const fingerprintSpec = { ...spec, history: undefined, revision: undefined, operationReceipts: undefined, projectDir: undefined, assets: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { ...asset, path: undefined, absolutePath: undefined }])) };
     const fingerprint = hashBytes(json({ spec: fingerprintSpec, audio: audio.report.fingerprint, engineHash, fontsHash: spec.fontsHash, browserVersion: spec.browserVersion, environment: { platform: platform(), arch: arch(), release: release() }, encoder: ffmpegVersion, probe: ffprobeVersion }));
     const cacheRoot = join(spec.projectDir, '.cache', 'agent-motion-studio');
     await mkdir(cacheRoot, { recursive: true });
@@ -100,22 +101,27 @@ export async function render(manifestPath: string, outputDir: string, options: {
     const verification = await verifyVideo(join(work, 'output.mp4'), tools, { width: spec.width, height: spec.height, fps: 30, totalFrames: spec.totalFrames, audio: Boolean(audio.path) }, join(work, 'logs/decode.log'));
     if (cancelled) throw new StudioError('CANCELLED', 'render', 'Rendering cancelled.', 130);
     if (!manifestBytes.equals(await readFile(resolve(manifestPath)))) throw new StudioError('PROJECT_CHANGED', 'render', 'The project changed during export. Previous output is preserved; export the new revision again.', 2);
+    // The manifest can remain unchanged while a video/audio/image file is edited
+    // during encoding or cache reuse. Do not publish pixels with stale provenance.
+    await verifySourceHashes(spec);
     await writeFile(join(work, 'manifest.json'), manifestBytes);
     await writeFile(join(work, 'resolved-manifest.json'), json({ ...spec, captionLayouts }));
-    const report = { status: 'verified', outputFile: finalOutput, totalFrames: spec.totalFrames, durationSeconds: spec.totalFrames / 30, elapsedSeconds: Number(((performance.now() - started) / 1000).toFixed(3)), fingerprint, cache: { status: cacheHit ? 'hit' : options.noCache ? 'disabled' : 'miss', directory: cachePath }, software: { node: process.version, browser: spec.browserVersion, ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, engineVersion: spec.engineVersion, engineHash, fontsHash: spec.fontsHash }, environment: { platform: platform(), arch: arch(), release: release() }, audio: audio.report, verification, visualReview: 'not-performed-by-renderer', contactSheet: join(out, 'contact-sheet.jpg'), framesDirectory: join(out, 'frames') };
+    const report = { status: 'verified', outputFile: finalOutput, totalFrames: spec.totalFrames, durationSeconds: spec.totalFrames / 30, elapsedSeconds: Number(((performance.now() - started) / 1000).toFixed(3)), fingerprint, cache: { status: cacheHit ? 'hit' : options.noCache ? 'disabled' : 'miss', directory: cachePath, publication: undefined as CachePublication | undefined }, software: { node: process.version, browser: spec.browserVersion, ffmpeg: ffmpegVersion, ffprobe: ffprobeVersion, engineVersion: spec.engineVersion, engineHash, fontsHash: spec.fontsHash }, environment: { platform: platform(), arch: arch(), release: release() }, audio: audio.report, verification, visualReview: 'not-performed-by-renderer', contactSheet: join(out, 'contact-sheet.jpg'), framesDirectory: join(out, 'frames') };
     await writeFile(join(work, 'render-report.json'), json(report));
     await writeFile(join(work, 'logs/render.log'), `Rendered ${spec.totalFrames} indexed frames. Cache ${report.cache.status}. MP4/decode verification passed.\n`);
     if (!cacheHit && !options.noCache) {
-      const cacheTemp = join(cacheRoot, `.job-${randomUUID()}`); await mkdir(cacheTemp, { recursive: true });
-      try {
-        const files = (await treeFiles(work)).filter(file => !file.startsWith('audio')); const hashes: Record<string, string> = {};
-        await copyTree(work, cacheTemp, files);
-        for (const file of files) hashes[file] = hashBytes(await readFile(join(cacheTemp, file)));
-        await writeFile(join(cacheTemp, 'integrity.json'), json({ fingerprint, hashes }));
-        throwIfCancelled();
-        if (await exists(cachePath)) await rm(cachePath, { recursive: true });
-        await rename(cacheTemp, cachePath);
-      } finally { if (await exists(cacheTemp)) await rm(cacheTemp, { recursive: true }); }
+      report.cache.publication = await publishCache({
+        root: realCacheRoot, fingerprint, checkCancelled: throwIfCancelled,
+        valid: async directory => Boolean(await validCache(directory, fingerprint)),
+        prepare: async cacheTemp => {
+          const files = (await treeFiles(work)).filter(file => !file.startsWith('audio')); const hashes: Record<string, string> = {};
+          await copyTree(work, cacheTemp, files);
+          for (const file of files) hashes[file] = hashBytes(await readFile(join(cacheTemp, file)));
+          await writeFile(join(cacheTemp, 'integrity.json'), json({ fingerprint, hashes }));
+        }
+      });
+      await writeFile(join(work, 'render-report.json'), json(report));
+      options.progress?.(`Cache publication ${report.cache.publication.status}; ${report.cache.publication.renameRetries} directory rename retries.`);
     }
     // Replace complete directories, so shortening a video cannot leave old frame files.
     // Keep rollback copies until the MP4 and all reports have been promoted successfully.
@@ -134,6 +140,13 @@ export async function render(manifestPath: string, outputDir: string, options: {
       if (rel.startsWith('.job-') && !rel.includes(sep)) await rm(work, { recursive: true, force: true });
       await lock.close(); await rm(lockPath, { force: true });
     }
+  }
+}
+async function verifySourceHashes(spec: ResolvedSpec) {
+  for (const asset of Object.values(spec.assets)) {
+    let intact = false;
+    try { intact = await realpath(asset.absolutePath) === asset.absolutePath && hashBytes(await readFile(asset.absolutePath)) === asset.hash; } catch { /* missing or inaccessible source */ }
+    if (!intact) throw new StudioError('SOURCE_CHANGED', 'render', 'A source changed during export. Previous output is preserved; import the edited source as a new asset and export again.', 2);
   }
 }
 async function publishWork(work: string, out: string) {

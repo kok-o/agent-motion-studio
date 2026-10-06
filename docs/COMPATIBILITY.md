@@ -9,11 +9,15 @@ Version 0.1.0 is an experimental developer preview. The release candidate has be
 | macOS | Not verified for this release |
 | Clean OS setup | No bundled Chrome/FFmpeg installer; dependency setup needs separate user testing |
 | v1/v2 projects | v1 remains readable; accepted editor changes migrate to v2 with history |
+| Generated-take receipts | Optional v2 metadata; new code reads previous projects, while older strict-schema binaries may reject files with `operationReceipts` |
+| Replicate Wan I2V | One production adapter with offline contract tests; live account, billing, output and full generated film are unverified |
 | 16:9 / 9:16 | 1920×1080 / 1080×1920, 30 fps, H.264 yuv420p; supported by tests |
 | Sources | MP4, PNG/JPEG and supported audio files; SDR workflow, no HDR color management |
-| Agent clients | CLI and portable skill provided; native discovery in each agent is not certified |
+| Agent clients | Codex desktop film/edits/restore and real API-agent demonstrated; fresh official Codex native skill discovery checked; fresh model continuation and Claude Code remain unrun. See [scope](AGENT_VALIDATION.md) |
 | Optional Edge speech | Separate Python addon and online service, outside default offline CI and studio preview |
 
 Run `npm run doctor` for environment discovery, `npm run check` for source/unit checks and `npm run test:integration` for browser/media behavior. See [release verification](RELEASING.md) for packaged-consumer checks. Review private paths and metadata before sharing logs.
 
 Pixel comparisons are meaningful within the tested environment. Different browser/font/codec versions may rasterize differently. Full decode, frame counts and source hashes establish technical integrity; continuous human viewing and listening are still needed to judge the film.
+
+Generation uses 121 source frames at 16 fps, 480p or 720p. The local scene encoder keeps its existing 1080p/30-fps output and ignores source-video audio. Candidate preview currently excludes projects with narration/captions. Saved jobs use explicit resume; hard process termination may require verified manual removal of the private runner lock. See [generation and recovery](GENERATION_RU.md) and [the provider contract](GENERATION_PROVIDER_DECISION.md).

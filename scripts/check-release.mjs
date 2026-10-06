@@ -6,8 +6,8 @@ import { spawnSync } from 'node:child_process';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const slash = p => p.replaceAll('\\', '/');
-export const excluded = p => /(^|\/)(node_modules|\.git|\.agents|\.cache|artifacts|exports|projects)(\/|$)/.test(p)
-  || /^(references|dist)\//.test(p) || /(^|\/)(\.env(?:\..+)?|[^/]+\.(?:pem|key|log|tgz)|\.preview-[^/]+|[^/]+\.edit-lock|\.render\.lock)$/.test(p);
+export const excluded = p => /(^|\/)(node_modules|\.git|\.agents|\.claude|\.cache|\.studio|artifacts|exports|projects)(\/|$)/.test(p)
+  || /^(references|dist)\//.test(p) || /(^|\/)(\.env(?:\..+)?|[^/]+\.(?:pem|key|log|tgz)|\.(?:candidate-)?preview-[^/]+|[^/]+\.edit-lock|\.render\.lock)$/.test(p);
 export async function sourceFiles() {
   const git = spawnSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8', windowsHide: true, maxBuffer: 4e6 });
   assert.equal(git.status, 0, 'Use a Git checkout, or run git init -b main after extracting the source ZIP.');

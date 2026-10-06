@@ -54,10 +54,15 @@ export function validateManifest(value: unknown): Manifest {
   if (music.provider !== 'file' && music.asset) throw new StudioError('UNEXPECTED_MUSIC_ASSET', 'validate', 'audio.music.asset only applies to provider:file.', 2, 'audio.music.asset');
   if (manifest.audio.narration.provider !== 'edge' && (manifest.audio.narration.voice || manifest.audio.narration.rate || manifest.audio.narration.pitch)) throw new StudioError('UNEXPECTED_TTS_OPTION', 'validate', 'voice/rate/pitch only apply to provider:edge.', 2, 'audio.narration');
   const revisionIds = new Set<string>();
+  const operationIds = new Set<string>();
+  for (const receipt of manifest.operationReceipts ?? []) {
+    if (operationIds.has(receipt.operationId)) throw new StudioError('INVALID_RECEIPTS', 'validate', 'Accepted operation IDs must be unique.', 2);
+    operationIds.add(receipt.operationId);
+  }
   for (const revision of manifest.history ?? []) {
     if (revisionIds.has(revision.id) || revision.id === manifest.revision) throw new StudioError('INVALID_HISTORY', 'validate', 'Revision IDs must be unique.', 2);
     revisionIds.add(revision.id);
-    validateManifest({ ...manifest, scenes: revision.scenes, video: revision.video, audio: revision.audio, brand: revision.brand, revision: undefined, history: undefined });
+    validateManifest({ ...manifest, scenes: revision.scenes, video: revision.video, audio: revision.audio, brand: revision.brand, revision: undefined, history: undefined, operationReceipts: undefined });
   }
   return manifest;
 }

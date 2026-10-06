@@ -8,11 +8,46 @@
   <div class="workspace">
     <section class="cut">
       <div class="panel player-panel"><div class="panel-heading"><span>Просмотр монтажа</span><span id="export-state" class="badge">Нет экспорта</span></div>
-        <div class="screen"><video id="player" controls playsinline preload="metadata"></video><div id="empty-player"><span class="orbit">◯</span><h2>Фильм начинается со сцены</h2><p>Импортируйте материалы, соберите раскадровку<br>и экспортируйте для просмотра полной композиции.</p></div></div>
+        <div class="screen"><video id="player" controls playsinline preload="metadata"></video><div id="empty-player"><span class="orbit">◯</span><h2>Посмотрите фильм в движении</h2><p>Выберите сцену и нажмите «Предпросмотр сцены».<br>Для просмотра всего фильма — «Экспорт MP4».</p></div></div>
         <div class="player-footer"><label>Экспорт <select id="exports" aria-label="Выбрать экспорт"></select></label><a id="download" hidden download="film.mp4">Скачать MP4 ↓</a></div>
       </div>
       <div class="story-heading"><div><h2>Раскадровка</h2><p>Выберите сцену, чтобы изменить её или вернуть предыдущий дубль.</p></div><button id="add-title">+ Титр</button></div>
       <div id="storyboard" class="storyboard"></div>
+      <section id="generation-panel" class="panel generation" hidden aria-labelledby="generation-title">
+        <div class="panel-heading"><span id="generation-title">Новый AI-дубль выбранной video scene</span><button id="generation-refresh">Перечитать задания</button></div>
+        <div class="generation-body">
+          <p id="generation-context"></p><p id="generation-capabilities" class="note" role="status"></p>
+          <p id="generation-dirty" class="note" hidden>Сначала сохраните обычные поля сцены или явно отбросьте их. Candidate редактируется отдельно.</p><button id="generation-discard-draft" hidden>Отбросить обычный черновик сцены</button>
+          <form id="generation-form">
+            <label>Что должно происходить в новом дубле<textarea id="generation-prompt" rows="3" maxlength="2000" required></textarea></label>
+            <div class="two"><label>Reference: изображение из проекта<select id="generation-reference" required></select></label><label>Длительность оплачиваемого клипа, с<input id="generation-duration" type="number" min="1" max="10" step="any" required readonly></label></div>
+            <label>Разрешение<select id="generation-resolution"><option value="480p">480p</option><option value="720p">720p</option></select></label>
+            <button id="generation-prepare" type="submit">Подготовить запрос и оценку</button>
+          </form>
+          <label>Сохранённые задания этой сцены<select id="generation-jobs"></select></label>
+          <p id="generation-status" role="status" aria-live="polite"></p>
+          <p id="generation-unknown-block" class="note" hidden></p>
+          <div id="generation-unknown" hidden>
+            <p>Ответ первой отправки потерян. Генерация могла начаться и быть оплачена. Проверьте задание и расходы в том же аккаунте Replicate. Эта запись останется с неизвестным исходом; её запрос не будет отправлен повторно.</p>
+            <label class="consent"><input id="generation-account-checked" type="checkbox">Я проверил задания и расходы в аккаунте провайдера</label>
+            <label class="consent"><input id="generation-possible-charge" type="checkbox">Понимаю, что первая отправка могла быть оплачена; новая попытка потребует отдельного разрешения и бюджета</label>
+            <button id="generation-resolve-unknown">Зафиксировать проверку аккаунта</button>
+            <p id="generation-resolution-status" class="note" role="status"></p>
+          </div>
+          <div id="generation-request" hidden><p id="generation-request-summary"></p><p id="generation-cost"></p><p id="generation-data" class="note"></p><label class="consent"><input id="generation-consent" type="checkbox">Разрешаю отправку указанного reference и один запрос с показанными параметрами</label><label>Максимум расходов, USD<input id="generation-budget" type="number" min="0" step="0.01"></label><button id="generation-submit" class="primary">Отправить один запрос</button></div>
+          <div class="generation-actions"><button id="generation-resume">Возобновить наблюдение</button><button id="generation-download">Скачать результат этого задания</button><button id="generation-stop">Остановить отслеживание</button></div>
+          <div id="generation-candidate" hidden>
+            <p id="generation-source" class="note"></p><video id="generation-raw" controls playsinline muted preload="metadata"></video>
+            <div class="two"><label>Начало нового источника, с<input id="candidate-trim" type="number" min="0" step="any" value="0"></label><label>Кадрирование<select id="candidate-fit"><option value="cover">Заполнить кадр</option><option value="contain">Вписать целиком</option></select></label></div>
+            <div class="two"><label>Фокус X (0–1)<input id="candidate-x" type="number" min="0" max="1" step="0.05" value="0.5"></label><label>Фокус Y (0–1)<input id="candidate-y" type="number" min="0" max="1" step="0.05" value="0.5"></label></div>
+            <button id="generation-preview">Предпросмотр применения кандидата</button><video id="generation-preview-player" controls playsinline muted hidden></video><p id="generation-preview-status" class="note"></p>
+            <label class="consent"><input id="generation-viewed" type="checkbox">Посмотрел этот preview с текущими trim/crop и принимаю замену выбранной сцены</label>
+            <div class="generation-actions"><button id="generation-accept" class="primary">Принять дубль</button><button id="generation-reject">Отклонить дубль</button></div>
+          </div>
+          <details><summary>Диагностика задания</summary><pre id="generation-diagnostics"></pre></details>
+          <p class="note">Студия и экспорт локальны. Облачная модель использует ваш тариф; открытие проекта не запускает новые запросы. Звук источника не входит в фильм. Остановка отслеживания не отменяет расходы.</p>
+        </div>
+      </section>
       <section class="panel library"><div class="panel-heading"><div>Материалы <span class="muted">· копии сохраняются в проекте</span></div><label class="import-button" for="import">+ Импорт файлов<input id="import" type="file" accept=".mp4,.png,.jpg,.jpeg,.wav,.mp3,.m4a,.aac,.ogg,.flac" multiple></label></div>
         <p class="muted">MP4, PNG/JPEG и аудио. Нажмите «В сцену» для добавления материала.</p><div id="library"></div>
         <div class="music-controls"><label>Музыка<select id="music"></select></label><label>Уровень, dB<input id="gain" type="number" min="-60" max="0" value="-12"></label><button id="save-music">Применить музыку</button></div>
@@ -22,7 +57,7 @@
       <p id="project-path" class="path"></p>
     </section>
     <aside class="panel inspector"><div class="panel-heading"><span id="selection-title">Параметры сцены</span><span class="badge">30 fps</span></div>
-      <div id="source-preview"></div><p class="note">Исходник без правок. Чтобы увидеть обрезку, кадрирование и motion, соберите предпросмотр сцены ниже.</p>
+      <div id="source-preview"></div><p class="note">Это исходный материал или карточка сцены. Движение, обрезку и кадрирование покажет «Предпросмотр сцены» ниже.</p>
       <form id="scene-form"><label>Длительность, с<input id="duration" type="number" min="0.033333" max="60" step="any" required></label>
         <div id="text-fields"><label>Текст<textarea id="scene-text" rows="3"></textarea></label><label id="highlight-field">Выделить слова (необязательно)<input id="scene-highlight"></label><label id="label-field">Подпись<input id="scene-label"></label></div>
         <div id="asset-fields"><label>Выбранный исходник / дубль<select id="scene-asset"></select></label><label id="caption-field">Motion-титр<textarea id="scene-caption" rows="2"></textarea></label>
@@ -41,5 +76,6 @@
   </div>
 </main>
 <dialog id="conflict-dialog" aria-labelledby="conflict-title"><h2 id="conflict-title">Проект изменён извне</h2><p>Ваш черновик сохранён в этой вкладке. На диске остаётся внешняя версия. Выберите, как продолжить.</p><div id="conflict-details"></div><p id="conflict-note" class="note"></p><div class="conflict-actions"><button id="conflict-local" class="primary">Применить мои изменённые поля</button><button id="conflict-external">Принять внешнюю, отбросить черновик</button><button id="conflict-cancel">Вернуться к черновику</button></div></dialog>
+<dialog id="generation-conflict-dialog" aria-labelledby="generation-conflict-title"><h2 id="generation-conflict-title">Контекст candidate изменён извне</h2><p>Кандидат сохранён отдельно. Принятый проект не перезаписан. Сравните контекст и подтвердите новый точный preview.</p><div id="generation-conflict-details"></div><p id="generation-conflict-note" class="note"></p><div class="conflict-actions"><button id="generation-conflict-preview" class="primary">Проверить текущую версию и собрать новый preview</button><button id="generation-conflict-cancel">Вернуться к кандидату</button></div></dialog>
 <script src="/app.js" type="module"></script>
 </body></html>

@@ -10,6 +10,7 @@ export type Scene = {
 export type Manifest = {
   schemaVersion: 1 | 2; id: string; seed: number;
   revision?: string; history?: Revision[];
+  operationReceipts?: OperationReceipt[];
   video: { aspectRatio: '9:16' | '16:9'; fps: 30; safeArea?: number; style?: 'studio' | 'kinetic' };
   brand: { theme: 'dark' | 'light'; background: string; foreground: string; accent: string; font: 'builtin-sans' };
   assets: Record<string, Asset>;
@@ -19,6 +20,7 @@ export type Manifest = {
   };
   scenes: Scene[];
 };
+export type OperationReceipt = { operationId: string; requestHash: string; revisionId: string };
 export type Revision = { id: string; label: string; createdAt: string; scenes: Scene[]; video: Manifest['video']; audio: Manifest['audio']; brand: Manifest['brand'] };
 export type ResolvedAsset = Asset & { absolutePath: string; hash: string; bytes: number; width?: number; height?: number; durationSeconds?: number; sourceFps?: number; rotation?: number };
 export type TextLayout = { lines: string[]; fontSize: number; lineHeight: number; x: number; y: number; width: number; height: number; align: 'left' | 'center' };

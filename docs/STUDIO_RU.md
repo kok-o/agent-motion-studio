@@ -1,21 +1,26 @@
 # Локальная студия: первая итерация
 
-Студия импортирует MP4, изображения и музыку, собирает короткий фильм, сохраняет варианты сцен и экспортирует проверенный MP4. Все операции выполняются существующим TypeScript/Node, Canvas и FFmpeg. Облачная генерация не подключена.
+Студия импортирует MP4, изображения и музыку, собирает короткий фильм, сохраняет варианты сцен и экспортирует проверенный MP4 локально через TypeScript/Node, Canvas и FFmpeg. Development checkout добавляет [один облачный generated take](GENERATION_RU.md) через API пользователя: candidate, preview и явное принятие отдельны от обычного монтажа. Live-проверка требует разрешения на запрос, reference и расходы.
 
-## Запуск готового примера
+## Первый запуск своей копии примера
 
 Из корня исходного проекта:
 
 ```powershell
+npm ci --ignore-scripts
 npm run build
-npm run studio
+node dist/cli.js doctor --json
+node dist/cli.js init coffee-ritual --dir projects/my-first-remix
+node dist/cli.js studio projects/my-first-remix/project.json
 ```
 
-Откройте **полную ссылку сессии**, которую напечатает терминал. Сервер слушает только `127.0.0.1:4173`; остановка — Ctrl+C. Если порт занят: `node dist/cli.js studio examples/orbit-demo/project.json --port 4174`. Перезапуск создаёт новую ссылку сессии.
+Продолжайте при `ready:true`. `init` нужен только один раз для своей копии; существующий фильм открывается только командой `studio` с его `project.json`. Не редактируйте общий template ради первого remix. [Установка и исправление зависимостей](GETTING_STARTED.md) · [Продолжение с агентом](AGENT_WORKFLOW_RU.md#продолжение-существующего-фильма).
+
+Откройте **полную ссылку сессии**, которую напечатает терминал. Сервер слушает только `127.0.0.1:4173`; остановка — Ctrl+C. Если порт занят: `node dist/cli.js studio projects/my-first-remix/project.json --port 4174`. Перезапуск создаёт новую ссылку сессии.
 
 Нужны Node ≥22.12, Chrome/Chromium, FFmpeg с libx264/AAC и ffprobe. Проверка: `node dist/cli.js doctor --json`. На этой машине зависимости уже установлены. На другом checkout сначала выполните `npm ci --ignore-scripts`. Автоустановка системных программ не реализована.
 
-По умолчанию открывается `examples/coffee-ritual/project.json`: 20 секунд реальной съёмки эспрессо Scott Schiller (CC BY-SA 2.0), motion-титры и процедурная музыка. Атрибуция и изменения — в `CREDITS.md`, хеши и источники — в `provenance.json`. Синтетический ORBIT сохранён отдельно: `npm run studio:orbit`.
+Команды выше копируют `coffee-ritual`: 20 секунд реальной съёмки эспрессо Scott Schiller (CC BY-SA 2.0), motion-титры и процедурная музыка. Атрибуция и изменения — в `CREDITS.md`, хеши и источники — в `provenance.json`. Синтетический ORBIT сохранён отдельно: `npm run studio:orbit`.
 
 1. Выберите карточку второй сцены.
 2. В поле «Выбранный исходник / дубль» выберите `first-drops.mp4`. Нажмите «Предпросмотр сцены», затем «Сохранить сцену».
@@ -41,8 +46,9 @@ node dist/cli.js studio "my-film/project.json"
 ## Тот же проект из CLI и агента
 
 ```powershell
-node dist/cli.js import "my-film/project.json" --file "C:\clips\shot.mp4" --json
-node dist/cli.js edit "my-film/project.json" --action "edit.json" --json
+node dist/cli.js state "my-film/project.json" --json
+node dist/cli.js import "my-film/project.json" --file "clips/shot.mp4" --if-match ETAG --json
+node dist/cli.js edit "my-film/project.json" --action "edit.json" --if-match CURRENT_ETAG --json
 node dist/cli.js validate "my-film/project.json" --json
 node dist/cli.js render "my-film/project.json" --out "my-film/export-cli" --no-cache --json
 node dist/cli.js verify "my-film/export-cli/output.mp4" --json
@@ -66,7 +72,7 @@ node dist/cli.js verify "my-film/export-cli/output.mp4" --json
 
 Операции: `add-scene` (`scene`), `edit-scene` (`sceneId`, `patch`), `remove-scene`, `move-scene` (`index`, с нуля), `music` (`asset`, `gainDb`, либо `provider: none/procedural`), `composition` (`video`), `restore` (`revisionId`), `restore-scene` (`revisionId`, `sceneId`). В patch значение `null` удаляет необязательное поле. Тип и ID сцены стабильны. Неизвестные поля отклоняются.
 
-UI и CLI используют `src/project.ts`, общий JSON Schema и `loadManifest`. Внешний агент может редактировать JSON напрямую и вызвать `render`, однако для атомарного сохранения, блокировки и истории следует использовать `edit`. После внешнего изменения нажмите «Перечитать проект». Сравнение хеша манифеста помечает устаревший экспорт даже при ручной правке без нового revision ID.
+UI и CLI используют `src/project.ts`, общий JSON Schema и `loadManifest`. Внешний агент передаёт действия через `edit` с актуальным `--if-match`, сохраняя validation, блокировки и историю; accepted JSON напрямую не записывается. После внешнего изменения нажмите «Перечитать проект». Сравнение хеша манифеста помечает устаревший экспорт. Generated Accept использует тот же project API одной операцией: [generation guide](GENERATION_RU.md).
 
 ## Формат, сохранность и перенос
 

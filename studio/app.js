@@ -1,3 +1,4 @@
+import { initGeneration } from './generation-ui.js';
 const $ = id => document.getElementById(id);
 let state, selected, busy = false, dirty = false, jobTimer, formBase, conflict;
 const formIds = ['duration', 'scene-text', 'scene-label', 'scene-caption', 'scene-highlight', 'scene-asset', 'trim', 'fit', 'focal-x', 'focal-y'];
@@ -25,6 +26,7 @@ async function task(fn) {
   finally { lock(false); if (state) setSceneConstraints(); }
 }
 const current = () => state.manifest.scenes.find(scene => scene.id === selected);
+const generation = initGeneration({ getState: () => state, getScene: current, isDirty: () => dirty, api, post, notice, refresh: () => refresh(), discardDraft: () => { forgetDraft(); paintScene(); }, isBusy: () => busy });
 function previousScene() {
   const scene = current();
   return [...(state.manifest.history ?? [])].reverse().find(revision => {
@@ -38,8 +40,9 @@ function setSceneConstraints() {
   const index = state.manifest.scenes.findIndex(scene => scene.id === selected);
   $('move-left').disabled = index === 0; $('move-right').disabled = index === state.manifest.scenes.length - 1;
   if (conflict) $('conflict-local').disabled = !conflict.fresh.manifest.scenes.some(scene => scene.id === conflict.draft.sceneId && scene.type === conflict.draft.scene.type);
+  generation.updateControls();
 }
-async function refresh() { state = await api('/api/state'); selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id; paint(); }
+async function refresh() { state = await api('/api/state'); selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id; paint(); await generation.refreshLocal(); }
 async function edit(action) { await post('/api/edit', action); forgetDraft(); await refresh(); notice('Сохранено в project.json. Исходные материалы сохранены.'); }
 function mediaNode(scene, controls = false) {
   const asset = state.manifest.assets[scene.asset];
@@ -98,6 +101,7 @@ function paintScene() {
   $('trim').value = scene.trimStartSeconds ?? 0; $('fit').value = scene.fit ?? 'cover'; $('focal-x').value = scene.focalPoint?.x ?? 0.5; $('focal-y').value = scene.focalPoint?.y ?? 0.5;
   formBase = formValues(); $('draft-status').textContent = 'Все изменения сохранены'; setSceneConstraints();
   invalidatePreview();
+  generation.paintSelection();
 }
 function paintExports() {
   const selectedExport = $('exports').value;
@@ -132,6 +136,7 @@ function applyDraft(draft) {
   formBase = draft.base; dirty = true; $('draft-status').textContent = 'Есть несохранённые изменения';
   if (state.manifest.assets[$('scene-asset').value]) $('source-preview').replaceChildren(mediaNode({ ...current(), asset: $('scene-asset').value }, true));
   invalidatePreview();
+  generation.paintSelection();
 }
 async function showConflict(draft, fresh) {
   conflict = { draft, fresh }; rememberDraft();
@@ -174,7 +179,7 @@ $('preview-scene').onclick = () => task(async () => {
   $('preview-status').textContent = result.stale ? 'Проект изменён извне во время рендера. Это предпросмотр прежней версии; перечитайте проект.' : `Предпросмотр готов · ${result.totalFrames} кадров · ${fmt(result.durationSeconds)} с · без звука. Черновик не сохранён.`;
   notice(result.stale ? 'Предпросмотр готов, но проект изменился извне. Перечитайте проект.' : 'Предпросмотр готов. Посмотрите отрезок, затем сохраните сцену или продолжите правку.');
 });
-$('scene-form').oninput = () => { dirty = true; rememberDraft(); invalidatePreview(); $('draft-status').textContent = 'Есть несохранённые изменения'; };
+$('scene-form').oninput = () => { dirty = true; rememberDraft(); invalidatePreview(); $('draft-status').textContent = 'Есть несохранённые изменения'; generation.paintSelection(); };
 $('scene-form').onsubmit = event => { event.preventDefault(); void task(saveScene); };
 $('scene-asset').onchange = () => { const scene = { ...current(), asset: $('scene-asset').value }; $('source-preview').replaceChildren(mediaNode(scene, true)); };
 $('reload').onclick = () => task(async () => { if (dirty) { const fresh = await api('/api/state'); if (fresh.etag !== state.etag) await showConflict(captureDraft(), fresh); else notice('На диске нет новых изменений. Ваш черновик остаётся в редакторе.'); } else { await refresh(); notice('Проект перечитан с диска.'); } });

@@ -21,3 +21,20 @@ test('cancelled runtime refuses subsequent process and browser launches before s
   await assert.rejects(stat(marker), /ENOENT/, 'cancelled retries must not spawn another process');
   await rm(directory, { recursive: true, force: true });
 });
+
+test('doctor reports every missing dependency with recovery hints instead of stopping at the browser', () => {
+  const absent = path.resolve('.cache/tests', `absent-tool-${randomUUID()}`);
+  const result = spawnSync(process.execPath, ['dist/cli.js', 'doctor', '--json'], {
+    encoding: 'utf8', timeout: 10000, windowsHide: true,
+    env: { ...process.env, CHROME_PATH: absent, FFMPEG_PATH: absent, FFPROBE_PATH: absent }
+  });
+  assert.equal(result.status, 3, result.stderr);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.ready, false);
+  assert.equal(report.node.supported, true);
+  for (const name of ['browser', 'ffmpeg', 'ffprobe']) {
+    assert.equal(report[name].ready, false, name);
+    assert.ok(report[name].error, name);
+    assert.ok(report[name].hint, name);
+  }
+});

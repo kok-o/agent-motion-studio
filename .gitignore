@@ -3,6 +3,7 @@ node_modules/
 /dist/
 /artifacts/
 .cache/
+.studio/
 /projects/
 /out/
 exports/
@@ -11,6 +12,7 @@ exports/
 *.edit-lock
 .render.lock
 .preview-*.json
+.candidate-preview-*.json
 .env
 .env.*
 !.env.example
@@ -23,6 +25,7 @@ Thumbs.db
 
 # Local agent configuration and research copies are not part of this project.
 /.agents/
+/.claude/
 /references/
 
 # Historical local briefs/reports refer to private paths and unshipped evidence.

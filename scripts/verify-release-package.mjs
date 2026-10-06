@@ -35,6 +35,29 @@ try {
   const cliRun = async (args, label) => JSON.parse(await run([cli, ...args, '--json'], label));
   const doctor = await cliRun(['doctor'], 'doctor'); assert.ok(doctor.ready); report.environment = doctor;
   await run([npm, 'exec', '--offline', '--no', '--', 'agent-motion-studio', 'doctor', '--json'], 'bin');
+  const installedSkill = JSON.parse(await run([join(app, 'scripts/install-agent-skill.mjs'), '--client', 'both', '--scope', 'project'], 'agent-skill-install'));
+  assert.deepEqual(installedSkill.installs.map(item => item.status), ['installed', 'installed']);
+  for (const location of ['.agents', '.claude']) assert.ok((await readFile(join(consumer, location, 'skills/agent-motion-studio/references/brief-to-film.md'), 'utf8')).includes('restore-scene'));
+  const briefFile = join(consumer, 'brief.txt'); await writeFile(briefFile, 'Create a local motion film. No external calls authorized.');
+  const dryApi = JSON.parse(await run([join(app, 'scripts/api-agent.mjs'), '--brief', briefFile, '--out', join(consumer, 'api-film'), '--dry-run'], 'api-agent-dry-run'));
+  assert.equal(dryApi.network, false); assert.equal(dryApi.clientStarted, false);
+  const fresh = await cliRun(['new', '--dir', join(consumer, 'new-film')], 'new-project');
+  const freshState = await cliRun(['state', fresh.project], 'new-state');
+  const ordinaryAction = join(consumer, 'ordinary-draft.json'); await writeFile(ordinaryAction, JSON.stringify({ type: 'edit-scene', sceneId: 'opening', patch: { text: 'INSTALLED PREVIEW', durationFrames: 30 } }));
+  const freshBytes = await readFile(fresh.project);
+  const ordinaryPreview = await cliRun(['preview', fresh.project, '--action', ordinaryAction, '--if-match', freshState.etag, '--out', join(consumer, 'ordinary-preview')], 'ordinary-cli-preview');
+  assert.equal(ordinaryPreview.stale, false); assert.equal(ordinaryPreview.totalFrames, 30); assert.ok((await readFile(fresh.project)).equals(freshBytes));
+  await cliRun(['edit', fresh.project, '--action', ordinaryAction, '--if-match', ordinaryPreview.projectHash], 'ordinary-cli-accept');
+  const ordinaryAccepted = await cliRun(['state', fresh.project], 'ordinary-accepted-state');
+  assert.equal(ordinaryAccepted.manifest.scenes[0].text, 'INSTALLED PREVIEW'); assert.deepEqual(ordinaryAccepted.manifest.history.at(-1).scenes, freshState.manifest.scenes);
+  const { createStudioTool } = await import(pathToFileURL(join(app, 'scripts/api-agent.mjs')));
+  const apiLocal = await createStudioTool(fresh.project, consumer), apiAction = { type: 'edit-scene', sceneId: 'opening', patch: { text: 'API TOOL ACCEPTED', durationFrames: 30 } };
+  const apiArgs = { operation: 'preview', action: JSON.stringify(apiAction), etag: ordinaryAccepted.etag, label: 'api-tool-preview', previewToken: null };
+  const apiPreview = await apiLocal.execute(apiArgs);
+  await assert.rejects(apiLocal.execute({ ...apiArgs, operation: 'edit', previewToken: apiPreview.previewToken, action: JSON.stringify({ ...apiAction, patch: { text: 'DIFFERENT DRAFT' } }) }), /Preview the exact action/);
+  const apiAccepted = await apiLocal.execute({ ...apiArgs, operation: 'edit', previewToken: apiPreview.previewToken });
+  assert.equal(apiAccepted.manifest.scenes[0].text, 'API TOOL ACCEPTED');
+  report.checks.agentWorkflow = { installedSkillFiles: installedSkill.installs.map(item => item.files), apiDryRunNoNetwork: true, newProject: true, previewNoMutation: true, previewFrames: 30, acceptedThroughCli: true, historyPreserved: true, apiPreviewBindsExactAction: true, apiExactPreviewAccepted: true, realClientDiscovery: 'NOT RUN in this consumer' }; await save();
   const film = join(consumer, 'film'), file = join(film, 'project.json');
   await cliRun(['init', 'coffee-ritual', '--dir', film], 'init'); await cliRun(['validate', file], 'validate');
   const { readProject, editProject } = await import(pathToFileURL(join(app, 'dist/project.js')));
@@ -56,5 +79,54 @@ try {
   assert.equal(rendered.verification.totalFrames, 600); assert.equal(rendered.verification.audio.codec, 'aac');
   await cliRun(['verify', join(consumer, 'export/output.mp4')], 'verify');
   report.checks.render.media = { frames: 600, seconds: 20, audio: 'AAC', elapsedSeconds: rendered.elapsedSeconds };
+  const referencePath = join(consumer, 'small-reference.png');
+  await writeFile(referencePath, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64'));
+  const reference = await cliRun(['import', file, '--file', referencePath], 'generation-reference-import');
+  const requestPath = join(consumer, 'generation-request.json');
+  await writeFile(requestPath, JSON.stringify({ intentId: 'installed-consumer-local-intent', sceneId: 'first-pour', prompt: 'Local package validation only; do not submit.', referenceAssetId: reference.importedId, durationSeconds: 7.5625, resolution: '480p' }));
+  const generationBefore = await readFile(file);
+  const capabilities = await cliRun(['generation', 'capabilities'], 'generation-capabilities'); assert.equal(capabilities.model, 'wan-video/wan-2.2-i2v-fast');
+  const prepared = await cliRun(['generation', 'prepare', file, '--request', requestPath], 'generation-prepare'); assert.equal(prepared.status, 'prepared'); assert.equal(prepared.submissions, 0);
+  const repeated = await cliRun(['generation', 'prepare', file, '--request', requestPath], 'generation-repeat-prepare'); assert.equal(prepared.id, repeated.id);
+  const status = await cliRun(['generation', 'status', file, '--job', prepared.id], 'generation-status'); assert.equal(status.submissions, 0);
+  const listed = await cliRun(['generation', 'list', file], 'generation-list'); assert.equal(listed.length, 1);
+  assert.ok((await readFile(file)).equals(generationBefore));
+  report.checks.generation = { installedModules: true, localPrepareStatusList: true, duplicateIntentRetained: true, acceptedProjectUnchanged: true, submissions: 0, liveProvider: 'NOT RUN' };
+  const { GenerationService } = await import(pathToFileURL(join(app, 'dist/generation.js')));
+  const { replicateCapabilities } = await import(pathToFileURL(join(app, 'dist/generation-provider.js')));
+  let controlledSubmissions = 0, controlledDownloads = 0;
+  const controlledProvider = {
+    capabilities: () => replicateCapabilities(true),
+    submit: async () => { controlledSubmissions++; return { remoteId: 'installed-controlled-job', status: 'output_ready' }; },
+    status: async remoteId => ({ remoteId, status: 'output_ready' }),
+    download: async (_remoteId, destination) => { controlledDownloads++; await writeFile(destination, await readFile(join(consumer, 'export/output.mp4')), { flag: 'wx' }); },
+  };
+  // Explicit test-only dependency injection. No installed production provider request is made.
+  const generation = new GenerationService(file, controlledProvider), beforeTake = await readProject(file);
+  await generation.submit(prepared.id, { requestHash: prepared.requestHash, maxSubmissions: 1, maxCostUsd: prepared.estimate.usd, uploadReference: true });
+  await generation.download(prepared.id); assert.equal(controlledSubmissions, 1); assert.equal(controlledDownloads, 1);
+  const draft = { trimStartSeconds: 0, fit: 'cover', focalPoint: { x: .5, y: .5 } };
+  const candidatePreview = await generation.preview(prepared.id, draft, beforeTake.etag, join(consumer, 'generation-preview'));
+  assert.ok((await readFile(file)).equals(generationBefore));
+  const candidateAccepted = await generation.accept(prepared.id, draft, candidatePreview.previewId, candidatePreview.projectHash, 'installed-candidate-accept');
+  const acceptedBytes = await readFile(file);
+  await generation.accept(prepared.id, draft, candidatePreview.previewId, candidatePreview.projectHash, 'installed-candidate-accept');
+  assert.ok((await readFile(file)).equals(acceptedBytes));
+  assert.equal(candidateAccepted.manifest.scenes[1].durationFrames, beforeTake.manifest.scenes[1].durationFrames);
+  assert.deepEqual(candidateAccepted.manifest.scenes.filter((_, i) => i !== 1), beforeTake.manifest.scenes.filter((_, i) => i !== 1));
+  await editProject(file, { type: 'restore-scene', sceneId: 'first-pour', revisionId: beforeTake.manifest.revision }, candidateAccepted.etag);
+  assert.deepEqual((await readProject(file)).manifest.scenes, beforeTake.manifest.scenes); assert.deepEqual(await sources(), initialHashes);
+  report.checks.generation.candidateWorkflow = { controlledSubmissions, controlledDownloads, previewFrames: candidatePreview.totalFrames, acceptedOnce: true, replayNoMutation: true, priorSceneRestored: true, sourcesPreserved: true, productionNetworkRequests: 0 };
+  const restoredBytes = await readFile(file);
+  const bound = await cliRun(['generation', 'bind-store', file], 'generation-bind-store'); assert.equal(bound.bound, true);
+  controlledProvider.submit = async () => { controlledSubmissions++; throw new Error('Controlled lost submission response'); };
+  const uncertain = await generation.prepare({ ...JSON.parse(await readFile(requestPath, 'utf8')), intentId: 'installed-unknown-intent' });
+  assert.equal((await generation.submit(uncertain.id, { requestHash: uncertain.requestHash, maxSubmissions: 1, maxCostUsd: uncertain.estimate.usd, uploadReference: true })).status, 'submission_unknown');
+  const resolutionPath = join(consumer, 'resolution.json');
+  await writeFile(resolutionPath, JSON.stringify({ requestHash: uncertain.requestHash, accountChecked: true, acknowledgePossibleCharge: true }));
+  const acknowledged = await cliRun(['generation', 'resolve-unknown', file, '--job', uncertain.id, '--resolution', resolutionPath], 'generation-resolve-unknown');
+  assert.equal(acknowledged.status, 'submission_unknown'); assert.equal(acknowledged.submissions, 1); assert.equal(acknowledged.unknownResolution.kind, 'user_acknowledged');
+  assert.equal(controlledSubmissions, 2); assert.ok((await readFile(file)).equals(restoredBytes));
+  report.checks.generation.recoveryCommands = { bindStore: true, resolveUnknown: true, oldUnknownRetained: true, acceptedProjectUnchanged: true, controlledSubmissionsTotal: controlledSubmissions, productionNetworkRequests: 0 };
   report.status = 'passed'; await save(); console.log(JSON.stringify({ status: report.status, evidence: out, sha256: report.sha256 }, null, 2));
 } catch (error) { report.status = 'failed'; report.failure = error.stack; await save(); throw error; }

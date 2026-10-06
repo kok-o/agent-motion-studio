@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile, writeFile, mkdir, copyFile, stat, cp } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, copyFile, stat, cp, readdir } from 'node:fs/promises';
 import { resolve, join, dirname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -24,8 +24,13 @@ if (process.platform === 'win32') run('tar', ['-a', '-cf', join(out, sourceZip),
 else run('zip', ['-q', '-r', join(out, sourceZip), sourceName], staging);
 const pack = JSON.parse(run(process.execPath, [npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', out]))[0];
 const names = pack.files.map(f => f.path);
+const modules = (await readdir(join(root, 'src'))).filter(name => name.endsWith('.ts')).map(name => `dist/${name.slice(0, -3)}.js`);
+const applicationFiles = new Set([...modules, 'dist/renderer/entry.js', 'dist/renderer/index.html', 'dist/studio/index.html', 'dist/studio/app.js', 'dist/studio/generation-ui.js', 'dist/studio/style.css']);
+for (const needed of applicationFiles) assert.ok(names.includes(needed), `Runtime missing application file: ${needed}; update package.json files when adding modules.`);
+for (const name of names.filter(name => name.startsWith('dist/'))) assert.ok(applicationFiles.has(name), `Runtime includes non-application output: ${name}`);
 await audit(names, root, { runtime: true });
-for (const needed of ['dist/cli.js', 'dist/server.js', 'dist/preview.js', 'dist/renderer/entry.js', 'dist/studio/app.js', 'assets/fonts/OFL.txt', 'examples/coffee-ritual/CREDITS.md', 'examples/coffee-ritual/LICENSE.md']) assert.ok(names.includes(needed), `Runtime missing ${needed}`);
+for (const needed of ['scripts/install-agent-skill.mjs', 'scripts/api-agent.mjs', 'docs/AGENT_WORKFLOW_RU.md', 'skills/agent-motion-studio/references/brief-to-film.md']) assert.ok(names.includes(needed), `Runtime missing agent workflow file: ${needed}`);
+for (const needed of ['dist/cli.js', 'dist/server.js', 'dist/preview.js', 'dist/generation.js', 'dist/generation-store.js', 'dist/generation-provider.js', 'dist/renderer/entry.js', 'dist/studio/app.js', 'dist/studio/generation-ui.js', 'docs/GENERATION_RU.md', 'assets/fonts/OFL.txt', 'examples/coffee-ritual/CREDITS.md', 'examples/coffee-ritual/LICENSE.md']) assert.ok(names.includes(needed), `Runtime missing ${needed}`);
 const project = join(staging, 'coffee-ritual-project');
 await mkdir(project);
 // Only distribute this template's accepted manifest, assets and credits, never its exports/cache.

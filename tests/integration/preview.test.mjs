@@ -1,11 +1,48 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile, copyFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, copyFile, readdir, stat } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
+import { spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { createProject, importMedia, editProject, readProject } from '../../dist/project.js';
 import { startStudio } from '../../dist/server.js';
 import { launchBrowser, findTools, runProcess } from '../../dist/runtime.js';
 import { render } from '../../dist/engine.js';
+
+test('CLI previews an unsaved ordinary scene draft, requires current context and preserves prior output', { timeout: 120000 }, async () => {
+  const root = resolve('artifacts/agent-workflow/cli-preview', randomUUID()); await mkdir(root, { recursive: true });
+  const file = (await createProject(root)).project;
+  await editProject(file, { type: 'edit-scene', sceneId: 'opening', patch: { text: 'ACCEPTED TITLE', durationFrames: 30 } });
+  const before = await readProject(file), beforeBytes = await readFile(file), action = join(root, 'draft.json'), output = join(root, 'preview');
+  await writeFile(action, JSON.stringify({ type: 'edit-scene', sceneId: 'opening', patch: { text: 'UNSAVED CLI DRAFT', durationFrames: 45 } }));
+  async function cli(args) {
+    return new Promise((ok, fail) => {
+      const child = spawn(process.execPath, ['dist/cli.js', 'preview', file, '--action', action, ...args, '--json'], { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      let stdout = '', stderr = ''; child.stdout.on('data', bytes => stdout += bytes); child.stderr.on('data', bytes => stderr += bytes);
+      child.once('error', fail); child.once('close', code => { try { ok({ code, result: JSON.parse(stdout), stderr }); } catch (error) { fail(error); } });
+    });
+  }
+  const missingEtag = await cli(['--out', join(root, 'missing-etag')]);
+  assert.equal(missingEtag.code, 2); assert.equal(missingEtag.result.error.code, 'INVALID_COMMAND');
+  const staleOutput = join(root, 'stale-preview'), stale = await cli(['--if-match', '0'.repeat(64), '--out', staleOutput]);
+  assert.equal(stale.code, 2); assert.equal(stale.result.error.code, 'PROJECT_CONFLICT');
+  await assert.rejects(stat(join(staleOutput, 'output.mp4')), error => error.code === 'ENOENT');
+  assert.ok((await readFile(file)).equals(beforeBytes));
+  const rendered = await cli(['--if-match', before.etag, '--out', output]);
+  assert.equal(rendered.code, 0, JSON.stringify(rendered));
+  assert.equal(rendered.result.sceneId, 'opening'); assert.equal(rendered.result.projectHash, before.etag);
+  assert.equal(rendered.result.totalFrames, 45); assert.equal(rendered.result.durationSeconds, 1.5);
+  assert.equal(rendered.result.verification.passed, true); assert.equal(rendered.result.stale, false);
+  assert.equal(rendered.result.output, join(output, 'output.mp4'));
+  const previewBytes = await readFile(rendered.result.output); assert.ok(previewBytes.length > 0);
+  assert.ok((await readFile(file)).equals(beforeBytes), 'CLI preview cannot save the draft or change accepted history/assets');
+  assert.deepEqual(await readProject(file), before);
+  const repeatedOutput = await cli(['--if-match', before.etag, '--out', output]);
+  assert.equal(repeatedOutput.code, 2); assert.equal(repeatedOutput.result.error.code, 'OUTPUT_EXISTS');
+  assert.ok((await readFile(rendered.result.output)).equals(previewBytes), 'an existing output is never replaced by CLI preview');
+  assert.equal((await readdir(root)).some(name => name.startsWith('.preview-')), false);
+  await writeFile(join(root, 'verification.json'), JSON.stringify({ passed: true, checks: ['actual CLI command', 'explicit ETag required', 'stale ETag rejected before rendering', '45-frame draft versus 30-frame accepted scene', 'accepted bytes/ETag/history/assets unchanged', 'existing output preserved', 'temporary manifest removed'], preview: rendered.result }, null, 2));
+});
 
 test('unsaved UI scene previews match full export frames for trim, crop, contain and motion', { timeout: 240000 }, async () => {
   const root = resolve('artifacts/iteration-2/preview', String(Date.now())); await mkdir(root, { recursive: true });

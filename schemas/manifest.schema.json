@@ -202,6 +202,20 @@
     "revision": {
       "$ref": "#/definitions/id"
     },
+    "operationReceipts": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["operationId", "requestHash", "revisionId"],
+        "properties": {
+          "operationId": { "$ref": "#/definitions/id" },
+          "requestHash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+          "revisionId": { "$ref": "#/definitions/id" }
+        }
+      }
+    },
     "history": {
       "type": "array",
       "maxItems": 100,
@@ -571,6 +585,11 @@
             {
               "required": [
                 "revision"
+              ]
+            },
+            {
+              "required": [
+                "operationReceipts"
               ]
             }
           ]

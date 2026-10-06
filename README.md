@@ -2,7 +2,9 @@
 
 **Make a short film locally. Replace one scene. Keep the takes you already like.**
 
-An open-source video editor for people and their AI agents. Import clips, images and music, assemble a storyboard, preview a scene and export a real MP4. The browser editor and CLI use the same portable JSON project.
+An open-source local studio for short films made by people and their AI agents. Import clips, images and music, assemble a storyboard, compare takes and export a real MP4. The studio is free; cloud generation uses your provider account and its charges. Your official external agent can use the CLI and skill. Local video-model inference is a future capability.
+
+The product goal is to make and revise a film from a brief through your own Claude Code, Codex or another supported agent, using your subscription or API access. Procedural motion, titles and editing supplied footage use the local renderer and do not require a video-generation key. A Codex desktop session and a real API-agent have demonstrated film creation; two demonstration edits, restore and reopen are verified. Fresh Codex native skill discovery is checked; fresh model continuation and Claude Code remain open. [Exact verification scope](docs/AGENT_VALIDATION.md). Optional neural-video generation has a separate Replicate integration.
 
 **0.1.0 · Experimental developer preview** · [Roadmap](ROADMAP.md) · [Contributing](CONTRIBUTING.md) · [Release notes](docs/releases/v0.1.0.md)
 
@@ -22,9 +24,12 @@ Clone or download this repository, open a terminal in its folder, then:
 npm ci --ignore-scripts
 npm run build
 npm run doctor
+node scripts/install-agent-skill.mjs --client codex --scope project
 node dist/cli.js init coffee-ritual --dir projects/my-first-remix
 node dist/cli.js studio projects/my-first-remix/project.json
 ```
+
+Continue when doctor reports `ready:true` (exit 0); exit 3 lists dependency errors and fixes. [Installation and troubleshooting](docs/GETTING_STARTED.md). Skill installation is optional for manual editing; use `--client claude` for Claude Code. Start the official agent in this workspace; Codex uses `$agent-motion-studio`, Claude Code `/agent-motion-studio`.
 
 Open the **complete session URL** printed by the CLI. Keep it private. The editor currently uses Russian labels:
 
@@ -36,6 +41,8 @@ Open the **complete session URL** printed by the CLI. Keep it private. The edito
 
 Your copy lives under `projects/`, which Git ignores. To reopen it, repeat only the `studio` command. Stop the server with Ctrl+C. If the port is busy, add `--port 4174`. [Detailed guide](docs/GETTING_STARTED.md) · [Инструкция на русском](docs/STUDIO_RU.md).
 
+Already have a film? Open its existing `project.json` with `studio`; give that path to your agent. Do not run `new` or `init` again. Keep its assets and history together. [Agent continuation](docs/AGENT_WORKFLOW_RU.md#продолжение-существующего-фильма) · [Independent user trial](docs/USER_TRIAL_RU.md).
+
 ## Use the built runtime
 
 The release preparation produces `agent-motion-studio-0.1.0.tgz`. With that file downloaded, install it in an empty folder:
@@ -44,6 +51,7 @@ The release preparation produces `agent-motion-studio-0.1.0.tgz`. With that file
 npm init -y
 npm install --ignore-scripts --omit=dev /path/to/agent-motion-studio-0.1.0.tgz
 npx --no-install agent-motion-studio doctor --json
+node node_modules/agent-motion-studio/scripts/install-agent-skill.mjs --client codex --scope project
 npx --no-install agent-motion-studio init coffee-ritual --dir film
 npx --no-install agent-motion-studio studio film/project.json
 ```
@@ -59,7 +67,21 @@ Replace the archive path with its location on your computer; quote paths contain
 - Restore previous takes, reopen projects and export H.264/AAC MP4.
 - Edit through the CLI with the same validation and history as the browser.
 
-Agents can use `import`, `edit --action action.json`, `validate` and `render`. [Agent skill](skills/agent-motion-studio/SKILL.md) · [Project format](docs/MANIFEST.md). Cloud generation is a [next step](ROADMAP.md); 0.1 needs no model key for local editing.
+Agents can use `state`, `import`, `edit --action action.json --if-match ETAG`, `validate` and `render`. [Agent skill](skills/agent-motion-studio/SKILL.md) · [Project format](docs/MANIFEST.md). Local editing and export need no model key.
+
+For a new film, use `new --dir projects/my-film`. Agents can preview an ordinary correction with `preview PROJECT --action ACTION.json --if-match ETAG --out NEW_DIRECTORY --json`, then accept the same action through `edit`. Install the bundled skill with `node scripts/install-agent-skill.mjs --client codex --scope project` (or `--client claude`). The installer leaves client login and existing edited skills intact. [Client setup, first brief and API-agent path](docs/AGENT_WORKFLOW_RU.md).
+
+## Development checkout: one generated replacement take
+
+The P1 implementation connects **Replicate `wan-video/wan-2.2-i2v-fast`** in image-to-video mode to an existing video scene. It persists a job, resumes its known remote ID, downloads a candidate separately, previews it, accepts it explicitly and keeps the previous take for restoration. The production path requires `REPLICATE_API_TOKEN` in the server environment; it does not substitute a mock when the key is missing.
+
+Run the first remix above, select a video scene and use **Новый AI-дубль**. Import a permitted PNG/JPEG reference ≤256 KiB first. Preparation stays local. Review the exact prompt, reference, settings and dated cost estimate before authorizing one submit. The model clip is 121 frames at 16 fps (7.5625 seconds); the selected scene keeps its duration, so scenes longer than this are rejected. Candidate trim starts at zero and crop controls stay separate from ordinary scene edits.
+
+Reopening the project only reads local jobs. Use **Возобновить наблюдение** to check a submitted job and **Скачать результат этого задания** to retry its output; neither creates another generation. Preview the candidate, watch it and explicitly accept. Then export, restore the previous scene and export again through the existing editor. See the [generation and CLI guide](docs/GENERATION_RU.md) and [provider decision](docs/GENERATION_PROVIDER_DECISION.md).
+
+If a submission response is lost, check the same provider account and explicitly acknowledge the possible existing charge in **Зафиксировать проверку аккаунта**. The old request stays unknown and is never repeated; a new prepared intent needs separate spending/reference approval. Stop and restart do not release this uncertainty. Each project directory supports one generation manifest; see the guide before binding an older local job store.
+
+Default tests use a controlled provider and require no paid calls. This checkout's offline implementation is distinct from **real provider verified** and **full workflow verified**, which require an authorized live run and its evidence. A key by itself grants no spending or reference-upload permission. The local agent-film demonstration is complete within its stated client limits; P2 focuses on a new user following this README independently.
 
 ## Current limits
 
@@ -69,9 +91,9 @@ Agents can use `import`, `edit --action action.json`, `validate` and `render`. [
 - 12 scenes, 24 assets, 1–60 seconds; the intended workflow is 3–4 scenes / 15–30 seconds.
 - Imports read files into RAM: video ≤512 MiB, images ≤20 MiB, audio ≤100 MiB. Keep renders sequential.
 - History retains 100 snapshots. Sources/exports are not automatically pruned. Draft recovery belongs to the current browser tab; it is not a backup.
-- The server is local and intended for one user. No built-in chat, cloud accounts or video-generation provider.
+- The server is local and intended for one user. No built-in chat or studio billing. The first provider integration uses your own Replicate API account; local inference is not implemented.
 
-The code is free under MIT. External generation services, if added, have their own costs and terms. Tests establish technical behavior; they do not establish artistic quality or demand.
+The code is free under MIT. External generation services have their own costs and terms; selected prompts/references leave your computer only after an authorized submit. Tests establish technical behavior; they do not establish artistic quality or demand.
 
 ## Build with us
 

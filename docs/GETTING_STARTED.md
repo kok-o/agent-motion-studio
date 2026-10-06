@@ -1,50 +1,106 @@
-# Local studio and agent workflow
+# Install, open and revise a film
 
-Use Node ≥22.12, Chrome/Chromium, FFmpeg with libx264/AAC and ffprobe. The CLI's `doctor --json` reports discovery. These system tools are not installed by this package. Override paths with `CHROME_PATH`, `FFMPEG_PATH`, `FFPROBE_PATH`. No Python or model key is required for local editing.
+Local editing needs Node.js ≥22.12, Chrome/Chromium and FFmpeg/ffprobe with libx264/AAC. No Python, model key or media-provider account is needed. Your external agent uses its own official authentication and quota/billing. The editor has Russian labels; translations below cover the first workflow.
 
-After installing the `.tgz` with `npm install --ignore-scripts --omit=dev <archive>`:
+## Install from source
+
+Install [Node.js](https://nodejs.org/en/download), [Chrome](https://www.google.com/chrome/) and an FFmpeg build from the [FFmpeg download page](https://ffmpeg.org/download.html). On Windows, extract the build and add the folder containing `ffmpeg.exe` and `ffprobe.exe` to PATH. Reopen the terminal after installation.
+
+Clone the repository, or download its source ZIP and open a terminal in the extracted folder:
+
+```sh
+git clone https://github.com/kok-o/agent-motion-studio.git
+cd agent-motion-studio
+npm ci --ignore-scripts
+npm run build
+node dist/cli.js doctor --json
+```
+
+Use `npm.cmd` on PowerShell if script policy blocks `npm.ps1`; no execution-policy change is required. Source ZIP users skip clone/cd. Normal use does not require `git init` or maintainer tests.
+
+Doctor must return `ready:true`, exit 0. It checks Node, a real browser launch, FFmpeg's libx264/AAC encoders and ffprobe. Exit 3 reports each failing dependency and recovery hint, even when the browser is missing. Fix the indicated tools and rerun before rendering. It does not install tools or certify a clean machine.
+
+| Failure | Fix |
+| --- | --- |
+| `node`/`npm` unknown | Install Node ≥22.12 and reopen the terminal |
+| `dist/cli.js` missing | Run `npm ci --ignore-scripts`, then `npm run build` in the repository root |
+| Browser missing/unable to launch | Install Chrome/Chromium or set `CHROME_PATH` to its executable |
+| FFmpeg/ffprobe missing | Add their bin folder to PATH or set executable paths below |
+| libx264/AAC missing | Use an FFmpeg build with both encoders |
+| Port busy | Stop the previous server with Ctrl+C or add `--port 4174` |
+
+For nonstandard Windows locations, adapt these example paths in the terminal that launches the studio:
 
 ```powershell
+$env:CHROME_PATH = 'C:\Tools\Chromium\chrome.exe'
+$env:FFMPEG_PATH = 'C:\Tools\ffmpeg\bin\ffmpeg.exe'
+$env:FFPROBE_PATH = 'C:\Tools\ffmpeg\bin\ffprobe.exe'
+node dist/cli.js doctor --json
+```
+
+## Install a provided runtime archive
+
+Use this route if you already have `agent-motion-studio-0.1.0.tgz`. No npm-registry package or published release archive is promised. In an empty workspace, replace the archive path with its actual location:
+
+```sh
+npm init -y
+npm install --ignore-scripts --omit=dev "../downloads/agent-motion-studio-0.1.0.tgz"
+npx --no-install agent-motion-studio doctor --json
+node node_modules/agent-motion-studio/scripts/install-agent-skill.mjs --client codex --scope project
 npx --no-install agent-motion-studio init coffee-ritual --dir film
 npx --no-install agent-motion-studio studio film/project.json
 ```
 
-Open the full session link. Stop with Ctrl+C. Another port: append `--port 4174`. Start a blank project with `new --dir my-film`. Import through **Импорт файлов**, add a source with **В сцену**, choose file music and save. The main player displays completed exports; the inspector's upper player is the source without edits.
+The runtime needs the same tools; it skips the TypeScript build. Use `npx.cmd` on PowerShell if policy blocks `npx.ps1`. In later examples substitute `npx --no-install agent-motion-studio` for `node dist/cli.js` in this workspace.
 
-Choose scene 2, change the source to `first-drops.mp4`, trim start to 1 s and duration to 7 s. **Предпросмотр сцены** renders the selected scene from the draft at output resolution, without audio or saving. The displayed interval has an exclusive end; duration is rounded to 30 fps. Changing fields invalidates the preview. Save with **Сохранить сцену**, then **Экспорт MP4**. Restore with **Вернуть предыдущий вариант** and export again. Scene previews are session-local temporary files; accepted exports live under `exports/`.
+## Connect your official agent
 
-## Working alongside an agent
+From the built source workspace:
 
-The agent and UI share `project.json`:
-
-```powershell
-npx --no-install agent-motion-studio import film/project.json --file "C:\clips\shot.mp4" --json
-npx --no-install agent-motion-studio edit film/project.json --action change.json --json
-npx --no-install agent-motion-studio validate film/project.json --json
-npx --no-install agent-motion-studio render film/project.json --out film/export-cli --no-cache --json
-npx --no-install agent-motion-studio verify film/export-cli/output.mp4 --json
+```sh
+node scripts/install-agent-skill.mjs --client codex --scope project
 ```
 
-`import` returns the new asset ID. A `change.json` example:
+Use `--client claude` for Claude Code, or `both`. The offline installer preserves edited skills; if it reports a conflict, move a backup outside the skills directory before updating. Login/settings stay intact. Launch your agent in this same workspace; the copied skill folder is guidance, not the executable. Codex discovers `.agents/skills`, Claude Code `.claude/skills`. Use `$agent-motion-studio` or `/agent-motion-studio`. Restart the client if discovery does not refresh. [Official Codex locations](https://learn.chatgpt.com/docs/build-skills) · [Claude Code skills](https://code.claude.com/docs/en/skills).
 
-```json
-{
-  "type": "edit-scene",
-  "sceneId": "first-pour",
-  "patch": { "durationFrames": 180, "trimStartSeconds": 2, "fit": "contain" }
-}
+## Open once, then reopen
+
+For a first remix create your personal copy once:
+
+```sh
+node dist/cli.js init coffee-ritual --dir projects/my-first-remix
+node dist/cli.js studio projects/my-first-remix/project.json
 ```
 
-An edit creates a history snapshot and validates the complete project before atomically replacing it. It never prunes accepted assets. Patch `null` removes an optional field. Scene ID/type stay fixed; unknown fields are rejected. Other operations: `add-scene`, `remove-scene`, `move-scene`, `composition`, `music`, `restore` and `restore-scene`. See the Russian guide for action arguments.
+For an existing film, use only `studio PATH_TO_PROJECT/project.json`. Extract a supplied project ZIP with its assets first. Keep sources/history; do not run `new`/`init` over an accepted film. A genuinely new film uses `new --dir projects/my-film`.
 
-If an agent changes the file while your form is dirty, **Перечитать проект** compares the two versions without saving. **Применить мои изменённые поля** explicitly applies your changed fields on top of the fresh version; other agent edits remain, and its prior composition is stored in history. **Принять внешнюю, отбросить черновик** discards your draft only after this explicit choice. **Вернуться к черновику** changes neither version. A second agent edit reopens the decision. Invalid form input can still be kept or discarded. Drafts are retained in this tab's session storage when available; do not rely on this as a cross-device backup.
+Open the complete session URL printed by the terminal. Keep it private and leave the server running; Ctrl+C stops it. To reopen later, repeat only `studio` and use the newly printed URL. Restart creates a new session URL. The main player shows completed exports; the inspector's source player shows unedited media.
 
-## Transfer and limitations
+## Edit, preview, accept and export
 
-Share `project.json`, `assets/`, `CREDITS.md`, `provenance.json`, `LICENSE.md` and the example README. Retain footage attribution next to public MP4s. The five example sources are relative and self-contained. Do not include `.cache`, session URLs, temporary files or development reports. `init` omits cached renders and exports.
+1. Select scene 2, `first-pour`. Choose **Выбранный исходник / дубль** (source/take) → `first-drops.mp4`, trim start 1 s, duration 7 s.
+2. Click **Предпросмотр сцены** (preview scene). It renders the unsaved draft silently at output resolution. Watch trim/crop; project/history stay unchanged. Changing fields makes that preview stale.
+3. Click **Сохранить сцену** (save scene), then **Экспорт MP4** (export MP4). Wait for verified output in the main player/export list. UI exports live in the project's `exports/` folder.
+4. Click **Вернуть предыдущий вариант** (restore previous take), export again, close the page and reopen. Original sources remain.
+5. For your own material use **Импорт файлов** (import files), then **В сцену** (add to scene). Imports copy immutable sources. Music uses a separate track; source-video audio is muted.
 
-v1 remains readable and renders unchanged; first accepted studio edit upgrades to v2 and records prior composition. v2 uses hard cuts and a uniform SDR BT.709 output; HDR/color-managed workflows are unsupported. Preview reuses the same visual engine and current frame timing but omits sound; projects with narration/captions need full export. No realtime compositor, cloud generation or multitrack timeline is included. Video source audio stays muted.
+To ask your agent to continue the same film:
 
-1080p/30 fps, 16:9/9:16, 12 scenes, 24 assets, 1–60 s, 1 MiB JSON, 100 snapshots. Imports read files into RAM: MP4 ≤512 MiB, images ≤20 MiB, audio ≤100 MiB; visual sources ≤4096 per side. Keep heavy renders sequential. Failed exports preserve prior accepted results.
+```text
+Use agent-motion-studio. Continue projects/my-first-remix/project.json.
+Read state first. Change only the second scene; preserve other scenes,
+sources and history. Preview before acceptance, export to a new folder.
+Use local tools only; no paid calls or uploads. Do not create a new film.
+```
 
-After a hard kill, inspect the PID in `<project>.edit-lock` or `<output>/.render.lock`; only remove that stale lock when its process is no longer running. The server is for one loopback session, not a public network service. Export/image metadata may contain local paths in diagnostic reports; share the editable source package and chosen MP4, not internal reports.
+[Russian continuation and exact CLI steps](AGENT_WORKFLOW_RU.md) · [Project operations](MANIFEST.md).
+
+## Conflicts, transfer and limits
+
+If an agent edits while your form is dirty, **Перечитать проект** (reload) compares both versions. **Применить мои изменённые поля** applies only your changed fields to the fresh version. **Принять внешнюю, отбросить черновик** discards your draft after your explicit choice. A second edit requires another decision; never blindly retry a stale save.
+
+Transfer `project.json`, all accepted `assets/` including history sources, and credits/licenses. Exclude caches, `.studio` jobs, session URLs and private reports. Do not use `resolved-manifest.json` as editable input. Public example derivatives require their credits. [Compatibility](COMPATIBILITY.md) · [Independent user trial](USER_TRIAL_RU.md).
+
+1080p/30 fps, 16:9/9:16, 12 scenes, 24 assets, 1–60 seconds, 100 snapshots. Preview is silent/on demand; narration/captions need full export. v1 remains readable; accepted edits migrate to v2 with history. No HDR, realtime multitrack timeline or local neural-video inference. Keep renders sequential. Failed exports preserve previous results.
+
+After a hard kill, inspect the PID in `<project>.edit-lock` or `<output>/.render.lock`; remove a stale lock only after verifying that process stopped. The server is loopback-only for one user. Keep diagnostic paths and personal media out of public reports.
