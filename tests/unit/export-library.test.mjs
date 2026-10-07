@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, readdir, rm, rename, symlink } from 'node:fs/promises';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { registerExport } from '../../dist/export-library.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { pathToFileURL } from 'node:url';
 
 async function fixture() {
   const parent = resolve('.cache/tests'); await mkdir(parent, { recursive: true });
@@ -77,6 +80,155 @@ test('registered exports are independent portable copies and keep earlier versio
     const report = await readFile(join(f.project, 'exports', first.id, 'render-report.json'), 'utf8');
     assert.equal(JSON.parse(report).status, 'verified'); assert.ok(!report.includes(f.output));
   } finally { await removeFixture(f); }
+});
+
+// Built-in seams live only in an isolated child. No runtime options or public
+// action are added, and the final successful move is the real filesystem rename.
+async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platform = 'win32', moduleUrl }) {
+  const assert = (await import('node:assert/strict')).default;
+  const fs = (await import('node:fs/promises')).default;
+  const timers = (await import('node:timers/promises')).default;
+  const { syncBuiltinESMExports } = await import('node:module');
+  const { resolve, join, dirname, basename, relative, isAbsolute } = await import('node:path');
+  const real = { ...fs }, realDelay = timers.setTimeout;
+  const parent = resolve('.cache/tests'); await real.mkdir(parent, { recursive: true });
+  const root = await real.mkdtemp(join(parent, 'export-library-promotion-'));
+  const project = join(root, 'project'), output = join(root, 'external');
+  await real.mkdir(project); await real.mkdir(output);
+  const file = join(project, 'project.json'), manifest = Buffer.from('{"history":["kept"]}\n');
+  await real.writeFile(file, manifest);
+  await real.mkdir(join(project, 'assets')); await real.writeFile(join(project, 'assets/source.mp4'), 'source-kept');
+  await real.mkdir(join(project, 'history')); await real.writeFile(join(project, 'history/kept.json'), 'history-kept');
+  await real.writeFile(join(output, 'output.mp4'), 'verified-output-fixture');
+  const summary = { durationSeconds: 1, totalFrames: 30 };
+  Object.defineProperty(process, 'platform', { value: platform });
+  const runtime = await import(new URL('runtime.js', moduleUrl));
+  const { registerExport } = await import(moduleUrl);
+  let previous;
+  try {
+    if (phase === 'second') {
+      previous = await registerExport(file, output, manifest, summary);
+      assert.equal(previous.status, 'registered', previous.message);
+    }
+    const foreignStage = join(project, '.studio-export-foreign');
+    await real.mkdir(foreignStage); await real.writeFile(join(foreignStage, 'owned'), 'foreign-kept');
+    const attempts = [], delays = []; let copies = 0, stages = 0, manifests = 0, stage, destination;
+    fs.mkdtemp = async (...args) => { stages++; return real.mkdtemp(...args); };
+    fs.copyFile = async (...args) => {
+      copies++;
+      if (mode === 'copy-failure') throw Object.assign(new Error('injected EPERM copy'), { code: 'EPERM' });
+      return real.copyFile(...args);
+    };
+    fs.writeFile = async (...args) => { if (basename(args[0]) === 'manifest.json') manifests++; return real.writeFile(...args); };
+    fs.rename = async (from, to) => {
+      assert.ok(basename(from).startsWith('.studio-export-') && basename(dirname(to)) === 'exports', 'only promotion is intercepted');
+      stage = from; destination = to; attempts.push({ from, to });
+      if (mode === 'transient' && attempts.length > 1) return real.rename(from, to);
+      if (mode === 'uncertain') await real.rename(from, to);
+      throw Object.assign(new Error(`injected ${code ?? 'unknown'} promotion attempt ${attempts.length}`), code === null ? {} : { code });
+    };
+    timers.setTimeout = async milliseconds => {
+      delays.push(milliseconds);
+      if (mode === 'cancel') runtime.cancelProcesses();
+      if (mode === 'library-link' || mode === 'library-replaced') {
+        await real.rename(join(project, 'exports'), join(project, 'retained-exports'));
+        if (mode === 'library-link') {
+          const outside = join(root, 'outside'); await real.mkdir(outside);
+          await real.writeFile(join(outside, 'owned'), 'outside-kept');
+          await real.symlink(outside, join(project, 'exports'), process.platform === 'win32' && platform === 'win32' ? 'junction' : 'dir');
+        } else { await real.mkdir(join(project, 'exports')); await real.writeFile(join(project, 'exports/owned'), 'replacement-kept'); }
+      }
+      if (mode === 'destination-occupied') { await real.mkdir(destination); await real.writeFile(join(destination, 'owned'), 'destination-kept'); }
+      if (mode === 'stage-replaced') {
+        await real.rename(stage, join(root, 'retained-stage'));
+        await real.mkdir(stage); await real.writeFile(join(stage, 'owned'), 'stage-kept');
+      }
+      if (mode === 'root-link') {
+        await real.rename(project, join(root, 'retained-project'));
+        const outside = join(root, 'outside'); await real.mkdir(outside);
+        await real.mkdir(join(outside, basename(stage))); await real.writeFile(join(outside, basename(stage), 'owned'), 'outside-stage-kept');
+        await real.symlink(outside, project, 'junction');
+      }
+    };
+    syncBuiltinESMExports();
+    let result, cancellation;
+    try { result = await registerExport(file, output, manifest, summary); }
+    catch (error) { cancellation = error; }
+    if (mode === 'transient' && platform === 'win32') {
+      assert.equal(result?.status, 'registered', result?.message);
+      assert.equal(attempts.length, 2); assert.deepEqual(delays, [100]);
+      assert.equal(await real.readFile(join(project, result.path), 'utf8'), 'verified-output-fixture');
+    } else if (mode === 'cancel') {
+      assert.equal(cancellation?.code, 'CANCELLED'); assert.equal(cancellation?.exitCode, 130);
+      assert.equal(attempts.length, 1); assert.deepEqual(delays, [100]);
+    } else {
+      assert.equal(result?.status, 'unavailable'); assert.equal(cancellation, undefined);
+      const exhausted = mode === 'permanent' && platform === 'win32' && ['EPERM', 'EBUSY'].includes(code);
+      assert.equal(attempts.length, mode === 'copy-failure' ? 0 : exhausted ? 6 : 1);
+      assert.deepEqual(delays, mode === 'copy-failure' || platform !== 'win32' || !['EPERM', 'EBUSY'].includes(code) ? [] : exhausted ? [100, 200, 400, 800, 1600] : [100]);
+      if (exhausted || mode === 'transient' || mode === 'non-retryable' || mode === 'copy-failure') {
+        assert.ok(result.message.includes(`injected ${code ?? 'unknown'}`));
+        if (exhausted) assert.ok(result.message.includes('attempt 6'), 'keep the last actual failure');
+      } else assert.match(result.message, /changed|exists|ENOENT|owned/i);
+    }
+    assert.equal(stages, 1); assert.equal(copies, 1); assert.equal(manifests, mode === 'copy-failure' ? 0 : 1);
+    assert.equal(new Set(attempts.map(item => item.from)).size, attempts.length ? 1 : 0);
+    assert.equal(new Set(attempts.map(item => item.to)).size, attempts.length ? 1 : 0);
+    const retainedProject = mode === 'root-link' ? join(root, 'retained-project') : project;
+    assert.deepEqual(await real.readFile(join(retainedProject, 'project.json')), manifest);
+    assert.equal(await real.readFile(join(retainedProject, 'assets/source.mp4'), 'utf8'), 'source-kept');
+    assert.equal(await real.readFile(join(retainedProject, 'history/kept.json'), 'utf8'), 'history-kept');
+    assert.equal(await real.readFile(join(output, 'output.mp4'), 'utf8'), 'verified-output-fixture');
+    assert.equal(await real.readFile(join(retainedProject, '.studio-export-foreign/owned'), 'utf8'), 'foreign-kept');
+    const retainedLibrary = ['library-link', 'library-replaced'].includes(mode) ? join(project, 'retained-exports') : join(retainedProject, 'exports');
+    if (previous) assert.equal(await real.readFile(join(retainedLibrary, previous.id, 'output.mp4'), 'utf8'), 'verified-output-fixture');
+    const libraryEntries = await real.readdir(retainedLibrary);
+    assert.equal(libraryEntries.length, (previous ? 1 : 0) + (result?.status === 'registered' || ['destination-occupied', 'uncertain'].includes(mode) ? 1 : 0));
+    const stageNames = (await real.readdir(retainedProject)).filter(name => name.startsWith('.studio-export-'));
+    assert.equal(stageNames.length, ['stage-replaced', 'root-link'].includes(mode) ? 2 : 1);
+    if (mode === 'library-link') assert.equal(await real.readFile(join(root, 'outside/owned'), 'utf8'), 'outside-kept');
+    if (mode === 'library-replaced') assert.equal(await real.readFile(join(project, 'exports/owned'), 'utf8'), 'replacement-kept');
+    if (mode === 'destination-occupied') assert.equal(await real.readFile(join(destination, 'owned'), 'utf8'), 'destination-kept');
+    if (mode === 'stage-replaced') assert.equal(await real.readFile(join(stage, 'owned'), 'utf8'), 'stage-kept');
+    if (mode === 'root-link') assert.equal(await real.readFile(join(project, basename(stage), 'owned'), 'utf8'), 'outside-stage-kept');
+    console.log(JSON.stringify({ mode, phase, platform, code, status: result?.status ?? cancellation.code, attempts: attempts.length, delays, stages, copies, manifests, preservation: true }));
+  } finally {
+    Object.assign(fs, real); timers.setTimeout = realDelay; syncBuiltinESMExports();
+    const within = relative(parent, root); assert.ok(within.startsWith('export-library-promotion-') && !within.includes('/') && !within.includes('\\') && !isAbsolute(within));
+    await real.rm(root, { recursive: true, force: true });
+  }
+}
+
+async function controlledPromotion(options) {
+  const moduleUrl = pathToFileURL(resolve('dist/export-library.js')).href;
+  try {
+    const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', `await (${promotionScenario.toString()})(JSON.parse(process.argv[1]));`, JSON.stringify({ ...options, moduleUrl })], { windowsHide: true, timeout: 15000 });
+    return JSON.parse(stdout);
+  } catch (error) { throw new Error(safeReason(error.stderr || error.message, { root: process.cwd() })); }
+}
+
+for (const code of ['EPERM', 'EBUSY']) for (const phase of ['first', 'second']) test(`Windows promotion recovers one ${code} without repeating preparation, ${phase}`, async () => {
+  await controlledPromotion({ mode: 'transient', code, phase });
+});
+
+test('Windows promotion exhausts exactly six attempts and preserves previous entries and the last cause', async () => {
+  for (const code of ['EPERM', 'EBUSY']) for (const phase of ['first', 'second']) await controlledPromotion({ mode: 'permanent', code, phase });
+});
+
+test('arbitrary errors, non-Windows promotion and non-promotion failures never retry', async () => {
+  for (const code of ['EACCES', 'EIO', null]) await controlledPromotion({ mode: 'non-retryable', code, phase: 'second' });
+  for (const platform of ['linux', 'darwin']) for (const code of ['EPERM', 'EBUSY']) await controlledPromotion({ mode: 'transient', code, platform });
+  await controlledPromotion({ mode: 'copy-failure', phase: 'second' });
+});
+
+test('cancellation during promotion delay stops before another rename and keeps earlier output', async () => {
+  for (const phase of ['first', 'second']) await controlledPromotion({ mode: 'cancel', phase });
+});
+
+test('promotion revalidates library, stage, root and destination after waiting and never deletes foreign data', async () => {
+  for (const mode of ['library-link', 'library-replaced', 'destination-occupied', 'stage-replaced', 'root-link', 'uncertain']) {
+    await controlledPromotion({ mode, phase: 'second' });
+  }
 });
 
 test('an export already in the project library is not duplicated', async () => {
