@@ -69,6 +69,7 @@
     "docs/STATUS.md",
     "docs/PLAN_V0.2_RU.md",
     "docs/USER_TRIAL_RU.md",
+    "docs/USER_TRIAL_RESULTS_RU.md",
     "docs/GETTING_STARTED.md",
     "docs/MANIFEST.md",
     "docs/COMPOSITION.md",
@@ -112,6 +113,7 @@
     "test:windows": "node --test tests/integration/windows-cancellation.test.mjs",
     "release:prepare": "node scripts/prepare-release.mjs",
     "verify:package": "node scripts/verify-release-package.mjs",
+    "verify:user-kit": "node scripts/verify-first-user-kit.mjs",
     "verify:v02": "node scripts/verify-v02-consumer.mjs"
   },
   "dependencies": {

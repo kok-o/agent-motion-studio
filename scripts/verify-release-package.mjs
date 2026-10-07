@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { verifyFirstUserKit } from './verify-first-user-kit.mjs';
 
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
 const latest = process.argv[2] ? null : JSON.parse(await readFile('artifacts/release/latest.json', 'utf8'));
@@ -131,5 +132,9 @@ try {
   assert.equal(acknowledged.status, 'submission_unknown'); assert.equal(acknowledged.submissions, 1); assert.equal(acknowledged.unknownResolution.kind, 'user_acknowledged');
   assert.equal(controlledSubmissions, 2); assert.ok((await readFile(file)).equals(restoredBytes));
   report.checks.generation.recoveryCommands = { bindStore: true, resolveUnknown: true, oldUnknownRetained: true, acceptedProjectUnchanged: true, controlledSubmissionsTotal: controlledSubmissions, productionNetworkRequests: 0 };
+  if (latest?.userKit) {
+    const kitResult = await verifyFirstUserKit({ kit: latest.userKit, npm, evidence: join(out, 'first-user-kit') });
+    report.checks.firstUserKit = { ...kitResult, consumer: '[retained OS temporary workspace]' };
+  }
   report.status = 'passed'; await save(); console.log(JSON.stringify({ status: report.status, evidence: out, sha256: report.sha256 }, null, 2));
 } catch (error) { report.status = 'failed'; report.failure = error.stack; await save(); throw error; }

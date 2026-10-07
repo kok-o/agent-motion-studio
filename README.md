@@ -61,6 +61,8 @@ Already have a film? Open its existing `project.json` with `studio`; give that p
 
 ## Use the built runtime
 
+For a manually supplied first-user kit, open its `START_HERE_RU.md`: it includes the runtime, a permitted coffee MP4, credits and a blank human protocol. [Preparation and participant route](docs/USER_TRIAL_RU.md). The kit records its source SHA and technical self-run separately from an independent person's result.
+
 The release preparation produces `agent-motion-studio-0.1.0.tgz`. With that file downloaded, install it in an empty folder:
 
 ```sh
