@@ -76,6 +76,10 @@ node dist/cli.js studio $film
 
 Для следующих проверок выбирайте новые output-папки. Restore выполняется штатным `restore-scene`/`restore` с текущим ETag; не копируйте старый JSON поверх новой работы. [Ручной workflow](GETTING_STARTED.md).
 
+Обычный полный CLI/API render сохраняет заданный output и регистрирует отдельную MP4/manifest-копию в `exports/` проекта. В ответе проверяйте `studioExport`: при `unavailable` исходный проверенный MP4 сохранён, но в студии копия не появилась; сообщите пользователю причину. Открытая студия обновляет список автоматически, сохраняя несохранённые поля и прежние экспорты. Preview остаётся отдельным черновым результатом.
+
+Doctor и renderer проверяют Canvas/PNG. `BROWSER_UNSUPPORTED` требует выбрать Chrome/Chromium/Edge через `CHROME_PATH`, сохраняя sandbox и личные настройки браузера. Для validate/preview/render нужны локальные child processes, временный listener на `127.0.0.1` и запись output/проекта. Read-only агент может читать `state`, но получать `LOOPBACK_UNAVAILABLE`/`EPERM listen` на validate. Используйте разрешение конкретных CLI-команд в официальном клиенте или локальный терминал. [macOS, HTTPS/SSH и процессы](GETTING_STARTED.md).
+
 ## API-ключ модели агента
 
 В официальном Codex CLI поддерживается API-режим: ключ передаётся через stdin в `codex login --with-api-key`. Это меняет login клиента, поэтому настройку выполняет пользователь; она не нужна для уже авторизованного подписочного клиента. На PowerShell с ключом в environment:

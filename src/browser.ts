@@ -2,6 +2,7 @@ import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { launchBrowser } from './runtime.js';
+import { assertRendererPage } from './browser-contract.js';
 import { packageRoot } from './spec.js';
 import { StudioError } from './errors.js';
 import type { ResolvedSpec, ResolvedScene } from './types.js';
@@ -26,7 +27,8 @@ export async function openRenderer(spec: ResolvedSpec, chrome: string) {
     try { const content = await readFile(route.path); response.writeHead(200, { 'Content-Type': route.type, 'Cache-Control': 'no-store', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'" }); response.end(content); }
     catch { response.writeHead(500); response.end(); }
   });
-  await new Promise<void>((ok, bad) => { server.once('error', bad); server.listen(0, '127.0.0.1', () => ok()); });
+  try { await new Promise<void>((ok, bad) => { server.once('error', bad); server.listen(0, '127.0.0.1', () => ok()); }); }
+  catch (error) { throw new StudioError('LOOPBACK_UNAVAILABLE', 'environment', `Cannot start the renderer's temporary loopback server (${(error as NodeJS.ErrnoException).code ?? 'listen failed'}). Run the CLI in a local terminal or an agent environment allowed to listen on 127.0.0.1; keep the browser sandbox enabled.`, 3); }
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('SERVER_ADDRESS_FAILED');
   let browser;
   try {
@@ -36,6 +38,7 @@ export async function openRenderer(spec: ResolvedSpec, chrome: string) {
     const allowedOrigin = `http://127.0.0.1:${address.port}`;
     page.on('request', request => { if (request.url().startsWith(`${allowedOrigin}/`)) void request.continue(); else void request.abort('blockedbyclient'); });
     await page.goto(`${allowedOrigin}/`, { waitUntil: 'networkidle0', timeout: 30_000 });
+    await assertRendererPage(page);
     const layout = await page.evaluate(async data => {
       const api = (window as unknown as { studio: { initialize(value: ResolvedSpec): Promise<{ scenes: ResolvedScene[]; captionLayouts: unknown }> } }).studio;
       return api.initialize(data);

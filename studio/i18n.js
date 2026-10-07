@@ -22,6 +22,8 @@ export const english = Object.freeze({
   "Текущая версия": "Current version",
   "Предыдущая версия · нужен экспорт": "Previous version · export needed",
   "Нет экспорта": "No export",
+  "Новый экспорт появился в студии.": "A new export is available in the studio.",
+  "Локальная студия остановлена или недоступна. Запустите CLI снова и откройте новую ссылку сессии. Ваш черновик сохранён в этой вкладке.": "The local studio stopped or is unavailable. Start the CLI again and open its new session link. Your draft is preserved in this tab.",
   "Проверьте поля сцены.": "Check the scene fields.",
   "Есть несохранённые изменения": "Unsaved changes",
   "Длительность, с": "Duration, s",

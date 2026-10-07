@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { homedir, platform, arch } from 'node:os';
 import puppeteer from 'puppeteer-core';
 import { StudioError } from './errors.js';
+import { assertBrowserExecutable, assertRendererPage } from './browser-contract.js';
 import type { ToolPaths } from './types.js';
 
 const ownedChildren = new Set<ChildProcess>();
@@ -59,13 +60,23 @@ export function findTools(): ToolPaths {
 }
 export async function launchBrowser(chrome: string) {
   throwIfCancelled();
+  assertBrowserExecutable(chrome);
   // Optional for hosts near their OS commit limit. Keep the browser sandbox,
   // one isolated rendering page and the same indexed Canvas/export path.
   const memoryArgs = process.env.AMS_LOW_MEMORY === '1' ? ['--disable-gpu', '--renderer-process-limit=1'] : [];
-  try { return await puppeteer.launch({ executablePath: chrome, headless: true, timeout: 30_000, protocolTimeout: 60_000,
+  let browser;
+  try {
+    browser = await puppeteer.launch({ executablePath: chrome, headless: true, timeout: 30_000, protocolTimeout: 60_000,
     handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, signal: cancellationController.signal,
-    args: ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run', '--disable-default-apps', ...memoryArgs] }); }
-  catch (error) { throwIfCancelled(); throw new StudioError('BROWSER_START_FAILED', 'doctor', `Cannot launch the browser: ${error instanceof Error ? error.message : String(error)}`, 3); }
+    args: ['--disable-background-networking', '--disable-component-update', '--disable-sync', '--no-first-run', '--disable-default-apps', ...memoryArgs] });
+    const page = await browser.newPage();
+    try { await assertRendererPage(page); } finally { await page.close(); }
+    return browser;
+  } catch (error) {
+    await browser?.close().catch(() => {}); throwIfCancelled();
+    if (error instanceof StudioError) throw error;
+    throw new StudioError('BROWSER_START_FAILED', 'doctor', `Cannot launch the browser: ${error instanceof Error ? error.message : String(error)}`, 3);
+  }
 }
 export async function doctor() {
   const [major, minor] = process.versions.node.split('.').map(Number);
@@ -86,12 +97,12 @@ export async function doctor() {
   ]);
   const inspect = (index: number) => results[index].status === 'fulfilled'
     ? { ready: true, version: typeof (results[index] as PromiseFulfilledResult<unknown>).value === 'string' ? (results[index] as PromiseFulfilledResult<string>).value : (results[index] as PromiseFulfilledResult<{stdout:string}>).value.stdout.split('\n')[0] }
-    : { ready: false, error: String((results[index] as PromiseRejectedResult).reason) };
+    : { ready: false, error: String((results[index] as PromiseRejectedResult).reason), ...((results[index] as PromiseRejectedResult).reason instanceof StudioError && { code: ((results[index] as PromiseRejectedResult).reason as StudioError).code }) };
   return {
     ready: nodeSupported && results.every(result => result.status === 'fulfilled'),
     node: { version: process.version, supported: nodeSupported, ...(!nodeSupported && { hint: 'Install Node.js 22.12 or newer, reopen the terminal, then reinstall dependencies.' }) },
     os: { platform: platform(), arch: arch() },
-    browser: { path: chrome ?? process.env.CHROME_PATH ?? null, ...inspect(2), ...(results[2].status === 'rejected' && { hint: 'Install Chrome/Chromium, or set CHROME_PATH to the browser executable. See docs/GETTING_STARTED.md.' }) },
+    browser: { path: chrome ?? process.env.CHROME_PATH ?? null, ...inspect(2), ...(results[2].status === 'fulfilled' ? { canvas: 'exact-readback-and-png' } : { hint: 'Use Chrome/Chromium/Edge and set CHROME_PATH to its executable. Keep the browser sandbox and privacy settings enabled; see docs/GETTING_STARTED.md.' }) },
     ffmpeg: { path: ffmpeg, ...inspect(0), ...(results[0].status === 'rejected' && { hint: 'Install FFmpeg with libx264/AAC; add its bin folder to PATH or set FFMPEG_PATH to the executable.' }) },
     ffprobe: { path: ffprobe, ...inspect(1), ...(results[1].status === 'rejected' && { hint: 'Install ffprobe (included with FFmpeg); add its bin folder to PATH or set FFPROBE_PATH to the executable.' }) },
     optionalTts: { edge: 'not-required; run an explicitly configured addon separately' }
