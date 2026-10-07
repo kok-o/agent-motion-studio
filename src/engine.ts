@@ -10,6 +10,7 @@ import { verifyVideo } from './media.js';
 import { prepareAudio, audioDuration, resolveCaptions } from './audio.js';
 import { renderMixed } from './pipeline.js';
 import { publishCache, type CachePublication } from './cache-publication.js';
+import { registerExport } from './export-library.js';
 import type { ResolvedSpec } from './types.js';
 
 const json = (value: unknown) => `${JSON.stringify(value, null, 2)}\n`;
@@ -126,7 +127,9 @@ export async function render(manifestPath: string, outputDir: string, options: {
     // Replace complete directories, so shortening a video cannot leave old frame files.
     // Keep rollback copies until the MP4 and all reports have been promoted successfully.
     await publishWork(work, out);
-    return report;
+    const studioExport = await registerExport(manifestPath, out, manifestBytes, report);
+    if (studioExport.status === 'unavailable') options.progress?.(studioExport.message);
+    return { ...report, studioExport };
   } catch (error) {
     const failureDir = join(out, 'failures', work.slice(work.lastIndexOf(sep) + 1));
     await mkdir(failureDir, { recursive: true });

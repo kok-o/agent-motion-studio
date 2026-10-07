@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { createReadStream } from 'node:fs';
 import { readFile, stat, readdir, realpath, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { resolve, dirname, join, extname, relative, isAbsolute } from 'node:path';
+import { resolve, dirname, basename, join, extname, relative, isAbsolute } from 'node:path';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { packageRoot, loadManifest, hashBytes } from './spec.js';
 import { readProject, importMedia, editProject, withProjectLock } from './project.js';
@@ -39,6 +39,7 @@ async function sendFile(request: IncomingMessage, response: ServerResponse, file
 export async function startStudio(manifestPath: string, port = 4173, options: { provider?: GenerationProvider } = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error('Port must be 0–65535.');
   const file = await realpath(resolve(manifestPath)), root = dirname(file);
+  const projectName = /^(project|manifest)\.json$/i.test(basename(file)) ? basename(root) : basename(file, extname(file));
   const generation = new GenerationService(file, options.provider);
   let mediaCache = { etag: (await readProject(file)).etag, spec: await loadManifest(file) };
   let mediaLoading: { etag: string; promise: ReturnType<typeof loadManifest> } | undefined;
@@ -53,7 +54,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
   const equal = (value: string) => value.length === token.length && timingSafeEqual(Buffer.from(value), Buffer.from(token));
   const job: { status: string; progress?: string; exportId?: string; error?: unknown } = { status: 'idle' };
   const previewRoot = await mkdtemp(join(tmpdir(), 'ams-preview-'));
-  let previewBusy = false, previewWork: Promise<unknown> | undefined;
+  let previewBusy = false, previewWork: Promise<unknown> | undefined, exportWork: Promise<unknown> | undefined;
   const previews = new Map<string, string>();
   let origin = '';
   async function inside(path: string) {
@@ -68,12 +69,15 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       if (!entry.isDirectory() || !/^[a-zA-Z0-9_-]+$/.test(entry.name)) continue;
       try {
         const directory = await inside(join(root, 'exports', entry.name));
-        const report = JSON.parse(await readFile(join(directory, 'render-report.json'), 'utf8'));
-        const input = await readFile(join(directory, 'manifest.json'));
-        exports.push({ id: entry.name, projectHash: hashBytes(input), duration: report.durationSeconds, url: `/exports/${entry.name}/output.mp4` });
+        const report = JSON.parse(await readFile(await inside(join(directory, 'render-report.json')), 'utf8'));
+        const input = await readFile(await inside(join(directory, 'manifest.json')));
+        const video = await stat(await inside(join(directory, 'output.mp4')));
+        if (!video.isFile() || report.status !== 'verified' || !Number.isFinite(report.durationSeconds) || report.durationSeconds <= 0) continue;
+        const createdAt = Date.parse(report.createdAt) || Number(entry.name.split('-')[0]) || video.mtimeMs;
+        exports.push({ id: entry.name, projectHash: hashBytes(input), duration: report.durationSeconds, createdAt, url: `/exports/${entry.name}/output.mp4` });
       } catch { /* Incomplete jobs have no accepted export. */ }
     }
-    return exports.sort((a, b) => b.id.localeCompare(a.id));
+    return exports.sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
   }
   const server = createServer(async (request, response) => {
     response.setHeader('Cache-Control', 'no-store');
@@ -97,7 +101,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       if (request.method === 'POST' && request.headers.origin !== origin) { send({ error: 'Origin required' }, 403); return; }
       if (request.method === 'GET' && url.pathname === '/api/state') {
         const state = await readProject(file), spec = await resolvedProject(state.etag);
-        send({ ...state, projectPath: file, metadata: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { width: asset.width, height: asset.height, durationSeconds: asset.durationSeconds, sourceFps: asset.sourceFps, bytes: asset.bytes, hash: asset.hash }])), exports: await exportsList(), job }); return;
+        send({ ...state, projectPath: file, projectName, metadata: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { width: asset.width, height: asset.height, durationSeconds: asset.durationSeconds, sourceFps: asset.sourceFps, bytes: asset.bytes, hash: asset.hash }])), exports: await exportsList(), job }); return;
       }
       if (request.method === 'GET' && url.pathname === '/api/job') { send(job); return; }
       if (request.method === 'GET' && url.pathname === '/api/generation/capabilities') { send(generation.capabilities()); return; }
@@ -169,11 +173,11 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
         if (state.manifest.audio.narration.provider === 'edge') throw new Error('Online speech is not enabled in the local studio. Use the explicit CLI addon.');
         job.status = 'running'; job.progress = 'Starting export'; delete job.error;
         const exportId = `${Date.now()}-${randomUUID().slice(0, 8)}`; job.exportId = exportId;
-        void withProjectLock(file, async () => {
+        exportWork = withProjectLock(file, async () => {
           if ((await readProject(file)).etag !== state.etag) throw new StudioError('PROJECT_CONFLICT', 'project', 'Project changed before export.', 2);
           await mkdir(join(root, 'exports'), { recursive: true }); await inside(join(root, 'exports'));
           await render(file, join(root, 'exports', exportId), { noCache: true, progress: message => { job.progress = message; } });
-        }).then(() => { job.status = 'complete'; job.progress = 'Verified MP4'; }, error => { job.status = 'failed'; job.error = normalizeError(error); });
+        }).then(() => { job.status = 'complete'; job.progress = 'Verified MP4'; }, error => { job.status = 'failed'; job.error = normalizeError(error); }).finally(() => { exportWork = undefined; });
         send({ ...job }, 202); return;
       }
       send({ error: 'Route not found' }, 404);
@@ -183,5 +187,11 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
   catch (error) { await rm(previewRoot, { recursive: true, force: true }); throw error; }
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Server did not start');
   origin = `http://127.0.0.1:${address.port}`;
-  return { server, url: `${origin}/#${token}`, project: file, async close() { server.closeAllConnections(); await new Promise<void>(ok => server.close(() => ok())); await previewWork?.catch(() => {}); await rm(previewRoot, { recursive: true, force: true }); } };
+  return { server, url: `${origin}/#${token}`, project: file, async close() {
+    const renderActive = previewBusy || job.status === 'running';
+    server.closeAllConnections(); await new Promise<void>(ok => server.close(() => ok()));
+    await Promise.allSettled([previewWork, exportWork]);
+    await rm(previewRoot, { recursive: true, force: true });
+    return { renderActive };
+  } };
 }

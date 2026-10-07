@@ -68,8 +68,12 @@ try {
     else if (command === 'studio' && input) {
       const studio = await startStudio(input, Number(values.port ?? 4173));
       console.log(`Local studio: ${studio.url}\nProject: ${studio.project}\nPress Ctrl+C to stop.`);
-      await new Promise<void>(ok => { process.once('SIGINT', () => { void studio.close().then(ok); }); process.once('SIGTERM', () => { void studio.close().then(ok); }); });
-      result = { stopped: true };
+      const stopped = await new Promise<{ renderActive: boolean }>((ok, bad) => {
+        let stopping = false;
+        const stop = () => { if (stopping) return; stopping = true; void studio.close().then(ok, bad); };
+        process.once('SIGINT', stop); process.once('SIGTERM', stop);
+      });
+      result = { stopped: true, ...(stopped.renderActive && { renderCancelled: true }), message: stopped.renderActive ? 'Local studio stopped. Active render cancelled; previous exports were kept.' : 'Local studio stopped.' };
     }
     else if (command === 'validate' && input) result = await validateForRender(input);
     else if (command === 'render' && input && values.out) result = await render(input, values.out, { overwrite: values.overwrite, noCache: values['no-cache'], progress: message => console.error(message) });
@@ -80,7 +84,7 @@ try {
       const source = join(packageRoot, 'examples', input);
       await mkdir(target, { recursive: true }); await cp(source, target, { recursive: true, filter: file => !file.split(/[\\/]/).some(part => ['.cache', '.studio', 'exports'].includes(part)) && !/\.(edit-lock|render\.lock)$/.test(file) }); result = { created: true, manifest: join(target, ['orbit-demo', 'coffee-ritual'].includes(input) ? 'project.json' : 'manifest.json') };
     } else throw new StudioError('INVALID_COMMAND', 'input', usage, 2);
-    throwIfCancelled();
+    if (command !== 'studio') throwIfCancelled();
     console.log(JSON.stringify(result, null, values.json ? undefined : 2));
   }
 } catch (error) {

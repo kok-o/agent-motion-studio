@@ -30,7 +30,7 @@ The agent uses the local renderer, previews ordinary scene corrections and expor
 
 ## Try your first remix
 
-Install **Node.js ≥22.12**, **Chrome/Chromium**, **FFmpeg with libx264/AAC**, and **ffprobe**. Keep FFmpeg/ffprobe on PATH. The app can also use `CHROME_PATH`, `FFMPEG_PATH` and `FFPROBE_PATH`. Windows has been tested with these tools installed; see [compatibility](docs/COMPATIBILITY.md).
+Install **Node.js ≥22.12**, **Chrome/Chromium/Edge for rendering**, **FFmpeg with libx264/AAC**, and **ffprobe**. Keep FFmpeg/ffprobe on PATH. The app can also use `CHROME_PATH`, `FFMPEG_PATH` and `FFPROBE_PATH`. [macOS commands, HTTPS/SSH and loopback requirements](docs/GETTING_STARTED.md) · [verification scope](docs/COMPATIBILITY.md).
 
 Clone or download this repository, open a terminal in its folder, then:
 
@@ -44,6 +44,8 @@ node dist/cli.js studio projects/my-first-remix/project.json
 ```
 
 Continue when doctor reports `ready:true` (exit 0); exit 3 lists dependency errors and fixes. [Installation and troubleshooting](docs/GETTING_STARTED.md). Skill installation is optional for manual editing; use `--client claude` for Claude Code. Start the official agent in this workspace; Codex uses `$agent-motion-studio`, Claude Code `/agent-motion-studio`.
+
+Doctor and the renderer check Canvas/PNG readback. Brave is unsupported as the renderer because its privacy protection can change pixels between sessions; select Chrome/Chromium/Edge with `CHROME_PATH`. Your usual browser can still display the studio. Normal CLI/API exports also appear in its project export list, with earlier versions and unsaved drafts preserved.
 
 Open the **complete session URL** printed by the CLI. Keep it private. The editor supports RU/EN and remembers your choice; select RU for the labels below:
 

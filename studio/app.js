@@ -1,7 +1,7 @@
 import { t, initializeI18n } from './i18n.js';
 import { initGeneration } from './generation-ui.js';
 const $ = id => document.getElementById(id);
-let state, selected, busy = false, dirty = false, jobTimer, formBase, conflict;
+let state, selected, busy = false, dirty = false, jobTimer, stateTimer, formBase, conflict;
 let languageReload = false;
 initializeI18n(() => {
   if (dirty) {
@@ -67,7 +67,8 @@ function mediaNode(scene, controls = false) {
 function fillSelect(node, entries, value) { node.replaceChildren(...entries.map(([id, name]) => { const option = el('option', name); option.value = id; return option; })); node.value = value ?? ''; }
 function paint() {
   const m = state.manifest, total = m.scenes.reduce((sum, scene) => sum + scene.durationFrames, 0);
-  $('project-title').textContent = m.id;
+  $('project-title').textContent = state.projectName;
+  document.title = `${state.projectName} · Agent Motion Studio`;
   $('project-path').textContent = state.projectPath;
   $('stats').textContent = t`${m.scenes.length} сцены · ${fmt(total / 30)} с · ${m.video.aspectRatio} · 30 fps`;
   $('aspect').value = m.video.aspectRatio;
@@ -114,9 +115,9 @@ function paintScene() {
   invalidatePreview();
   generation.paintSelection();
 }
-function paintExports() {
+function paintExports(selectLatest = false) {
   const selectedExport = $('exports').value;
-  fillSelect($('exports'), state.exports.map((item, index) => [item.id, t`${index === 0 ? t('Последний · ') : ''}${new Date(Number(item.id.split('-')[0])).toLocaleTimeString()} · ${item.duration} с`]), state.exports.some(item => item.id === selectedExport) ? selectedExport : state.exports[0]?.id);
+  fillSelect($('exports'), state.exports.map((item, index) => [item.id, t`${index === 0 ? t('Последний · ') : ''}${new Date(item.createdAt).toLocaleTimeString()} · ${item.duration} с`]), !selectLatest && state.exports.some(item => item.id === selectedExport) ? selectedExport : state.exports[0]?.id);
   showExport();
 }
 function showExport() {
@@ -125,7 +126,7 @@ function showExport() {
   if (item) {
     if ($('player').getAttribute('src') !== item.url) $('player').src = item.url;
     $('download').href = item.url;
-    $('export-state').textContent = item.projectHash === state.etag ? t('Текущая версия') : t('Предыдущая версия · нужен экспорт');
+    $('export-state').textContent = item.projectHash === (state.diskEtag ?? state.etag) ? t('Текущая версия') : t('Предыдущая версия · нужен экспорт');
   } else { $('player').removeAttribute('src'); $('export-state').textContent = t('Нет экспорта'); }
 }
 function scenePatch() {
@@ -193,7 +194,7 @@ $('preview-scene').onclick = () => task(async () => {
 $('scene-form').oninput = () => { dirty = true; rememberDraft(); invalidatePreview(); $('draft-status').textContent = t('Есть несохранённые изменения'); generation.paintSelection(); };
 $('scene-form').onsubmit = event => { event.preventDefault(); void task(saveScene); };
 $('scene-asset').onchange = () => { const scene = { ...current(), asset: $('scene-asset').value }; $('source-preview').replaceChildren(mediaNode(scene, true)); };
-$('reload').onclick = () => task(async () => { if (dirty) { const fresh = await api('/api/state'); if (fresh.etag !== state.etag) await showConflict(captureDraft(), fresh); else notice(t('На диске нет новых изменений. Ваш черновик остаётся в редакторе.')); } else { await refresh(); notice(t('Проект перечитан с диска.')); } });
+$('reload').onclick = () => task(async () => { if (dirty) { const fresh = await api('/api/state'); if (fresh.etag !== state.etag) await showConflict(captureDraft(), fresh); else { state.exports = fresh.exports; paintExports(); notice(t('На диске нет новых изменений. Ваш черновик остаётся в редакторе.')); } } else { await refresh(); notice(t('Проект перечитан с диска.')); } });
 $('restore-scene').onclick = () => task(async () => { if (dirty) await saveScene(); const prior = previousScene(); if (prior) await edit({ type: 'restore-scene', sceneId: selected, revisionId: prior.id }); });
 $('remove-scene').onclick = () => task(async () => { if (dirty) await saveScene(); await edit({ type: 'remove-scene', sceneId: selected }); });
 for (const [id, offset] of [['move-left', -1], ['move-right', 1]]) $(id).onclick = () => task(async () => { if (dirty) await saveScene(); await edit({ type: 'move-scene', sceneId: selected, index: state.manifest.scenes.findIndex(scene => scene.id === selected) + offset }); });
@@ -209,6 +210,23 @@ $('import').onchange = () => task(async () => {
   $('import').value = ''; notice(t('Материалы импортированы. Добавьте их в сцены или выберите музыкальную дорожку.'));
 });
 $('exports').onchange = showExport;
+async function pollExternalState() {
+  clearTimeout(stateTimer);
+  try {
+    if (!state || busy || conflict || document.hidden) return;
+    const base = state, fresh = await api('/api/state');
+    if (state !== base || busy || conflict) return;
+    const hasNew = fresh.exports.some(item => !state.exports.some(old => old.id === item.id));
+    const followLatest = (!$('exports').value || $('exports').value === state.exports[0]?.id) && $('player').paused;
+    if (!dirty && fresh.etag !== state.etag) {
+      state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id;
+      paint();
+    } else { state.exports = fresh.exports; state.diskEtag = fresh.etag; }
+    paintExports(hasNew && followLatest);
+    if (hasNew && !dirty) notice(t('Новый экспорт появился в студии.'));
+  } catch { notice(t('Локальная студия остановлена или недоступна. Запустите CLI снова и откройте новую ссылку сессии. Ваш черновик сохранён в этой вкладке.'), true); }
+  finally { stateTimer = setTimeout(pollExternalState, 2000); }
+}
 async function pollJob() {
   clearTimeout(jobTimer);
   try {
@@ -225,4 +243,5 @@ try {
   const stored = sessionStorage.getItem(draftKey());
   if (stored) { const draft = JSON.parse(stored); if (state.manifest.scenes.some(scene => scene.id === draft.sceneId)) { selected = draft.sceneId; paint(); applyDraft(draft); if (draft.etag !== state.etag) await showConflict(draft, state); else notice(t('Восстановлен несохранённый черновик этой вкладки.')); } else { selected = draft.sceneId; state.manifest.scenes.push(draft.scene); paint(); applyDraft(draft); await showConflict(draft, await api('/api/state')); } }
   if (state.job.status === 'running') void pollJob();
+  stateTimer = setTimeout(pollExternalState, 2000);
 } catch (error) { notice(error.message, true); }
