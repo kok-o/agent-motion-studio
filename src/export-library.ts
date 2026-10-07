@@ -62,6 +62,9 @@ export async function registerExport(projectFile: string, output: string, manife
       if (!await ownedStage(root, rootInfo, prepared, owner.stageInfo)) throw new StudioError('EXPORT_PATH', 'project', 'The project or owned export stage changed during registration.', 2);
       if (!sameDirectory(await lstat(library, { bigint: true }), info) || await realpath(library) !== actual) throw new StudioError('EXPORT_PATH', 'project', 'The exports folder changed during registration.', 2);
       await vacantDestination(destination);
+      // Cancellation may arrive while any awaited path check is resolving.
+      // Keep this last gate synchronous with dispatching the promotion syscall.
+      throwIfCancelled();
       try { await rename(prepared, destination); stage = undefined; break; }
       catch (error) {
         throwIfCancelled();

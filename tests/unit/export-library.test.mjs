@@ -112,7 +112,8 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
     }
     const foreignStage = join(project, '.studio-export-foreign');
     await real.mkdir(foreignStage); await real.writeFile(join(foreignStage, 'owned'), 'foreign-kept');
-    const attempts = [], delays = []; let copies = 0, stages = 0, manifests = 0, stage, destination;
+    const attempts = [], delays = []; let copies = 0, stages = 0, manifests = 0, stage, destination, cancelledAtValidation = false;
+    const validationCancellation = ['cancel-validation-initial', 'cancel-validation-retry'].includes(mode);
     fs.mkdtemp = async (...args) => { stages++; return real.mkdtemp(...args); };
     fs.copyFile = async (...args) => {
       copies++;
@@ -120,10 +121,22 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
       return real.copyFile(...args);
     };
     fs.writeFile = async (...args) => { if (basename(args[0]) === 'manifest.json') manifests++; return real.writeFile(...args); };
+    fs.lstat = async (path, ...args) => {
+      try { return await real.lstat(path, ...args); }
+      catch (error) {
+        // Deliver the real vacancy ENOENT, setting cancellation while the last
+        // awaited check is resolving, after the attempt's first cancellation gate.
+        const priorMoves = mode === 'cancel-validation-retry' ? 1 : 0;
+        if (validationCancellation && error.code === 'ENOENT' && dirname(path) === join(project, 'exports') && attempts.length === priorMoves) {
+          runtime.cancelProcesses(); cancelledAtValidation = runtime.cancelled;
+        }
+        throw error;
+      }
+    };
     fs.rename = async (from, to) => {
       assert.ok(basename(from).startsWith('.studio-export-') && basename(dirname(to)) === 'exports', 'only promotion is intercepted');
       stage = from; destination = to; attempts.push({ from, to });
-      if (mode === 'transient' && attempts.length > 1) return real.rename(from, to);
+      if (mode === 'transient' && attempts.length > 1 || validationCancellation && (mode === 'cancel-validation-initial' || attempts.length > 1)) return real.rename(from, to);
       if (mode === 'uncertain') await real.rename(from, to);
       throw Object.assign(new Error(`injected ${code ?? 'unknown'} promotion attempt ${attempts.length}`), code === null ? {} : { code });
     };
@@ -158,9 +171,11 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
       assert.equal(result?.status, 'registered', result?.message);
       assert.equal(attempts.length, 2); assert.deepEqual(delays, [100]);
       assert.equal(await real.readFile(join(project, result.path), 'utf8'), 'verified-output-fixture');
-    } else if (mode === 'cancel') {
+    } else if (mode === 'cancel' || validationCancellation) {
       assert.equal(cancellation?.code, 'CANCELLED'); assert.equal(cancellation?.exitCode, 130);
-      assert.equal(attempts.length, 1); assert.deepEqual(delays, [100]);
+      const priorMoves = mode === 'cancel-validation-initial' ? 0 : 1;
+      assert.equal(attempts.length, priorMoves); assert.deepEqual(delays, priorMoves ? [100] : []);
+      if (validationCancellation) assert.equal(cancelledAtValidation, true, 'Cancel inside the actual final vacancy check');
     } else {
       assert.equal(result?.status, 'unavailable'); assert.equal(cancellation, undefined);
       const exhausted = mode === 'permanent' && platform === 'win32' && ['EPERM', 'EBUSY'].includes(code);
@@ -223,6 +238,10 @@ test('arbitrary errors, non-Windows promotion and non-promotion failures never r
 
 test('cancellation during promotion delay stops before another rename and keeps earlier output', async () => {
   for (const phase of ['first', 'second']) await controlledPromotion({ mode: 'cancel', phase });
+});
+
+for (const phase of ['first', 'second']) for (const attempt of ['initial', 'retry']) test(`cancellation during final destination validation prevents the ${attempt} rename, ${phase}`, async () => {
+  await controlledPromotion({ mode: `cancel-validation-${attempt}`, phase });
 });
 
 test('promotion revalidates library, stage, root and destination after waiting and never deletes foreign data', async () => {
