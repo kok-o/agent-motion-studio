@@ -84,6 +84,8 @@ Both reports must say `cache.status: "disabled"`. Compare full decoded frames an
 
 ## Install a provided runtime archive
 
+If you received a first-user kit, follow its `START_HERE_RU.md`; it uses this runtime route and the bundled coffee project. [Kit instructions and empty human protocol](USER_TRIAL_RU.md).
+
 Use this route if you already have `agent-motion-studio-0.1.0.tgz`. No npm-registry package or published release archive is promised. In an empty workspace, replace the archive path with its actual location:
 
 ```sh
