@@ -5,6 +5,7 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { checkRelease, audit, root } from './check-release.mjs';
 import { sourceStamp, prepareUserKit } from './first-user-kit.mjs';
+import { zipDirectory } from './zip-archive.mjs';
 
 function run(bin, args, cwd = root) {
   const r = spawnSync(bin, args, { cwd, encoding: 'utf8', windowsHide: true, maxBuffer: 8e6 });
@@ -20,10 +21,7 @@ const out = join(root, 'artifacts/release', id), sourceName = `agent-motion-stud
 const staging = join(out, 'staging'), source = join(staging, sourceName); await mkdir(source, { recursive: true });
 for (const name of checked.sourceFiles) { await mkdir(dirname(join(source, name)), { recursive: true }); await copyFile(join(root, name), join(source, name)); }
 const sourceZip = `${sourceName}.zip`;
-// tar is provided by Windows and the GitHub Linux runner; no shell interpolation.
-// ZIP support is provided by bsdtar on Windows; Linux uses the standard zip CLI.
-if (process.platform === 'win32') run('tar', ['-a', '-cf', join(out, sourceZip), '-C', staging, sourceName]);
-else run('zip', ['-q', '-r', join(out, sourceZip), sourceName], staging);
+zipDirectory(staging, join(out, sourceZip), sourceName);
 const pack = JSON.parse(run(process.execPath, [npm, 'pack', '--ignore-scripts', '--json', '--pack-destination', out]))[0];
 const names = pack.files.map(f => f.path);
 const modules = (await readdir(join(root, 'src'))).filter(name => name.endsWith('.ts')).map(name => `dist/${name.slice(0, -3)}.js`);
@@ -38,8 +36,7 @@ await mkdir(project);
 // Only distribute this template's accepted manifest, assets and credits, never its exports/cache.
 for (const name of ['project.json', 'assets', 'CREDITS.md', 'LICENSE.md', 'README.md', 'provenance.json']) await cp(join(root, 'examples/coffee-ritual', name), join(project, name), { recursive: true });
 const projectZip = 'coffee-ritual-project.zip';
-if (process.platform === 'win32') run('tar', ['-a', '-cf', join(out, projectZip), '-C', staging, 'coffee-ritual-project']);
-else run('zip', ['-q', '-r', join(out, projectZip), 'coffee-ritual-project'], staging);
+zipDirectory(staging, join(out, projectZip), 'coffee-ritual-project');
 const archives = [];
 const userKit = await prepareUserKit({ root, out, staging, version: checked.version, runtime: join(out, pack.filename), source: sourceStampBefore });
 for (const name of [sourceZip, pack.filename, projectZip]) archives.push({ file: name, bytes: (await stat(join(out, name))).size, sha256: createHash('sha256').update(await readFile(join(out, name))).digest('hex') });

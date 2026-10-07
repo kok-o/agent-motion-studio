@@ -4,7 +4,7 @@
 
 ## Prepare a candidate locally
 
-From a Git checkout with Node, Chrome and FFmpeg installed. Archive creation uses the built-in tar on Windows and the zip command on Linux/macOS (install zip separately if missing):
+From a Git checkout with Node, Chrome and FFmpeg installed. ZIP creation, extraction and resealing use the absolute SystemRoot/System32/tar.exe on Windows (Sysnative for a 32-bit process on 64-bit Windows), verified as bsdtar. A missing/non-bsdtar executable produces an explicit error; GNU tar from Git Bash/PATH is never a fallback. Linux/macOS use zip and unzip (install them separately if missing):
 
 ```sh
 npm ci --ignore-scripts
@@ -18,7 +18,7 @@ npm run verify:package
 
 `verify:package` uses the latest candidate, verifies its archive hash, installs it into a fresh OS-temporary directory, and runs installed doctor/init/validate/render/verify plus an unsaved preview and edit/restore. It records exit codes and source hashes. System tools and npm network/cache are still required. It does not prove a clean-OS installation or publish anything. To check a specific runtime: `npm run verify:package -- /absolute/path/archive.tgz`.
 
-For the latest candidate it also runs `verify:user-kit`: extract only the supplied kit into a new temporary consumer with a space and Cyrillic in its path, install the supplied runtime, run doctor/skill/init, open the real studio, preview/edit/export, restore the initial revision and reopen. The technical report checks accepted preview bytes, sources/credits/history, previous exports and all restored decoded frames. No model or human participant is invoked. It adds a sanitized `SELF_RUN.json` and verified environment to the kit, reseals its internal checksums, rebuilds the kit ZIP and updates its external hash in candidate.json/SHA256SUMS. The blank human protocol stays empty. `npm run verify:user-kit` repeats only this smoke. Instructions: [USER_TRIAL_RU.md](USER_TRIAL_RU.md). Source/runtime hashes are not self-referential; the outer kit ZIP hash lives outside it.
+For the latest candidate it also runs `verify:user-kit`: extract only the supplied kit into a new temporary consumer with a space and Cyrillic in its path, install the supplied runtime, run doctor/skill/init, open the real studio, preview/edit/export, restore the initial revision and reopen. The technical report checks accepted preview bytes, sources/credits/history, previous exports and all restored decoded frames. No model or human participant is invoked. It adds a sanitized `SELF_RUN.json` and verified environment to the kit, reseals its internal checksums, rebuilds the kit ZIP and updates its external hash in candidate.json/SHA256SUMS. The blank human protocol stays empty. `npm run verify:user-kit` repeats only this smoke. The kit includes the existing installation, agent workflow, status and composition documents as local Markdown, readable before npm install without private GitHub access. Additional source references are explicitly optional. Instructions: [USER_TRIAL_RU.md](USER_TRIAL_RU.md). Source/runtime hashes are not self-referential; the outer kit ZIP hash lives outside it.
 
 Extract the source ZIP into a new directory and check the documented build there as well. Run `git init -b main` if checking a source ZIP without Git metadata. Check the original and changed demo with sound and ask someone else to follow the quickstart. Do not record those human checks as passed until they happen.
 

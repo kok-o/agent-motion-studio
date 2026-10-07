@@ -4,6 +4,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:pat
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
+import { extractZip } from './zip-archive.mjs';
 import { root } from './check-release.mjs';
 import { command, sha256, verifyKit, recordKitSmoke } from './first-user-kit.mjs';
 
@@ -11,8 +12,7 @@ export async function verifyFirstUserKit({ kit, npm, evidence }) {
   const consumer = await realpath(await mkdtemp(join(tmpdir(), 'ams Первый запуск ')));
   const within = relative(await realpath(root), consumer);
   assert.ok(within.startsWith('..') || isAbsolute(within), 'Consumer must be outside checkout');
-  if (process.platform === 'win32') command('tar', ['-xf', kit.archive, '-C', consumer]);
-  else command('unzip', ['-q', kit.archive, '-d', consumer]);
+  extractZip(kit.archive, consumer);
   const delivered = join(consumer, kit.name), manifest = await verifyKit(delivered);
   const blank = await readFile(join(delivered, 'RESULTS_BLANK_RU.md'));
   assert.equal(blank.toString().split('\n').filter(line => /^\|[^|]+\| \|$/.test(line)).length, 14);

@@ -1,27 +1,28 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, copyFile, readdir, lstat } from 'node:fs/promises';
-import { basename, join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { basename, dirname, join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { platform, arch } from 'node:os';
 import { audit } from './check-release.mjs';
-
+import { command, zipDirectory } from './zip-archive.mjs';
+export { command, zipDirectory } from './zip-archive.mjs';
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
-export function command(bin, args, cwd) {
-  const result = spawnSync(bin, args, { cwd, encoding: 'utf8', windowsHide: true, maxBuffer: 8e6 });
-  assert.equal(result.status, 0, `${basename(bin)} ${args[0]} failed: ${result.stderr || result.error}`);
-  return result.stdout;
-}
 export function sourceStamp(root) {
   const gitSha = command('git', ['rev-parse', 'HEAD'], root).trim();
   const dirty = command('git', ['status', '--porcelain', '--untracked-files=normal'], root).trim() !== '';
   return { gitSha, dirty };
 }
-export function zipDirectory(directory, archive, name) {
-  if (platform() === 'win32') command('tar', ['-a', '-cf', archive, '-C', directory, name]);
-  else command('zip', ['-q', '-r', archive, name], directory);
-}
-const payload = ['START_HERE_RU.md', 'RESULTS_BLANK_RU.md', 'coffee-original.mp4', 'CREDITS.md', 'MEDIA_LICENSE.md', 'LICENSE', 'FONTS_OFL.txt'];
+export const kitDocuments = {
+  'docs/USER_TRIAL_RU.md': 'START_HERE_RU.md',
+  'docs/USER_TRIAL_RESULTS_RU.md': 'RESULTS_BLANK_RU.md',
+  'docs/GETTING_STARTED.md': 'GETTING_STARTED.md',
+  'docs/AGENT_WORKFLOW_RU.md': 'AGENT_WORKFLOW_RU.md',
+  'docs/STATUS.md': 'STATUS.md',
+  'docs/COMPOSITION.md': 'COMPOSITION.md',
+  'skills/agent-motion-studio/references/brief-to-film.md': 'BRIEF_TO_FILM.md',
+  'skills/agent-motion-studio/references/composition.md': 'OBJECT_COMPOSITION.md'
+};
+const payload = [...Object.values(kitDocuments), 'coffee-original.mp4', 'CREDITS.md', 'MEDIA_LICENSE.md', 'LICENSE', 'FONTS_OFL.txt'];
 export async function sealKit(directory, manifest) {
   const names = [...payload, manifest.runtime.file];
   if (manifest.verification.status === 'self-run-passed') names.push('SELF_RUN.json');
@@ -68,19 +69,26 @@ export async function prepareUserKit({ root, out, staging, version, runtime, sou
   await mkdir(directory);
   for (const [from, to] of [
     [runtime, basename(runtime)],
-    [join(root, 'docs/USER_TRIAL_RESULTS_RU.md'), 'RESULTS_BLANK_RU.md'],
     [join(root, 'docs/media/coffee-original.mp4'), 'coffee-original.mp4'],
     [join(root, 'examples/coffee-ritual/CREDITS.md'), 'CREDITS.md'],
     [join(root, 'examples/coffee-ritual/LICENSE.md'), 'MEDIA_LICENSE.md'],
     [join(root, 'LICENSE'), 'LICENSE'], [join(root, 'assets/fonts/OFL.txt'), 'FONTS_OFL.txt']
   ]) await copyFile(from, join(directory, to));
-  const guide = (await readFile(join(root, 'docs/USER_TRIAL_RU.md'), 'utf8')).replace(/\]\(([^)\s]+)\)/g, (whole, href) => {
-    if (/^(https?:|#)/.test(href)) return whole;
-    if (href === 'USER_TRIAL_RESULTS_RU.md') return '](RESULTS_BLANK_RU.md)';
-    const path = href.startsWith('../') ? href.slice(3) : `docs/${href}`;
-    return `](https://github.com/kok-o/agent-motion-studio/blob/${source.gitSha}/${path})`;
-  });
-  await writeFile(join(directory, 'START_HERE_RU.md'), `Git SHA: \`${source.gitSha}\` · package ${version} · dirty: ${source.dirty}\n\n${source.dirty ? '**Только локальная подготовка: исходники изменены относительно этого SHA. Не выдавать за проверенный коммит.**\n\n' : ''}${guide}`);
+  // Reuse the existing instructions; essential documents are readable before npm install.
+  // Only additional source references require optional GitHub access.
+  for (const [from, to] of Object.entries(kitDocuments)) {
+    const guide = (await readFile(join(root, from), 'utf8')).replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, label, href) => {
+      if (/^(https?:|mailto:|#)/.test(href)) return whole;
+      const [target, fragment] = href.split('#');
+      const sourcePath = resolve(root, dirname(from), target);
+      const bundled = Object.entries(kitDocuments).find(([path]) => resolve(root, path) === sourcePath);
+      if (bundled) return `[${label}](${bundled[1]}${fragment ? `#${fragment}` : ''})`;
+      const path = new URL(href, `https://github.com/kok-o/agent-motion-studio/blob/${source.gitSha}/${from}`).href;
+      return `[${label} (optional GitHub reference; access required)](${path})`;
+    });
+    const stamp = to === 'START_HERE_RU.md' ? `Git SHA: \`${source.gitSha}\` · package ${version} · dirty: ${source.dirty}\n\n${source.dirty ? '**Только локальная подготовка: исходники изменены относительно этого SHA. Не выдавать за проверенный коммит.**\n\n' : ''}` : '';
+    await writeFile(join(directory, to), stamp + guide);
+  }
   const manifest = { formatVersion: 1, version, source, preparedOn: { platform: platform(), arch: arch(), node: process.version }, runtime: { file: basename(runtime), sha256: sha256(await readFile(runtime)) }, verification: { status: 'not-run', scope: 'Kit preparation only; independent human/model session NOT RUN' }, files: [] };
   await sealKit(directory, manifest);
   await verifyKit(directory, { requireClean: false });
