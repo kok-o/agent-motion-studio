@@ -1,5 +1,23 @@
 # Текущее состояние Agent Motion Studio
 
+## Доказательная диагностика Windows EPERM — issue #12, 7 октября 2026
+
+Прочитаны исходные raw logs двух разных событий: `58c08ff`, integration 30/31 — EPERM/rename work/logs → output/logs в engine до registerExport; `8e5106a`, check 67/68 — grouped path-swap получил EPERM/rename вместо validation rejection, но subcase/пути formatter потерял. Сохранность output/rollback при этих событиях не измерена: UNKNOWN. Последующие зелёные проверки не объясняют OS cause и не исправляют эти события.
+
+На базе `3da00e3` изменены только tests/helpers, команда integration и эти документы. Шесть path-swap subcases именованы отдельно; при сбое сохраняются mode/phase/checkpoint, ожидаемая операция, supplied code/syscall/from/to и состояния fixtures до cleanup. Приватные префиксы, credentials и URLs редактируются; callback, preparation, validation и promotion различены контролями. Отсутствующие поля обозначены not-supplied, не выведены из текста assertion.
+
+Реальный короткий renderer: ровно один injected EPERM на promotion logs в каждом сценарии, без retry. Перед отказом продвинуты contact-sheet и frames; output.mp4 ещё в work. Наблюдения до engine cleanup и после него сохранены отдельно:
+
+| Контроль | Output / rollback | Work, backup, lock / сообщение |
+| --- | --- | --- |
+| Fresh | Продвинутые entries возвращены; готового нового output нет; прежняя verified studio copy сохранена | Новый MP4 есть до cleanup, work/backup/lock удалены после; failure-report INTERNAL_ERROR/render, exit 4 и logs сохранены |
+| Overwrite | Все старые output bytes восстановлены; прежний MP4 декодируется; studio library неизменна | Новый MP4 есть до cleanup, work/backup/lock удалены после; INTERNAL_ERROR/render, exit 4 |
+| Overwrite + отдельный отказ возврата old logs | PUBLISH_ROLLBACK_FAILED/publish, exit 4; успешный rollback не заявлен. Все прежние bytes доступны в output + retained backup | Backup с прежними logs сохранён после cleanup; work/lock удалены; failure-report и новые failure logs сохранены |
+
+Accepted bytes, source hashes, history и previous verified movie сохранены во всех контролях. Это fault injection, не причина природного Windows EPERM. Единственный короткий естественный smoke в сценарии успешен: NOT REPRODUCED. Нарушений сохранности в этих контролях не найдено; runtime fix не добавлен.
+
+`npm run check` — 77/77 unit, build/audit, exit 0; затронутый `AMS_LOW_MEMORY=1 node --test --test-concurrency=1 tests/integration/publication.test.mjs` — 1/1 (три контролируемых сценария), exit 0. Первый вариант дополнительного rollback-контроля был RED из-за подсчёта предыдущего failure-report; исправлен только выбор нового отчёта, исходный лог сохранён. Полная локальная media matrix не повторялась; hosted full integration/package оцениваются на exact head в PR. Raw private evidence и retained backup остаются ignored. Новые macOS/human/live-model/paid проверки NOT RUN, исходный kit и личные проекты не изменены.
+
 ## Windows promotion и принятые внешние проверки — 7 октября 2026
 
 [PR #8](https://github.com/kok-o/agent-motion-studio/pull/8) принят и слит squash: main `3580b5ff203a8851f993ba22945e8b6f1e196555`, [Verify базы](https://github.com/kok-o/agent-motion-studio/actions/runs/37622866721) — 3/3. Диагностика сохраняет возвращённую причину и состояние fixture для первой/второй регистрации. Единственный сохранённый естественный отказ — первая регистрация, EPERM на rename staging → exports, поиск остановлен на запуске 16 (15 успехов, 1 failure). Почему Windows отказал, UNKNOWN; прежние отказы второй регистрации не отождествляются с этим событием. Принятие диагностики не было исправлением runtime.

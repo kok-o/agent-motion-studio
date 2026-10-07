@@ -6,6 +6,7 @@ import { registerExport } from '../../dist/export-library.js';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { pathToFileURL } from 'node:url';
+import { safeText } from '../support/failure-observation.mjs';
 
 async function fixture() {
   const parent = resolve('.cache/tests'); await mkdir(parent, { recursive: true });
@@ -84,12 +85,13 @@ test('registered exports are independent portable copies and keep earlier versio
 
 // Built-in seams live only in an isolated child. No runtime options or public
 // action are added, and the final successful move is the real filesystem rename.
-async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platform = 'win32', moduleUrl }) {
+async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platform = 'win32', moduleUrl, observationUrl, diagnosticFault }) {
   const assert = (await import('node:assert/strict')).default;
   const fs = (await import('node:fs/promises')).default;
   const timers = (await import('node:timers/promises')).default;
   const { syncBuiltinESMExports } = await import('node:module');
   const { resolve, join, dirname, basename, relative, isAbsolute } = await import('node:path');
+  const { safeText, suppliedError, probeStates } = await import(observationUrl);
   const real = { ...fs }, realDelay = timers.setTimeout;
   const parent = resolve('.cache/tests'); await real.mkdir(parent, { recursive: true });
   const root = await real.mkdtemp(join(parent, 'export-library-promotion-'));
@@ -105,6 +107,23 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
   const runtime = await import(new URL('runtime.js', moduleUrl));
   const { registerExport } = await import(moduleUrl);
   let previous;
+  let checkpoint = 'preparation/previous-registration', expectedOperation = 'register previous export', lastOperation;
+  const roots = [[root, '<fixture>'], [process.cwd(), '<checkout>']];
+  const operations = [];
+  let stage, destination, result, cancellation;
+  // Observe the actual callback syscalls as well as injected promotion refusals.
+  // No retries, and failures still reach the original rejection assertions.
+  const move = async (from, to) => {
+    expectedOperation = 'rename';
+    lastOperation = { checkpoint, operation: 'rename', from: safeText(from, roots), to: safeText(to, roots) };
+    operations.push(lastOperation);
+    try {
+      if (diagnosticFault === 'callback' && checkpoint === 'callback/path-swap') {
+        throw Object.assign(new Error(`controlled callback denial '${from}' -> '${to}' token=private-token http://127.0.0.1:4173/#private-session`), { code: 'EPERM', syscall: 'rename', path: from, dest: to });
+      }
+      await real.rename(from, to); lastOperation.status = 'moved';
+    } catch (error) { lastOperation.error = suppliedError(error, roots); throw error; }
+  };
   try {
     if (phase === 'second') {
       previous = await registerExport(file, output, manifest, summary);
@@ -112,18 +131,37 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
     }
     const foreignStage = join(project, '.studio-export-foreign');
     await real.mkdir(foreignStage); await real.writeFile(join(foreignStage, 'owned'), 'foreign-kept');
-    const attempts = [], delays = []; let copies = 0, stages = 0, manifests = 0, stage, destination, cancelledAtValidation = false;
+    checkpoint = 'preparation/current-registration'; expectedOperation = 'copyFile and manifest preparation';
+    const attempts = [], delays = []; let copies = 0, stages = 0, manifests = 0, cancelledAtValidation = false;
     const validationCancellation = ['cancel-validation-initial', 'cancel-validation-retry'].includes(mode);
     fs.mkdtemp = async (...args) => { stages++; return real.mkdtemp(...args); };
     fs.copyFile = async (...args) => {
       copies++;
-      if (mode === 'copy-failure') throw Object.assign(new Error('injected EPERM copy'), { code: 'EPERM' });
-      return real.copyFile(...args);
+      checkpoint = 'preparation/copyFile'; expectedOperation = 'copyFile';
+      if (mode === 'copy-failure' || diagnosticFault === 'preparation') {
+        lastOperation = { checkpoint, operation: 'copyFile', from: safeText(args[0], roots), to: safeText(args[1], roots), error: suppliedError(Object.assign(new Error('injected EPERM copy'), { code: 'EPERM' }), roots) };
+        operations.push(lastOperation); throw Object.assign(new Error('injected EPERM copy'), { code: 'EPERM' });
+      }
+      try { return await real.copyFile(...args); }
+      catch (error) {
+        lastOperation = { checkpoint, operation: 'copyFile', from: safeText(args[0], roots), to: safeText(args[1], roots), error: suppliedError(error, roots) }; operations.push(lastOperation);
+        throw error;
+      }
     };
     fs.writeFile = async (...args) => { if (basename(args[0]) === 'manifest.json') manifests++; return real.writeFile(...args); };
     fs.lstat = async (path, ...args) => {
+      if (diagnosticFault === 'validation' && dirname(path) === join(project, 'exports')) {
+        checkpoint = 'runtime/validation'; expectedOperation = 'lstat destination';
+        const error = Object.assign(new Error('controlled destination validation denial'), { code: 'EACCES', syscall: 'lstat', path });
+        lastOperation = { checkpoint, operation: 'lstat', from: safeText(path, roots), error: suppliedError(error, roots) }; operations.push(lastOperation);
+        throw error;
+      }
       try { return await real.lstat(path, ...args); }
       catch (error) {
+        if (error.code !== 'ENOENT') {
+          checkpoint = 'runtime/validation'; expectedOperation = 'lstat';
+          lastOperation = { checkpoint, operation: 'lstat', from: safeText(path, roots), error: suppliedError(error, roots) }; operations.push(lastOperation);
+        }
         // Deliver the real vacancy ENOENT, setting cancellation while the last
         // awaited check is resolving, after the attempt's first cancellation gate.
         const priorMoves = mode === 'cancel-validation-retry' ? 1 : 0;
@@ -136,15 +174,21 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
     fs.rename = async (from, to) => {
       assert.ok(basename(from).startsWith('.studio-export-') && basename(dirname(to)) === 'exports', 'only promotion is intercepted');
       stage = from; destination = to; attempts.push({ from, to });
-      if (mode === 'transient' && attempts.length > 1 || validationCancellation && (mode === 'cancel-validation-initial' || attempts.length > 1)) return real.rename(from, to);
-      if (mode === 'uncertain') await real.rename(from, to);
-      throw Object.assign(new Error(`injected ${code ?? 'unknown'} promotion attempt ${attempts.length}`), code === null ? {} : { code });
+      checkpoint = 'runtime/promotion'; expectedOperation = 'rename';
+      if (mode === 'transient' && attempts.length > 1 || validationCancellation && (mode === 'cancel-validation-initial' || attempts.length > 1)) return move(from, to);
+      if (mode === 'uncertain') await move(from, to);
+      const error = diagnosticFault === 'promotion'
+        ? Object.assign(new Error('controlled promotion denial'), { code: 'EACCES', syscall: 'rename', path: from, dest: to })
+        : Object.assign(new Error(`injected ${code ?? 'unknown'} promotion attempt ${attempts.length}`), code === null ? {} : { code });
+      lastOperation = { checkpoint, operation: 'rename', from: safeText(from, roots), to: safeText(to, roots), error: suppliedError(error, roots) }; operations.push(lastOperation);
+      throw error;
     };
     timers.setTimeout = async milliseconds => {
       delays.push(milliseconds);
+      checkpoint = 'callback/path-swap';
       if (mode === 'cancel') runtime.cancelProcesses();
       if (mode === 'library-link' || mode === 'library-replaced') {
-        await real.rename(join(project, 'exports'), join(project, 'retained-exports'));
+        await move(join(project, 'exports'), join(project, 'retained-exports'));
         if (mode === 'library-link') {
           const outside = join(root, 'outside'); await real.mkdir(outside);
           await real.writeFile(join(outside, 'owned'), 'outside-kept');
@@ -153,18 +197,18 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
       }
       if (mode === 'destination-occupied') { await real.mkdir(destination); await real.writeFile(join(destination, 'owned'), 'destination-kept'); }
       if (mode === 'stage-replaced') {
-        await real.rename(stage, join(root, 'retained-stage'));
+        await move(stage, join(root, 'retained-stage'));
         await real.mkdir(stage); await real.writeFile(join(stage, 'owned'), 'stage-kept');
       }
       if (mode === 'root-link') {
-        await real.rename(project, join(root, 'retained-project'));
+        await move(project, join(root, 'retained-project'));
         const outside = join(root, 'outside'); await real.mkdir(outside);
         await real.mkdir(join(outside, basename(stage))); await real.writeFile(join(outside, basename(stage), 'owned'), 'outside-stage-kept');
         await real.symlink(outside, project, 'junction');
       }
+      checkpoint = 'runtime/revalidation'; expectedOperation = 'validate root/library/stage/destination before rename';
     };
     syncBuiltinESMExports();
-    let result, cancellation;
     try { result = await registerExport(file, output, manifest, summary); }
     catch (error) { cancellation = error; }
     if (mode === 'transient' && platform === 'win32') {
@@ -207,6 +251,32 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
     if (mode === 'stage-replaced') assert.equal(await real.readFile(join(stage, 'owned'), 'utf8'), 'stage-kept');
     if (mode === 'root-link') assert.equal(await real.readFile(join(project, basename(stage), 'owned'), 'utf8'), 'outside-stage-kept');
     console.log(JSON.stringify({ mode, phase, platform, code, status: result?.status ?? cancellation.code, attempts: attempts.length, delays, stages, copies, manifests, preservation: true }));
+  } catch (error) {
+    const retained = mode === 'root-link' ? join(root, 'retained-project') : project;
+    const diagnostic = { mode, phase, platform, checkpoint, expectedOperation, lastOperation, operations,
+      returnedReason: result?.message ? safeText(result.message, roots) : 'not-supplied',
+      thrown: suppliedError(cancellation ?? error, roots),
+      fixtures: await probeStates({
+        acceptedKept: () => real.readFile(join(retained, 'project.json')).then(bytes => bytes.equals(manifest)),
+        sourceKept: () => real.readFile(join(retained, 'assets/source.mp4'), 'utf8').then(value => value === 'source-kept'),
+        historyKept: () => real.readFile(join(retained, 'history/kept.json'), 'utf8').then(value => value === 'history-kept'),
+        externalMovieKept: () => real.readFile(join(output, 'output.mp4'), 'utf8').then(value => value === 'verified-output-fixture'),
+        foreignStageKept: () => real.readFile(join(retained, '.studio-export-foreign/owned'), 'utf8').then(value => value === 'foreign-kept'),
+        ownedOrReplacedStage: () => stage ? real.readdir(stage) : 'not-created',
+        retainedStage: () => real.readdir(join(root, 'retained-stage')),
+        library: () => real.readdir(join(retained, 'exports')),
+        retainedLibrary: () => real.readdir(join(project, 'retained-exports')),
+        previousCopyKept: async () => {
+          if (!previous) return 'not-applicable';
+          for (const library of [join(retained, 'exports'), join(project, 'retained-exports')]) {
+            try { return await real.readFile(join(library, previous.id, 'output.mp4'), 'utf8') === 'verified-output-fixture'; }
+            catch (error) { if (error.code !== 'ENOENT') throw error; }
+          }
+          return false;
+        },
+        outsideFixture: () => real.readdir(join(root, 'outside'))
+      }, roots) };
+    throw new Error(JSON.stringify(diagnostic));
   } finally {
     Object.assign(fs, real); timers.setTimeout = realDelay; syncBuiltinESMExports();
     const within = relative(parent, root); assert.ok(within.startsWith('export-library-promotion-') && !within.includes('/') && !within.includes('\\') && !isAbsolute(within));
@@ -216,10 +286,11 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
 
 async function controlledPromotion(options) {
   const moduleUrl = pathToFileURL(resolve('dist/export-library.js')).href;
+  const observationUrl = new URL('../support/failure-observation.mjs', import.meta.url).href;
   try {
-    const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', `await (${promotionScenario.toString()})(JSON.parse(process.argv[1]));`, JSON.stringify({ ...options, moduleUrl })], { windowsHide: true, timeout: 15000 });
+    const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', `await (${promotionScenario.toString()})(JSON.parse(process.argv[1]));`, JSON.stringify({ ...options, moduleUrl, observationUrl })], { windowsHide: true, timeout: 15000 });
     return JSON.parse(stdout);
-  } catch (error) { throw new Error(safeReason(error.stderr || error.message, { root: process.cwd() })); }
+  } catch (error) { throw new Error(`promotion subcase mode=${options.mode}, phase=${options.phase ?? 'first'}; ${safeText(error.stderr || error.message, [[process.cwd(), '<checkout>']])}`); }
 }
 
 for (const code of ['EPERM', 'EBUSY']) for (const phase of ['first', 'second']) test(`Windows promotion recovers one ${code} without repeating preparation, ${phase}`, async () => {
@@ -244,10 +315,31 @@ for (const phase of ['first', 'second']) for (const attempt of ['initial', 'retr
   await controlledPromotion({ mode: `cancel-validation-${attempt}`, phase });
 });
 
-test('promotion revalidates library, stage, root and destination after waiting and never deletes foreign data', async () => {
-  for (const mode of ['library-link', 'library-replaced', 'destination-occupied', 'stage-replaced', 'root-link', 'uncertain']) {
+for (const mode of ['library-link', 'library-replaced', 'destination-occupied', 'stage-replaced', 'root-link', 'uncertain']) {
+  test(`promotion revalidates ${mode} after waiting and never deletes foreign data, second`, async () => {
     await controlledPromotion({ mode, phase: 'second' });
-  }
+  });
+}
+
+test('callback rename refusal remains a failing named path-swap case with private data redacted', async () => {
+  await assert.rejects(controlledPromotion({ mode: 'library-replaced', phase: 'second', diagnosticFault: 'callback' }), error => {
+    for (const expected of ['library-replaced', 'second', 'callback/path-swap', 'EPERM', 'rename', '<fixture>/project/exports', '<fixture>/project/retained-exports', '"acceptedKept":true', '"foreignStageKept":true']) assert.ok(error.message.includes(expected), expected);
+    for (const secret of [process.cwd(), 'private-token', 'private-session', 'http://127.0.0.1']) assert.ok(!error.message.includes(secret), 'private diagnostic value');
+    assert.ok(error.message.includes('<redacted-secret>') && error.message.includes('<redacted-url>'));
+    return true;
+  });
+});
+
+for (const [diagnosticFault, checkpoint, code, operation] of [
+  ['preparation', 'preparation/copyFile', 'EPERM', 'copyFile'],
+  ['validation', 'runtime/validation', 'EACCES', 'lstat'],
+  ['promotion', 'runtime/promotion', 'EACCES', 'rename']
+]) test(`failed ${diagnosticFault} is diagnosed separately from callback/promotion`, async () => {
+  await assert.rejects(controlledPromotion({ mode: 'library-replaced', phase: 'second', diagnosticFault }), error => {
+    for (const expected of [checkpoint, code, operation, '"previousCopyKept":true']) assert.ok(error.message.includes(expected), expected);
+    if (diagnosticFault === 'preparation') assert.ok(error.message.includes('"syscall":"not-supplied"'));
+    return true;
+  });
 });
 
 test('an export already in the project library is not duplicated', async () => {
