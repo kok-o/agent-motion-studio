@@ -28,10 +28,28 @@ function safeReason(message, f) {
   return text.replace(/(^|[\s'"(=])(?:[a-z]:\/|\/)[^'"\r\n]*/gi, '$1<external-path>');
 }
 
-function assertRegistered(result, f, phase) {
+function assertRegistered(result, f, phase, observations) {
   const previousExports = phase === 'first' ? 0 : 1;
   const reason = result.status === 'unavailable' ? safeReason(result.message, f) : 'not supplied';
-  assert.equal(result.status, 'registered', `registerExport ${phase} registration; fixture: project=<fixture>/project/project.json, output=<fixture>/external/output.mp4, previousExports=${previousExports}; returned reason: ${reason}`);
+  assert.equal(result.status, 'registered', `registerExport ${phase} registration; fixture: project=<fixture>/project/project.json, output=<fixture>/external/output.mp4, previousExports=${previousExports}; returned reason: ${reason}${observations ? `; observations: ${JSON.stringify(observations)}` : ''}`);
+}
+
+async function assertFixtureRegistered(result, f, phase, { expectedOutput, previousPath } = {}) {
+  if (result.status === 'registered') return;
+  const probes = {
+    acceptedManifestKept: () => readFile(f.file).then(bytes => bytes.equals(f.manifest)),
+    externalOutputKept: () => readFile(join(f.output, 'output.mp4'), 'utf8').then(bytes => bytes === expectedOutput),
+    stagingDirectoriesLeft: () => readdir(f.project).then(names => names.filter(name => name.startsWith('.studio-export-')).length),
+    libraryEntries: () => readdir(join(f.project, 'exports')).then(names => names.length),
+    previousCopyKept: () => previousPath ? readFile(join(f.project, previousPath), 'utf8').then(bytes => bytes === 'verified-output-fixture') : 'not-applicable'
+  };
+  const observations = {};
+  for (const [name, probe] of Object.entries(probes)) {
+    try { observations[name] = await probe(); }
+    catch (error) { observations[name] = { unavailableCode: typeof error.code === 'string' && /^[A-Z0-9_]+$/.test(error.code) ? error.code : 'not-supplied' }; }
+  }
+  // A failed read must not replace the original registration cause.
+  assertRegistered(result, f, phase, observations);
 }
 
 async function removeFixture(f) {
@@ -44,11 +62,11 @@ test('registered exports are independent portable copies and keep earlier versio
   const f = await fixture();
   try {
     const first = await registerExport(f.file, f.output, f.manifest, summary);
-    assertRegistered(first, f, 'first');
+    await assertFixtureRegistered(first, f, 'first', { expectedOutput: 'verified-output-fixture' });
     assert.equal(await readFile(join(f.project, first.path), 'utf8'), 'verified-output-fixture');
     await writeFile(join(f.output, 'output.mp4'), 'next-output-fixture');
     const second = await registerExport(f.file, f.output, f.manifest, summary);
-    assertRegistered(second, f, 'second'); assert.notEqual(first.id, second.id);
+    await assertFixtureRegistered(second, f, 'second', { expectedOutput: 'next-output-fixture', previousPath: first.path }); assert.notEqual(first.id, second.id);
     assert.equal(relative(f.root, f.output), 'external');
     await rm(f.output, { recursive: true });
     assert.equal(await readFile(join(f.project, first.path), 'utf8'), 'verified-output-fixture');
@@ -93,7 +111,7 @@ test('a controlled library obstruction exposes the returned cause safely for fir
       let first;
       if (phase === 'second') {
         first = await registerExport(f.file, f.output, f.manifest, summary);
-        assertRegistered(first, f, 'first');
+        await assertFixtureRegistered(first, f, 'first', { expectedOutput: 'verified-output-fixture' });
         const library = join(f.project, 'exports'), retained = join(f.project, 'earlier-exports');
         assert.equal(relative(f.root, library), join('project', 'exports'));
         assert.equal(relative(f.root, retained), join('project', 'earlier-exports'));
@@ -102,13 +120,17 @@ test('a controlled library obstruction exposes the returned cause safely for fir
       await writeFile(join(f.project, 'exports'), 'controlled obstruction');
       const result = await registerExport(f.file, f.output, f.manifest, summary);
       assert.equal(result.status, 'unavailable');
-      assert.throws(() => assertRegistered(result, f, phase), error => {
+      await assert.rejects(assertFixtureRegistered(result, f, phase, { expectedOutput: 'verified-output-fixture', previousPath: first ? join('earlier-exports', first.id, 'output.mp4') : undefined }), error => {
         assert.ok(error.message.includes(`${phase} registration`));
         assert.ok(error.message.includes(`previousExports=${phase === 'first' ? 0 : 1}`));
         // Preserve the actual OS explanation before its quoted fixture path.
         assert.ok(error.message.includes(result.message.split("'")[0]));
         assert.ok(error.message.includes('mkdir') && error.message.includes('<fixture>/project/exports'));
         assert.ok(!error.message.includes(f.root) && !error.message.includes(f.root.replaceAll('\\', '/')));
+        assert.ok(error.message.includes('"acceptedManifestKept":true') && error.message.includes('"externalOutputKept":true'));
+        assert.ok(error.message.includes('"stagingDirectoriesLeft":0'));
+        assert.ok(error.message.includes('"unavailableCode":')); // The obstruction is a file, not a directory.
+        if (first) assert.ok(error.message.includes('"previousCopyKept":true'));
         return true;
       });
       assert.deepEqual(await readFile(f.file), f.manifest);
@@ -123,7 +145,7 @@ test('diagnostic assertions redact other absolute paths, credentials and session
   const f = { root: resolve('.cache/tests/export-library-diagnostic') };
   const secret = 'sk-' + 'proj-' + 'x'.repeat(40);
   const session = 'http://127.0.0.1:4173/#' + 'a'.repeat(48);
-  const externalPaths = ['C:' + '/Users/' + 'private user/file.mp4', '/' + 'home/' + 'private-user/file.mp4'];
+  const externalPaths = ['C:' + '/' + 'Users' + '/' + 'private user/file.mp4', '/' + 'home/' + 'private-user/file.mp4'];
   const message = `EACCES: denied rename '${f.root}/project/.studio-export-controlled' -> '${f.root}/project/exports/next'; other '${externalPaths[0]}' '${externalPaths[1]}'; ${secret}; token=private-token; ${session}`;
   assert.throws(() => assertRegistered({ status: 'unavailable', message }, f, 'second'), error => {
     assert.ok(error.message.includes('EACCES: denied rename'));
