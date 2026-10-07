@@ -4,7 +4,7 @@
 
 ## Prepare a candidate locally
 
-From a Git checkout with Node, Chrome and FFmpeg installed. ZIP creation, extraction and resealing use the absolute SystemRoot/System32/tar.exe on Windows (Sysnative for a 32-bit process on 64-bit Windows), verified as bsdtar. A missing/non-bsdtar executable produces an explicit error; GNU tar from Git Bash/PATH is never a fallback. Linux/macOS use zip and unzip (install them separately if missing):
+From a Git checkout with Node, Chrome and FFmpeg installed. ZIP creation, extraction and resealing use the absolute SystemRoot/System32/tar.exe on Windows (Sysnative for a 32-bit process on 64-bit Windows), verified as bsdtar. A missing/non-bsdtar executable produces an explicit error; GNU tar from Git Bash/PATH is never a fallback. Node opens ZIP files and passes seekable file descriptors via stdin/stdout and passes the working directory through cwd, so older bsdtar builds do not have to decode Cyrillic archive/destination paths from argv. Linux/macOS use zip and unzip (install them separately if missing):
 
 ```sh
 npm ci --ignore-scripts
