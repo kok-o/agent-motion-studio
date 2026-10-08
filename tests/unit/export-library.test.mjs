@@ -252,28 +252,47 @@ async function promotionScenario({ mode, code = 'EPERM', phase = 'first', platfo
     if (mode === 'root-link') assert.equal(await real.readFile(join(project, basename(stage), 'owned'), 'utf8'), 'outside-stage-kept');
     console.log(JSON.stringify({ mode, phase, platform, code, status: result?.status ?? cancellation.code, attempts: attempts.length, delays, stages, copies, manifests, preservation: true }));
   } catch (error) {
-    const retained = mode === 'root-link' ? join(root, 'retained-project') : project;
+    // A mode describes the intended swap, not whether the callback completed.
+    // Inspect both roots/libraries before cleanup; a missing probe is UNKNOWN,
+    // while a verified copy at any observed location proves preservation.
+    const locations = {}, libraries = {};
+    for (const [name, location] of Object.entries({ original: project, retained: join(root, 'retained-project') })) {
+      locations[name] = await probeStates({
+        entries: () => real.readdir(location),
+        acceptedKept: () => real.readFile(join(location, 'project.json')).then(bytes => bytes.equals(manifest)),
+        sourceKept: () => real.readFile(join(location, 'assets/source.mp4'), 'utf8').then(value => value === 'source-kept'),
+        historyKept: () => real.readFile(join(location, 'history/kept.json'), 'utf8').then(value => value === 'history-kept'),
+        foreignStageKept: () => real.readFile(join(location, '.studio-export-foreign/owned'), 'utf8').then(value => value === 'foreign-kept')
+      }, roots);
+    }
+    for (const [name, library] of Object.entries({
+      original: join(project, 'exports'), retainedProject: join(root, 'retained-project/exports'),
+      retainedOriginal: join(project, 'retained-exports'), retainedProjectLibrary: join(root, 'retained-project/retained-exports')
+    })) {
+      libraries[name] = await probeStates({
+        entries: () => real.readdir(library),
+        previousCopyKept: () => previous ? real.readFile(join(library, previous.id, 'output.mp4'), 'utf8').then(value => value === 'verified-output-fixture') : 'not-applicable'
+      }, roots);
+    }
+    const preservation = (observations, key) => {
+      const values = Object.values(observations).map(location => location[key]);
+      if (values.includes(true)) return true;
+      if (values.every(value => value === false)) return false;
+      return 'UNKNOWN';
+    };
     const diagnostic = { mode, phase, platform, checkpoint, expectedOperation, lastOperation, operations,
       returnedReason: result?.message ? safeText(result.message, roots) : 'not-supplied',
       thrown: suppliedError(cancellation ?? error, roots),
       fixtures: await probeStates({
-        acceptedKept: () => real.readFile(join(retained, 'project.json')).then(bytes => bytes.equals(manifest)),
-        sourceKept: () => real.readFile(join(retained, 'assets/source.mp4'), 'utf8').then(value => value === 'source-kept'),
-        historyKept: () => real.readFile(join(retained, 'history/kept.json'), 'utf8').then(value => value === 'history-kept'),
+        locations: () => locations, libraries: () => libraries,
+        acceptedKept: () => preservation(locations, 'acceptedKept'),
+        sourceKept: () => preservation(locations, 'sourceKept'),
+        historyKept: () => preservation(locations, 'historyKept'),
         externalMovieKept: () => real.readFile(join(output, 'output.mp4'), 'utf8').then(value => value === 'verified-output-fixture'),
-        foreignStageKept: () => real.readFile(join(retained, '.studio-export-foreign/owned'), 'utf8').then(value => value === 'foreign-kept'),
+        foreignStageKept: () => preservation(locations, 'foreignStageKept'),
         ownedOrReplacedStage: () => stage ? real.readdir(stage) : 'not-created',
         retainedStage: () => real.readdir(join(root, 'retained-stage')),
-        library: () => real.readdir(join(retained, 'exports')),
-        retainedLibrary: () => real.readdir(join(project, 'retained-exports')),
-        previousCopyKept: async () => {
-          if (!previous) return 'not-applicable';
-          for (const library of [join(retained, 'exports'), join(project, 'retained-exports')]) {
-            try { return await real.readFile(join(library, previous.id, 'output.mp4'), 'utf8') === 'verified-output-fixture'; }
-            catch (error) { if (error.code !== 'ENOENT') throw error; }
-          }
-          return false;
-        },
+        previousCopyKept: () => previous ? preservation(libraries, 'previousCopyKept') : 'not-applicable',
         outsideFixture: () => real.readdir(join(root, 'outside'))
       }, roots) };
     throw new Error(JSON.stringify(diagnostic));
@@ -290,7 +309,14 @@ async function controlledPromotion(options) {
   try {
     const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '--eval', `await (${promotionScenario.toString()})(JSON.parse(process.argv[1]));`, JSON.stringify({ ...options, moduleUrl, observationUrl })], { windowsHide: true, timeout: 15000 });
     return JSON.parse(stdout);
-  } catch (error) { throw new Error(`promotion subcase mode=${options.mode}, phase=${options.phase ?? 'first'}; ${safeText(error.stderr || error.message, [[process.cwd(), '<checkout>']])}`); }
+  } catch (error) {
+    const failure = new Error(`promotion subcase mode=${options.mode}, phase=${options.phase ?? 'first'}; ${safeText(error.stderr || error.message, [[process.cwd(), '<checkout>']])}`);
+    // Preserve the child's already-redacted evidence as data, before formatting
+    // the surrounding stderr/stack text a second time.
+    const line = String(error.stderr ?? '').split('\n').find(line => line.startsWith('Error: {"mode":'));
+    try { if (line) failure.diagnostic = JSON.parse(line.slice('Error: '.length)); } catch { /* Keep the original child failure. */ }
+    throw failure;
+  }
 }
 
 for (const code of ['EPERM', 'EBUSY']) for (const phase of ['first', 'second']) test(`Windows promotion recovers one ${code} without repeating preparation, ${phase}`, async () => {
@@ -326,6 +352,34 @@ test('callback rename refusal remains a failing named path-swap case with privat
     for (const expected of ['library-replaced', 'second', 'callback/path-swap', 'EPERM', 'rename', '<fixture>/project/exports', '<fixture>/project/retained-exports', '"acceptedKept":true', '"foreignStageKept":true']) assert.ok(error.message.includes(expected), expected);
     for (const secret of [process.cwd(), 'private-token', 'private-session', 'http://127.0.0.1']) assert.ok(!error.message.includes(secret), 'private diagnostic value');
     assert.ok(error.message.includes('<redacted-secret>') && error.message.includes('<redacted-url>'));
+    return true;
+  });
+});
+
+test('root-link callback refusal reports preserved original data and unavailable retained locations before cleanup', async () => {
+  await assert.rejects(controlledPromotion({ mode: 'root-link', phase: 'second', diagnosticFault: 'callback' }), error => {
+    const diagnostic = error.diagnostic;
+    assert.ok(diagnostic, 'child rejection retains structured diagnostic');
+    assert.equal(diagnostic.mode, 'root-link'); assert.equal(diagnostic.phase, 'second');
+    assert.equal(diagnostic.checkpoint, 'callback/path-swap');
+    const refusal = diagnostic.operations.filter(operation => operation.checkpoint === 'callback/path-swap');
+    assert.equal(refusal.length, 1); assert.equal(refusal[0].error.code, 'EPERM');
+    assert.equal(refusal[0].error.syscall, 'rename'); assert.equal(refusal[0].status, undefined);
+    assert.equal(refusal[0].from, '<fixture>/project'); assert.equal(refusal[0].to, '<fixture>/retained-project');
+    assert.equal(diagnostic.thrown.code, 'ERR_ASSERTION', 'scenario rejection is not converted to success');
+    for (const key of ['acceptedKept', 'sourceKept', 'historyKept', 'previousCopyKept']) assert.equal(diagnostic.fixtures[key], true, key);
+    const { locations, libraries } = diagnostic.fixtures;
+    for (const key of ['acceptedKept', 'sourceKept', 'historyKept', 'foreignStageKept']) {
+      assert.equal(locations.original[key], true, key);
+      assert.equal(locations.retained[key].unavailable.code, 'ENOENT', key);
+    }
+    assert.equal(locations.retained.entries.unavailable.code, 'ENOENT');
+    assert.equal(libraries.original.previousCopyKept, true); assert.equal(libraries.original.entries.length, 1);
+    assert.equal(libraries.retainedProject.previousCopyKept.unavailable.code, 'ENOENT');
+    assert.equal(libraries.retainedOriginal.previousCopyKept.unavailable.code, 'ENOENT');
+    for (const secret of [process.cwd(), process.cwd().replaceAll('\\', '/'), 'private-token', 'private-session', 'http://127.0.0.1']) {
+      assert.ok(!error.message.includes(secret)); assert.ok(!JSON.stringify(diagnostic).includes(secret));
+    }
     return true;
   });
 });

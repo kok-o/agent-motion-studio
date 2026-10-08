@@ -6,6 +6,8 @@
 
 Ревью 8 октября обнаружило natural Windows EPERM на первом baseline до observer в `a38cc27`: 0/1, controlled phases NOT RUN, pre-cleanup UNKNOWN. В том же PR добавлено passive observation до baseline и сохранение раннего отказа с original Error, исходными hashes и pre/post-cleanup. Короткий deterministic early-refusal regression проверяет недоступный дополнительный probe и передачу отказа без retry/skip; engine и runtime policy остаются за scope. Новые результаты не подменяют сохранённый Windows RED и исторический Linux CI; проверки фиксируются по новой revision.
 
+Ранний observer на `209f891` принят ведущим; повторять его исправление не нужно. Оставшаяся точечная поправка — root-link failure diagnostics: независимо проверять original/retained roots и libraries, не выводить сохранность из имени mode. Unit regression проверяет отказ callback до переноса и целую previous copy в original project/exports; rejection assertions сохраняются. Проверить затронутый unit/check и CI нового head, оставить прошлый natural 76/77 UNKNOWN. Engine, retries и новая локальная media matrix не входят в эту поправку.
+
 ## Надёжность студийной копии — issue #10, 7 октября 2026
 
 [Диагностика #7 / PR #8](https://github.com/kok-o/agent-motion-studio/pull/8) принята и слита в main `3580b5ff203a8851f993ba22945e8b6f1e196555`; Verify базы — 3/3. Принята также [source-checkout macOS-проверка #3](https://github.com/kok-o/agent-motion-studio/issues/3#issuecomment-6038403951) на `e59e3f8`. Установка фиксированного комплекта вне checkout проверяется отдельно в [#9](https://github.com/kok-o/agent-motion-studio/issues/9); её результат не переносится молча на новый runtime. Независимая человеческая приёмка остаётся NOT RUN.
