@@ -8,6 +8,7 @@ import { createHash } from 'node:crypto';
 import { verifyFirstUserKit } from './verify-first-user-kit.mjs';
 import { safeError } from './kit-ui-observer.mjs';
 
+async function main() {
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
 const latest = process.argv[2] ? null : JSON.parse(await readFile('artifacts/release/latest.json', 'utf8'));
 const archive = resolve(process.argv[2] || latest.runtime);
@@ -149,3 +150,9 @@ try {
   }
   report.status = 'passed'; await save(); console.log(JSON.stringify({ status: report.status, evidence: out, sha256: report.sha256 }, null, 2));
 } catch (error) { report.status = 'failed'; report.failure = safeError(error); try { await save(); } catch { /* Preserve the primary failure if evidence storage is unavailable. */ } throw error; }
+}
+
+// Puppeteer connection errors may include a complete private session URL.
+// Preserve Error identity inside the verifier; print only portable data at CLI.
+try { await main(); }
+catch (error) { console.error(JSON.stringify(safeError(error))); process.exitCode = 1; }

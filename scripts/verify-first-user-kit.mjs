@@ -161,8 +161,10 @@ async function verifyKitRun({ kit, npm, evidence, report, save }) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const latest = JSON.parse(await readFile(join(root, 'artifacts/release/latest.json'), 'utf8'));
-  const result = await verifyFirstUserKit({ kit: latest.userKit, npm: process.env.npm_execpath, evidence: join(latest.directory, 'first-user-kit-check') });
-  // The retained private consumer path stays local, outside the distributable report.
-  console.log(JSON.stringify({ ...result, consumer: '[retained OS temporary workspace]' }, null, 2));
+  try {
+    const latest = JSON.parse(await readFile(join(root, 'artifacts/release/latest.json'), 'utf8'));
+    const result = await verifyFirstUserKit({ kit: latest.userKit, npm: process.env.npm_execpath, evidence: join(latest.directory, 'first-user-kit-check') });
+    // The retained private consumer path stays local, outside the distributable report.
+    console.log(JSON.stringify({ ...result, consumer: '[retained OS temporary workspace]' }, null, 2));
+  } catch (error) { console.error(JSON.stringify(safeError(error))); process.exitCode = 1; }
 }
