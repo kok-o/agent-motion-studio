@@ -1,19 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir, mkdtemp } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { verifyFirstUserKit } from './verify-first-user-kit.mjs';
+import { safeError } from './kit-ui-observer.mjs';
 
+async function main() {
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
 const latest = process.argv[2] ? null : JSON.parse(await readFile('artifacts/release/latest.json', 'utf8'));
 const archive = resolve(process.argv[2] || latest.runtime);
 const out = join(root, 'artifacts/release', `package-check-${Date.now()}`); await mkdir(out, { recursive: true });
 const consumer = await mkdtemp(join(tmpdir(), 'ams-package-'));
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
-const report = { status: 'running', consumer, archive, sha256: hash(await readFile(archive)), checks: {}, limitations: 'Existing system tools; new npm consumer on this host, not a clean OS. Temporary consumer retained for inspection.' };
+const report = { status: 'running', consumer: '[retained OS temporary workspace]', archive: basename(archive), sha256: hash(await readFile(archive)), checks: {}, limitations: 'Existing system tools; new npm consumer on this host, not a clean OS. Temporary consumer retained for inspection.' };
 const save = () => writeFile(join(out, 'verification.json'), JSON.stringify(report, null, 2));
 async function run(args, label) {
   const result = await new Promise((ok, bad) => {
@@ -37,7 +39,8 @@ try {
   assert.ok((await readFile(join(app, 'dist/studio/index.html'), 'utf8')).includes('id="language"'));
   assert.ok((await readFile(join(app, 'skills/agent-motion-studio/references/edits.md'), 'utf8')).includes('E8'));
   const cliRun = async (args, label) => JSON.parse(await run([cli, ...args, '--json'], label));
-  const doctor = await cliRun(['doctor'], 'doctor'); assert.ok(doctor.ready); report.environment = doctor;
+  const doctor = await cliRun(['doctor'], 'doctor'); assert.ok(doctor.ready);
+  report.environment = { os: doctor.os, node: doctor.node.version, browser: doctor.browser.version, canvas: doctor.browser.canvas, ffmpeg: doctor.ffmpeg.version.trim(), ffprobe: doctor.ffprobe.version.trim() };
   await run([npm, 'exec', '--offline', '--no', '--', 'agent-motion-studio', 'doctor', '--json'], 'bin');
   const installedSkill = JSON.parse(await run([join(app, 'scripts/install-agent-skill.mjs'), '--client', 'both', '--scope', 'project'], 'agent-skill-install'));
   assert.deepEqual(installedSkill.installs.map(item => item.status), ['installed', 'installed']);
@@ -133,8 +136,23 @@ try {
   assert.equal(controlledSubmissions, 2); assert.ok((await readFile(file)).equals(restoredBytes));
   report.checks.generation.recoveryCommands = { bindStore: true, resolveUnknown: true, oldUnknownRetained: true, acceptedProjectUnchanged: true, controlledSubmissionsTotal: controlledSubmissions, productionNetworkRequests: 0 };
   if (latest?.userKit) {
-    const kitResult = await verifyFirstUserKit({ kit: latest.userKit, npm, evidence: join(out, 'first-user-kit') });
+    report.checks.firstUserKit = { status: 'running', evidence: 'first-user-kit/SELF_RUN.json' }; await save();
+    let kitResult;
+    try { kitResult = await verifyFirstUserKit({ kit: latest.userKit, npm, evidence: join(out, 'first-user-kit') }); }
+    catch (error) {
+      // Child failure is evidence, never a successful kit smoke or a reseal.
+      report.checks.firstUserKit = { status: 'failed', evidence: 'first-user-kit/SELF_RUN.json', failure: safeError(error) };
+      try { report.checks.firstUserKit.partial = JSON.parse(await readFile(join(out, 'first-user-kit/SELF_RUN.json'), 'utf8')); }
+      catch (probeError) { report.checks.firstUserKit.evidenceUnavailable = safeError(probeError); }
+      throw error;
+    }
     report.checks.firstUserKit = { ...kitResult, consumer: '[retained OS temporary workspace]' };
   }
   report.status = 'passed'; await save(); console.log(JSON.stringify({ status: report.status, evidence: out, sha256: report.sha256 }, null, 2));
-} catch (error) { report.status = 'failed'; report.failure = error.stack; await save(); throw error; }
+} catch (error) { report.status = 'failed'; report.failure = safeError(error); try { await save(); } catch { /* Preserve the primary failure if evidence storage is unavailable. */ } throw error; }
+}
+
+// Puppeteer connection errors may include a complete private session URL.
+// Preserve Error identity inside the verifier; print only portable data at CLI.
+try { await main(); }
+catch (error) { console.error(JSON.stringify(safeError(error))); process.exitCode = 1; }
