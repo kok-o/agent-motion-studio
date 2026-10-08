@@ -25,5 +25,5 @@ const provenance={author:'Scott Schiller',title:'Morning Espresso Routine: Progr
 await writeFile(join(dir,'provenance.json'),JSON.stringify(provenance,null,2)+'\n');
 provenance.licenseDiscrepancy='Commons lists historic CC BY 2.0, reviewed 2015-04-30; the current Flickr author link is CC BY-SA 2.0. This distribution follows CC BY-SA 2.0 for derivatives and finished remix.';
 await writeFile(join(dir,'provenance.json'),JSON.stringify(provenance,null,2)+'\n');
-await writeFile(join(dir,'LICENSE.md'),'# Media and composition license\n\nThe edited footage, still, finished film and this example composition are distributed under CC BY-SA 2.0: https://creativecommons.org/licenses/by-sa/2.0/ . Retain attribution and changes in CREDITS.md. The separate original WAV and application code remain MIT.\n\n'+await readFile('LICENSE','utf8'));
+await writeFile(join(dir,'LICENSE.md'),'# Media and composition license\n\nThe edited footage, still, finished film and this example composition are distributed under CC BY-SA 2.0: https://creativecommons.org/licenses/by-sa/2.0/ . Retain attribution and changes in CREDITS.md. The application code is Apache-2.0; the separate original WAV retains MIT.\n\n'+await readFile('examples/orbit-demo/LICENSE','utf8'));
 console.log(JSON.stringify({project:file,assets:ids,provenance:join(dir,'provenance.json')},null,2));

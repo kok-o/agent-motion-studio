@@ -127,7 +127,7 @@ The current checkout also supports [editable object compositions](docs/COMPOSITI
 - History retains 100 snapshots. Sources/exports are not automatically pruned. Draft recovery belongs to the current browser tab; it is not a backup.
 - The server is local and intended for one user. No built-in chat or studio billing. The first provider integration uses your own Replicate API account; local inference is not implemented.
 
-The code is free under MIT. External generation services have their own costs and terms; selected prompts/references leave your computer only after an authorized submit. Tests establish technical behavior; they do not establish artistic quality or demand.
+The code is free under Apache License 2.0. External generation services have their own costs and terms; selected prompts/references leave your computer only after an authorized submit. Tests establish technical behavior; they do not establish artistic quality or demand.
 
 ## Build with us
 
@@ -141,4 +141,4 @@ npm run release:prepare
 
 `check` needs a Git checkout. Integration tests use real Chrome and FFmpeg and make no video-generation requests. `release:prepare` builds local source/runtime archives and checks their contents; it does not upload anything. Maintainers should follow the [release guide](docs/RELEASING.md), including installation verification.
 
-Code and separate original procedural music: [MIT](LICENSE). Fonts: SIL OFL. Coffee footage derivatives, still and finished remix: CC BY-SA 2.0. Keep the [media credits](examples/coffee-ritual/CREDITS.md) when sharing an adaptation. [Third-party notices](THIRD_PARTY_NOTICES.md) · [Security](SECURITY.md).
+Code: [Apache License 2.0](LICENSE). Original demo graphics, synthetic footage and separate procedural music: [MIT](examples/orbit-demo/LICENSE). Fonts: SIL OFL. Coffee footage derivatives, still and finished remix: CC BY-SA 2.0. Keep the [media credits](examples/coffee-ritual/CREDITS.md) when sharing an adaptation. [Third-party notices](THIRD_PARTY_NOTICES.md) · [Security](SECURITY.md).

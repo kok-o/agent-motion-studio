@@ -55,4 +55,4 @@ Optional checks: `npm run test:edge` needs a configured Python fixture; `npm run
 
 Describe AI-assisted changes like any other contribution: the author understands the patch and is responsible for its behavior, provenance and tests. Do not submit generated claims of successful runs without the logs or actual execution.
 
-Keep discussion respectful and focused on the work. By contributing code you agree to license it under the project's MIT license. Preserve separate licenses and attribution for fonts and media; only add assets you are allowed to redistribute. See [notices](THIRD_PARTY_NOTICES.md), [security](SECURITY.md) and [release steps](docs/RELEASING.md).
+Keep discussion respectful and focused on the work. By contributing code you agree to license it under the project's [Apache License 2.0](LICENSE). Preserve separate licenses and attribution for fonts and media; only add assets you are allowed to redistribute. See [notices](THIRD_PARTY_NOTICES.md), [security](SECURITY.md) and [release steps](docs/RELEASING.md).
