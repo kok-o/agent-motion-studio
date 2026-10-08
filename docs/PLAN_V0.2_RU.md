@@ -1,5 +1,13 @@
 # Единственный рабочий план: Agent Motion Studio v0.2
 
+## Следующая итерация — готовность первого человеческого preview, #14, 8 октября 2026
+
+База — принятый main `92b0a4fe466e757b9912887d45d04e3a0d6ed5d8`, [Verify 3/3](https://github.com/kok-o/agent-motion-studio/actions/runs/37743510688). #12 / PR #13 завершены как test-only diagnostics; installed macOS #9 принят и закрыт. Их scopes и старые RED/UNKNOWN сохраняются в [STATUS](STATUS.md). Разделы ниже — исторические этапы, не поручение повторять закрытые задачи, фильмы или EPERM-поиск.
+
+[#14](https://github.com/kok-o/agent-motion-studio/issues/14) — только согласование README, compatibility, STATUS и существующего USER_TRIAL, плюс одна противоречащая строка AGENT_VALIDATION. Один вход для человека: неизменённый fixed kit `agent-motion-studio-first-user-0.1.0-8e5106ad2a18.zip` с локальными docs и пустым human protocol; source stamp/hashes сохраняются. Локальная проверка — check:release и diff check, required hosted jobs — на exact head PR; runtime/package/CI/версия и media/model/provider runs не меняются и не повторяются локально. Ведущий принимает и сливает scoped PR.
+
+Независимый human preview остаётся NOT RUN: участник и срок ещё не зафиксированы. Продолжение после документационной приёмки — существующий [USER_TRIAL](USER_TRIAL_RU.md), собственная правка человека, просмотр/слух, restore/reopen и его пустой протокол; техническая QA, Codex с developer assistance и приёмка владельцем fastgrep не подменяют этот результат. Clean-OS/zero-help setup и stable release не объявлены, cleave173 повтор #9 не назначается.
+
 ## Диагностика отдельных Windows отказов — issue #12, 7 октября 2026
 
 База — merge main `3da00e3a73f3ea4af564b98bf0bc306c907ae33c`, дерево reviewed PR #11. [#12](https://github.com/kok-o/agent-motion-studio/issues/12) ограничен tests/helpers и обезличенными наблюдениями: именованные path-swap subcases, контекст операции и сохранность до cleanup; real-render контролируемый отказ promotion logs для fresh/overwrite и отдельный отказ rollback. Runtime policy, engine и cleanup не меняются. Сохранённые естественные engine/unit события разбираются раздельно; их причина и неизмеренные последствия остаются UNKNOWN. Проверки и границы — [STATUS.md](STATUS.md); exact-head hosted evidence — в PR. Завершённые фильмы, исходный kit, личный checkout и независимый #9 сохраняются.
