@@ -2,11 +2,21 @@
 
 **Make a short film locally. Replace one scene. Keep the takes you already like.**
 
-An open-source local studio for short films made by people and their AI agents. Import clips, images and music, assemble a storyboard, compare takes and export a real MP4. The studio is free; cloud generation uses your provider account and its charges. Your official external agent can use the CLI and skill. Local video-model inference is a future capability.
+An open-source local video studio for people and their AI agents. Create a short MP4, preview an unsaved scene, accept a correction, and keep an editable project with sources and history. Your agent uses the CLI and bundled skill; the browser lets you inspect, edit and compare the results.
 
-The product goal is to make and revise a film from a brief through your own Claude Code, Codex or another supported agent, using your subscription or API access. Procedural motion, titles and editing supplied footage use the local renderer and do not require a video-generation key. A Codex desktop session and a real API-agent have demonstrated film creation; two demonstration edits, restore and reopen are verified. A fresh official Codex CLI session, resumed after developer repairs to its temporary budget transport, created a new meetup film, handled three subsequent corrections and reopened it from an installed runtime. On 7 October 2026 the project owner accepted the final fastgrep after two personally requested alignment corrections and a sound revision. Windows/Linux technical checks and external installed-kit QA on an existing macOS system have passed in their [tested scopes](docs/COMPATIBILITY.md). Independent human use, clean-OS setup, Claude Code and a live run of the new API-agent actions remain unverified. [Exact agent verification scope](docs/AGENT_VALIDATION.md). Optional neural-video generation has a separate Replicate integration.
+The local editor and renderer are free. Your agent's subscription/API and optional cloud generation have separate costs. Local video-model inference is not included. [Agent verification and client limits](docs/AGENT_VALIDATION.md) · [Tested Windows/Linux/macOS scopes](docs/COMPATIBILITY.md).
 
 **0.1.0 · Experimental developer preview** · [Current status](docs/STATUS.md) · [Development plan](docs/PLAN_V0.2_RU.md) · [Contributing](CONTRIBUTING.md) · [Release notes](docs/releases/v0.1.0.md)
+
+![Real local CLI and Studio workflow](docs/media/agent-motion-studio-demo.gif)
+
+[Watch the 37-second demo](docs/media/agent-motion-studio-demo.mp4) · [Recording, source project and credits](docs/LAUNCH_DEMO.md) · [Download the pre-release](https://github.com/kok-o/agent-motion-studio/releases/tag/v0.1.0)
+
+The demo records the real editor: original MP4 → scene correction → unsaved preview → new export → restore → reopen. Playback is accelerated and recording captions are added; it is not a model-session recording or a usability test.
+
+## Start with the supplied kit
+
+Download `agent-motion-studio-first-user-0.1.0-8e5106ad2a18.zip` from the [pre-release assets](https://github.com/kok-o/agent-motion-studio/releases/tag/v0.1.0), extract it into a new folder, and open its local `START_HERE_RU.md`. The kit includes the built runtime, permitted coffee example, credits and installation instructions. Node.js ≥22.12, Chrome/Chromium/Edge, FFmpeg and ffprobe are separate prerequisites. You do not need a source checkout or TypeScript build. [English installation guide](docs/GETTING_STARTED.md) · [Kit checksums](docs/USER_TRIAL_RU.md).
 
 For the first independent human preview, use the supplied fixed kit `agent-motion-studio-first-user-0.1.0-8e5106ad2a18.zip` and its local `START_HERE_RU.md`. [Kit identity and the existing participant route](docs/USER_TRIAL_RU.md) include checksum details; GitHub access, a source checkout and a build are not required for that route. No independent participant or date has been recorded yet. Independent human viewing, listening, usability and setup without developer help remain **NOT RUN**; a stable release has not been declared.
 

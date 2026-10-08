@@ -25,11 +25,15 @@ Extract the source ZIP into a new directory and check the documented build there
 ## First publication
 
 1. Review the source inventory, license/credits, changelog and candidate results. Commit the intended files on `main`. Do not commit `artifacts/` or temporary paths. Rebuild the candidate if source changes after verification.
-2. Create an empty GitHub repository named `agent-motion-studio` under the agreed owner. Add its actual URL as `origin`; push `main`. Do not overwrite an existing remote history.
-3. Invite the second maintainer, enable private vulnerability reporting and protect `main` as described in CONTRIBUTING. These settings are not automatically applied by the files here.
-4. Wait for the first hosted **Verify** workflow. Resolve failures before declaring the release verified on that runner. Locally passing Windows tests do not establish Linux success.
+2. Use the existing `kok-o/agent-motion-studio` repository. Audit all published Git refs/history, discussions, Actions logs and retained artifact diagnostics before changing visibility. Keep private evidence outside published assets; do not overwrite remote history or relabel source stamps. Existing Git author metadata will be public. The limited source-file check is not a full secret/privacy audit.
+3. Verify maintainer access; do not send duplicate invitations. When publication is authorized, configure About/topics/social preview, make the repository public, enable private vulnerability reporting and protect `main` as described in CONTRIBUTING. Read settings back; files do not configure them automatically.
+4. Wait for **Verify** on the exact release commit and read the actual logs. Preserve earlier failures; do not substitute another SHA or a successful sibling run for a failed required gate. Locally passing Windows tests do not establish Linux success.
 5. Tag the verified commit `v0.1.0` and create a GitHub **pre-release** using `docs/releases/v0.1.0.md`. Attach the candidate archives and `SHA256SUMS.txt`. Link the release to that commit. No npm publication is needed.
 6. Download the attached runtime and verify its SHA-256 against the accepted candidate. Save the commit SHA, release URL and actual CI result in the maintainer record.
+
+For this first preview, also attach the unchanged first-human kit `agent-motion-studio-first-user-0.1.0-8e5106ad2a18.zip` identified in [USER_TRIAL](USER_TRIAL_RU.md). Its older clean source stamp, embedded STATUS and SELF_RUN are build snapshots, not the new release commit. Label it separately from newly prepared source/runtime archives and include its original ZIP hash in the release checksums. Never reseal or rename that accepted kit to claim a new verification.
+
+Human viewing/listening, an independent participant and clean-OS setup remain separate NOT RUN checks. A public repository and a pre-release do not establish a stable product. The [recorded launch demo](LAUNCH_DEMO.md) uses real local UI/CLI actions and original assets, not a fake model conversation.
 
 Preparation commands above never commit, tag, push, create repositories or upload releases. Perform publication only when the project owner has chosen the destination and requested it.
 
