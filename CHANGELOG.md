@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- License the application code and documentation under Apache-2.0, preserving earlier MIT notices and the separate demo-media/font licenses.
+
 ## 0.1.0 — experimental developer preview
 
 First public release candidate. See [release notes](docs/releases/v0.1.0.md) for setup and limitations. Publication is a separate maintainer action.

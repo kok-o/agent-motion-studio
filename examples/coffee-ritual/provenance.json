@@ -60,5 +60,5 @@
       "name": "ritual-score.wav"
     }
   },
-  "licenseDiscrepancy": "Commons lists a CC BY 2.0 license reviewed on 2015-04-30. The current Flickr author license link points to CC BY-SA 2.0. This distribution follows CC BY-SA 2.0 for derivatives and finished remix, while separate original music and application code remain MIT."
+  "licenseDiscrepancy": "Commons lists a CC BY 2.0 license reviewed on 2015-04-30. The current Flickr author license link points to CC BY-SA 2.0. This distribution follows CC BY-SA 2.0 for derivatives and finished remix, while separate original music retains MIT and application code is Apache-2.0."
 }

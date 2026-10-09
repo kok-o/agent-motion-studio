@@ -2,7 +2,7 @@
 
 The edited footage, still, finished film and this example composition are distributed under Creative Commons Attribution-ShareAlike 2.0: https://creativecommons.org/licenses/by-sa/2.0/ . Retain Scott Schiller attribution, original-source link and change notice in CREDITS.md. This is not a transfer of ownership or a code license change.
 
-The separate original procedural WAV and application code remain under MIT. Original MIT license:
+The application code is distributed under Apache License 2.0 (see the repository LICENSE). The separate original procedural WAV retains MIT. Original music license:
 
 MIT License
 
