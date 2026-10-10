@@ -70,9 +70,14 @@ function snapshot(manifest: Manifest, label: string): Revision {
 
 async function readExternalRevision(projectDir: string, revisionId: string): Promise<Revision | undefined> {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(revisionId)) return undefined;
-  const filePath = join(projectDir, '.history', `${revisionId}.json`);
   try {
+    const canonicalDir = await realpath(projectDir);
+    const historyDir = join(canonicalDir, '.history');
+    if (await realpath(historyDir) !== historyDir) return undefined;
+    const filePath = join(historyDir, `${revisionId}.json`);
+    if (await realpath(filePath) !== filePath) return undefined;
     const content = await readFile(filePath, 'utf8');
+    if (content.length > 10 * 1024 * 1024) return undefined;
     const parsed = JSON.parse(content) as Revision;
     if (parsed && typeof parsed === 'object' && parsed.id === revisionId && Array.isArray(parsed.scenes)) {
       return parsed;
@@ -85,42 +90,7 @@ async function readExternalRevision(projectDir: string, revisionId: string): Pro
 
 async function commit(file: string, before: Manifest, next: Manifest, label: string, operation?: Omit<OperationReceipt, 'revisionId'>, beforeManifestRename?: () => void) {
   next.schemaVersion = 2;
-  const projectDir = dirname(resolve(file));
-  const historyDir = join(projectDir, '.history');
   const newRev = snapshot(before, label);
-
-  try {
-    await mkdir(historyDir, { recursive: true });
-    for (const rev of before.history ?? []) {
-      const revPath = join(historyDir, `${rev.id}.json`);
-      try { await writeFile(revPath, json(rev), { flag: 'wx' }); }
-      catch (err) { if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err; }
-    }
-    const tmpRev = join(historyDir, `.tmp-${randomUUID()}.json`);
-    try {
-      await writeFile(tmpRev, json(newRev), { flag: 'wx' });
-      await rename(tmpRev, join(historyDir, `${newRev.id}.json`));
-    } finally {
-      await rm(tmpRev, { force: true });
-    }
-
-    const entries = await readdir(historyDir, { withFileTypes: true });
-    const revFiles = entries.filter(e => e.isFile() && e.name.endsWith('.json') && !e.name.startsWith('.tmp-'));
-    if (revFiles.length > 100) {
-      const withStats = await Promise.all(revFiles.map(async f => ({
-        name: f.name,
-        time: (await stat(join(historyDir, f.name))).mtimeMs
-      })));
-      withStats.sort((a, b) => a.time - b.time);
-      const toRemove = withStats.slice(0, withStats.length - 100);
-      for (const r of toRemove) {
-        await rm(join(historyDir, r.name), { force: true });
-      }
-    }
-  } catch {
-    // External history persistence should not block commit if directory cannot be created
-  }
-
   const allRevisions = [...(before.history ?? []), newRev];
   const budgetedInline: Revision[] = [];
   let inlineBytes = 0;
@@ -136,14 +106,85 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
   next.history = budgetedInline;
   next.revision = randomUUID();
   if (operation) next.operationReceipts = [...(before.operationReceipts ?? []), { ...operation, revisionId: next.revision }].slice(-100);
+
+  // 1. Validate manifest before modifying any filesystem state
   validateManifest(next);
-  const temporary = join(dirname(resolve(file)), `.project-${randomUUID()}.json`);
+
+  // 2. Ensure project directory and .history directory are safe and accessible
+  const projectDir = dirname(resolve(file));
+  const canonicalDir = await realpath(projectDir);
+  const historyDir = join(canonicalDir, '.history');
+  try {
+    await mkdir(historyDir, { recursive: true });
+    if (await realpath(historyDir) !== historyDir) {
+      throw fail('The history directory must not be a symlink.');
+    }
+  } catch (error) {
+    throw fail(`Cannot access history directory: ${(error as Error).message}`);
+  }
+
+  // 3. Write temporary manifest file and verify it loads
+  const temporary = join(canonicalDir, `.project-${randomUUID()}.json`);
+  let stagedRevPath: string | undefined;
   try {
     await writeFile(temporary, json(next), { flag: 'wx' });
     await loadManifest(temporary);
+
+    // 4. Backfill legacy inline history into .history if missing
+    for (const rev of before.history ?? []) {
+      const revPath = join(historyDir, `${rev.id}.json`);
+      try { await writeFile(revPath, json(rev), { flag: 'wx' }); }
+      catch (err) { if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err; }
+    }
+
+    // 5. Write the new revision snapshot atomically
+    const tmpRev = join(historyDir, `.tmp-${randomUUID()}.json`);
+    try {
+      await writeFile(tmpRev, json(newRev), { flag: 'wx' });
+      await rename(tmpRev, join(historyDir, `${newRev.id}.json`));
+      stagedRevPath = join(historyDir, `${newRev.id}.json`);
+    } finally {
+      await rm(tmpRev, { force: true });
+    }
+
+    // 6. Manifest publication
     beforeManifestRename?.();
     await rename(temporary, resolve(file));
-  } finally { await rm(temporary, { force: true }); }
+    stagedRevPath = undefined;
+  } catch (error) {
+    if (stagedRevPath) {
+      await rm(stagedRevPath, { force: true });
+    }
+    throw error;
+  } finally {
+    await rm(temporary, { force: true });
+  }
+
+  // 7. Prune retained history to 100 entries using logical createdAt timestamps
+  try {
+    const entries = await readdir(historyDir, { withFileTypes: true });
+    const revFiles = entries.filter(e => e.isFile() && e.name.endsWith('.json') && !e.name.startsWith('.tmp-'));
+    if (revFiles.length > 100) {
+      const withStats = await Promise.all(revFiles.map(async f => {
+        try {
+          const content = await readFile(join(historyDir, f.name), 'utf8');
+          const parsed = JSON.parse(content);
+          const time = typeof parsed.createdAt === 'string' ? Date.parse(parsed.createdAt) : 0;
+          return { name: f.name, time: isNaN(time) ? 0 : time };
+        } catch {
+          return { name: f.name, time: 0 };
+        }
+      }));
+      withStats.sort((a, b) => a.time - b.time || a.name.localeCompare(b.name));
+      const toRemove = withStats.slice(0, withStats.length - 100);
+      for (const r of toRemove) {
+        await rm(join(historyDir, r.name), { force: true });
+      }
+    }
+  } catch {
+    // Non-fatal if post-commit pruning fails
+  }
+
   return readProject(file);
 }
 

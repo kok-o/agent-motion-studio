@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, readFile, writeFile, stat, readdir, rename } from 'node:fs/promises';
+import { mkdtemp, rm, readFile, writeFile, stat, readdir, rename, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -394,3 +394,81 @@ test('H1: fixture 6 scenes x 20 objects survives 150 consecutive accepted edits;
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('H1: archive obstruction (.history as regular file) cleanly rejects edits and preserves initial project state', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-h1-blocked-'));
+  try {
+    await mkdir(root, { recursive: true });
+    await writeFile(join(root, '.history'), 'Blocked archive obstruction; not a directory.\n');
+    const file = join(root, 'project.json');
+    await createProject(root, { title: 'Blocked archive test' });
+
+    const state = await readProject(file);
+    const initialRevision = state.manifest.revision;
+    const beforeBytes = await readFile(file);
+    const beforeEtag = state.etag;
+
+    // edit must fail safely because .history is blocked
+    await assert.rejects(
+      editProject(file, { type: 'brand', patch: { accent: '#ff00ff' } }, state.etag),
+      /Cannot access history directory/
+    );
+
+    const afterState = await readProject(file);
+    const afterBytes = await readFile(file);
+    assert.ok(beforeBytes.equals(afterBytes), 'Accepted bytes must be preserved after rejected edit');
+    assert.equal(afterState.etag, beforeEtag, 'ETag must be preserved after rejected edit');
+    assert.equal(afterState.manifest.revision, initialRevision, 'Initial revision must not be lost');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('H1: rejected commit (e.g. invalid manifest removing last scene) never mutates or prunes historical archive', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-h1-rej-commit-'));
+  try {
+    await createProject(root, { title: 'Rejected commit test' });
+    const file = join(root, 'project.json');
+    let state = await readProject(file);
+
+    // Perform 100 accepted edits
+    for (let i = 1; i <= 100; i++) {
+      const hex = ((i * 123456) % 0xFFFFFF).toString(16).padStart(6, '0');
+      state = await editProject(file, { type: 'brand', patch: { accent: `#${hex}` } }, state.etag);
+    }
+
+    const beforeBytes = await readFile(file);
+    const beforeEtag = state.etag;
+    const historyDir = join(root, '.history');
+    const archiveFilesBefore = (await readdir(historyDir)).filter(n => n.endsWith('.json') && !n.startsWith('.tmp-'));
+    assert.equal(archiveFilesBefore.length, 100);
+
+    const snapshotDigestsBefore = {};
+    for (const name of archiveFilesBefore) {
+      snapshotDigestsBefore[name] = (await readFile(join(historyDir, name))).toString('hex');
+    }
+
+    // Attempt invalid commit removing the only scene
+    await assert.rejects(
+      editProject(file, { type: 'remove-scene', sceneId: 'opening' }, beforeEtag),
+      /must NOT have fewer than 1 items/
+    );
+
+    // Verify project bytes and ETag preserved
+    const afterBytes = await readFile(file);
+    const afterState = await readProject(file);
+    assert.ok(beforeBytes.equals(afterBytes), 'Project bytes preserved after rejected commit');
+    assert.equal(afterState.etag, beforeEtag, 'Project ETag preserved after rejected commit');
+
+    // Verify NO archive snapshot was changed, added or pruned
+    const archiveFilesAfter = (await readdir(historyDir)).filter(n => n.endsWith('.json') && !n.startsWith('.tmp-'));
+    assert.equal(archiveFilesAfter.length, 100, 'Archive file count must remain 100');
+    for (const name of archiveFilesAfter) {
+      const currentDigest = (await readFile(join(historyDir, name))).toString('hex');
+      assert.equal(currentDigest, snapshotDigestsBefore[name], `Snapshot ${name} must be unaltered`);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
