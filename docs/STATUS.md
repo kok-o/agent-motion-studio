@@ -55,7 +55,7 @@
 - **`EXECUTOR_CHECKS.mjs` runner (7/7 PASS):** `H1_3X12` (PASS), `H1_6X20` (PASS), `H1_ARCHIVE_BLOCKED` (PASS), `H1_REJECTED_COMMIT` (PASS), `M7_BATCH` (PASS), `M1_FLAGS` (PASS), `M1_INTERNAL_IO` (PASS).
 - **`artifacts/reviews/pr20-e4e8d23/M1_CLI_REVIEW.mjs` runner (10/10 PASS):** 6 malformed option checks, valid state + malformed action JSON, missing verify input, precommit ENOENT (exit 4 / INTERNAL_ERROR / render), postcommit ENOENT (exit 4 / INTERNAL_ERROR / project, manifest & archive preserved and verified).
 - **`npm run check`:** сборка `build` успешна, 89/89 модульных тестов прошли, аудит дистрибутива `check:release` пройден (231 файл, 212 ссылок).
-- **Интеграционные тесты:** CI head `f168fbc` показал 44/44 integration PASS (runs 38037381481 / 38037378933, 6/6 checks); локальный регрессионный сьют расширен до 15/15 PASS.
+- **Интеграционные тесты:** полный последовательный сьют `npm run test:integration` показал **49/49 PASS** (включая согласованный assertion в `generated-take.test.mjs` на `INTERNAL_ERROR/project/4` и 15/15 в `h1-m7-m1-regressions.test.mjs`).
 
 ### Что остаётся открытым
 

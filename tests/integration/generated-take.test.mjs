@@ -97,7 +97,14 @@ test('atomic generated take acceptance preserves sources/history and receipts pr
   };
   syncBuiltinESMExports();
   try {
-    await assert.rejects(acceptGeneratedTake(file, nextIntent, restored.etag), error => !(error instanceof ProjectPrecommitError) && error.code === 'EIO');
+    await assert.rejects(
+      acceptGeneratedTake(file, nextIntent, restored.etag),
+      error => !(error instanceof ProjectPrecommitError) &&
+        error.code === 'INTERNAL_ERROR' &&
+        error.stage === 'project' &&
+        error.exitCode === 4 &&
+        error.message.includes('Manifest was committed but reading the result failed')
+    );
   } finally { filesystem.rename = originalRename; filesystem.readFile = originalReadFile; syncBuiltinESMExports(); }
   assert.equal(published, true); assert.equal(failedReads, 1);
   const afterReadFailure = await readProject(file), afterReadFailureBytes = await readFile(file);
