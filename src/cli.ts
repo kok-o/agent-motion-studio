@@ -24,13 +24,26 @@ try {
   else {
     let result: unknown;
     if (command === 'doctor') { result = await doctor(); if (!(result as {ready:boolean}).ready) process.exitCode = 3; }
-    else if (command === 'new' && values.dir) result = await createProject(values.dir, { aspect: values.aspect as '9:16' | '16:9' | undefined, title: values.title });
-    else if (command === 'state' && input) result = await readProject(resolve(input));
-    else if (command === 'import' && input && values.file) {
-      if ((await stat(values.file)).size > 512 * 1024 * 1024) throw new StudioError('ASSET_LIMIT', 'import', 'Maximum import size is 512 MiB.', 2);
+    else if (command === 'new') {
+      if (!values.dir) throw new StudioError('INVALID_COMMAND', 'input', 'new requires --dir <project>', 2);
+      result = await createProject(values.dir, { aspect: values.aspect as '9:16' | '16:9' | undefined, title: values.title });
+    }
+    else if (command === 'state') {
+      if (!input) throw new StudioError('INVALID_COMMAND', 'input', 'state requires <project.json>', 2);
+      result = await readProject(resolve(input));
+    }
+    else if (command === 'import') {
+      if (!input || !values.file) throw new StudioError('INVALID_COMMAND', 'input', 'import requires <project.json> and --file <media>', 2);
+      let fileStat;
+      try { fileStat = await stat(values.file); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new StudioError('FILE_NOT_FOUND', 'input', `Media file does not exist: ${values.file}`, 2); throw error; }
+      if (fileStat.size > 512 * 1024 * 1024) throw new StudioError('ASSET_LIMIT', 'import', 'Maximum import size is 512 MiB.', 2);
       result = await importMedia(input, values.file, await readFile(values.file), values['if-match']);
     }
-    else if (command === 'edit' && input && values.action) result = await editProject(input, await readJsonInput(values.action) as Parameters<typeof editProject>[1], values['if-match']);
+    else if (command === 'edit') {
+      if (!input || !values.action) throw new StudioError('INVALID_COMMAND', 'input', 'edit requires <project.json> and --action <action.json>', 2);
+      result = await editProject(input, await readJsonInput(values.action) as Parameters<typeof editProject>[1], values['if-match']);
+    }
     else if (command === 'preview' && input) {
       if (!values.action || !values['if-match'] || !values.out) throw new StudioError('INVALID_COMMAND', 'input', 'preview requires --action, --if-match and --out (a new directory).', 2);
       const action = await readJsonInput(values.action) as Parameters<typeof previewScene>[1], output = resolve(values.out);
@@ -65,7 +78,8 @@ try {
         default: throw new StudioError('INVALID_COMMAND', 'input', usage, 2);
       }
     }
-    else if (command === 'studio' && input) {
+    else if (command === 'studio') {
+      if (!input) throw new StudioError('INVALID_COMMAND', 'input', 'studio requires <project.json>', 2);
       const studio = await startStudio(input, Number(values.port ?? 4173));
       console.log(`Local studio: ${studio.url}\nProject: ${studio.project}\nPress Ctrl+C to stop.`);
       const stopped = await new Promise<{ renderActive: boolean }>((ok, bad) => {
@@ -75,9 +89,18 @@ try {
       });
       result = { stopped: true, ...(stopped.renderActive && { renderCancelled: true }), message: stopped.renderActive ? 'Local studio stopped. Active render cancelled; previous exports were kept.' : 'Local studio stopped.' };
     }
-    else if (command === 'validate' && input) result = await validateForRender(input);
-    else if (command === 'render' && input && values.out) result = await render(input, values.out, { overwrite: values.overwrite, noCache: values['no-cache'], progress: message => console.error(message) });
-    else if (command === 'verify' && input) result = await verifyVideo(resolve(input), findTools());
+    else if (command === 'validate') {
+      if (!input) throw new StudioError('INVALID_COMMAND', 'input', 'validate requires <manifest.json>', 2);
+      result = await validateForRender(input);
+    }
+    else if (command === 'render') {
+      if (!input || !values.out) throw new StudioError('INVALID_COMMAND', 'input', 'render requires <manifest.json> and --out <directory>', 2);
+      result = await render(input, values.out, { overwrite: values.overwrite, noCache: values['no-cache'], progress: message => console.error(message) });
+    }
+    else if (command === 'verify') {
+      if (!input) throw new StudioError('INVALID_COMMAND', 'input', 'verify requires <output.mp4>', 2);
+      result = await verifyVideo(resolve(input), findTools());
+    }
     else if (command === 'init' && input && values.dir && ['repo-promo', 'product-ad', 'feature-explainer', 'kinetic-promo', 'orbit-demo', 'coffee-ritual'].includes(input)) {
       const target = resolve(values.dir);
       try { await stat(target); throw new StudioError('PROJECT_EXISTS', 'input', `${target} already exists; choose an empty new directory.`, 2); } catch (error) { if (error instanceof StudioError) throw error; if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
