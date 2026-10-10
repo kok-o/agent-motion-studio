@@ -189,6 +189,129 @@ test('M7: composition aspect ratio change preserves unspecified style and safeAr
   }
 });
 
+test('M7: sequential batch children preserve previous children settings for music and composition', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-m7-seq-batch-'));
+  try {
+    await createProject(root, { aspect: '16:9', title: 'Sequential Batch Test' });
+    const file = join(root, 'project.json');
+
+    // 1. Music sequential children: procedural -12 -> gain-only -20 -> gain-only -6
+    let res = await editProject(file, {
+      type: 'batch',
+      label: 'Sequential procedural gain batch',
+      actions: [
+        { type: 'music', provider: 'procedural', gainDb: -12 },
+        { type: 'music', gainDb: -20 },
+        { type: 'music', gainDb: -6 }
+      ]
+    });
+    let music = res.manifest.audio.music;
+    assert.equal(music.provider, 'procedural');
+    assert.equal(music.gainDb, -6);
+
+    // 2. Music file asset: import audio asset, then batch file asset -> gain-only
+    const sampleAudio = resolve('examples/feature-explainer/assets/voice.wav');
+    const audioContent = await readFile(sampleAudio);
+    const { importMedia } = await import('../../dist/project.js');
+    await importMedia(file, 'voice.wav', audioContent);
+    const assetId = Object.entries((await readProject(file)).manifest.assets).find(
+      ([, a]) => a.type === 'audio'
+    )[0];
+
+    res = await editProject(file, {
+      type: 'batch',
+      label: 'Sequential file music batch',
+      actions: [
+        { type: 'music', asset: assetId, gainDb: -10 },
+        { type: 'music', gainDb: -18 }
+      ]
+    });
+    music = res.manifest.audio.music;
+    assert.equal(music.provider, 'file');
+    assert.equal(music.asset, assetId);
+    assert.equal(music.gainDb, -18);
+
+    // 3. Music explicit none in batch: procedural -> none
+    res = await editProject(file, {
+      type: 'batch',
+      label: 'Sequential turn off batch',
+      actions: [
+        { type: 'music', provider: 'procedural', gainDb: -12 },
+        { type: 'music', provider: 'none' }
+      ]
+    });
+    music = res.manifest.audio.music;
+    assert.equal(music.provider, 'none');
+
+    // 4. Sequential composition patches in batch: style + safeArea -> aspect ratio change
+    res = await editProject(file, {
+      type: 'batch',
+      label: 'Sequential composition batch',
+      actions: [
+        { type: 'composition', video: { style: 'studio', safeArea: 0.1 } },
+        { type: 'composition', video: { aspectRatio: '9:16' } }
+      ]
+    });
+    const video = res.manifest.video;
+    assert.equal(video.aspectRatio, '9:16');
+    assert.equal(video.style, 'studio', 'Sequential composition patch must preserve style from earlier child');
+    assert.equal(video.safeArea, 0.1, 'Sequential composition patch must preserve safeArea from earlier child');
+    assert.equal(video.fps, 30);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('M7: invalid child in batch cleanly rejects entire batch and preserves accepted project state', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-m7-atomic-fail-'));
+  try {
+    await createProject(root, { aspect: '16:9', title: 'Atomic Fail Test' });
+    const file = join(root, 'project.json');
+
+    const beforeState = await readProject(file);
+    const beforeBytes = await readFile(file);
+    const beforeEtag = beforeState.etag;
+    const beforeRev = beforeState.manifest.revision;
+    const beforeBrand = beforeState.manifest.brand;
+
+    // Batch where child 0 is valid (brand edit) but child 1 is invalid (unknown music provider)
+    await assert.rejects(
+      editProject(file, {
+        type: 'batch',
+        actions: [
+          { type: 'brand', patch: { accent: '#ff00ff' } },
+          { type: 'music', provider: 'invalid_provider' }
+        ]
+      }),
+      /Batch action\[1\]/
+    );
+
+    const afterState = await readProject(file);
+    const afterBytes = await readFile(file);
+    assert.ok(beforeBytes.equals(afterBytes), 'Rejected batch must not alter project bytes');
+    assert.equal(afterState.etag, beforeEtag, 'Rejected batch must preserve ETag');
+    assert.equal(afterState.manifest.revision, beforeRev, 'Rejected batch must preserve revision');
+    assert.deepEqual(afterState.manifest.brand, beforeBrand, 'First child brand edit must NOT leak into project');
+
+    // Batch with asset and provider conflict in child
+    await assert.rejects(
+      editProject(file, {
+        type: 'batch',
+        actions: [
+          { type: 'brand', patch: { accent: '#00ff00' } },
+          { type: 'music', asset: 'foo', provider: 'procedural' }
+        ]
+      }),
+      /Choose either a file asset or a music provider/
+    );
+
+    const afterConflictBytes = await readFile(file);
+    assert.ok(beforeBytes.equals(afterConflictBytes), 'Conflicting child must not alter project bytes');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // H1 Tests: History retention, size budget, 150 consecutive edits on 3x12 and 6x20
 // ─────────────────────────────────────────────────────────────────────────────

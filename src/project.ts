@@ -300,11 +300,11 @@ async function applyAction(next: Manifest, before: Manifest, action: ProjectActi
       if (action.asset === undefined && action.provider === undefined && action.gainDb === undefined) throw fail('Music action requires at least one of asset, provider or gainDb.');
       if (action.asset) {
         if (next.assets[action.asset]?.type !== 'audio') throw fail('Music requires an imported audio asset.');
-        next.audio.music = { provider: 'file', asset: action.asset, gainDb: action.gainDb ?? before.audio.music.gainDb ?? -12 };
+        next.audio.music = { provider: 'file', asset: action.asset, gainDb: action.gainDb ?? next.audio.music.gainDb ?? -12 };
       } else if (action.provider !== undefined) {
-        next.audio.music = { provider: action.provider, gainDb: action.gainDb ?? before.audio.music.gainDb ?? -12 };
+        next.audio.music = { provider: action.provider, gainDb: action.gainDb ?? next.audio.music.gainDb ?? -12 };
       } else if (action.gainDb !== undefined) {
-        const current = before.audio.music;
+        const current = next.audio.music;
         if (current.provider === 'file' && current.asset) {
           next.audio.music = { provider: 'file', asset: current.asset, gainDb: action.gainDb };
         } else if (current.provider === 'procedural') {
@@ -317,7 +317,7 @@ async function applyAction(next: Manifest, before: Manifest, action: ProjectActi
     }
     case 'composition': {
       if (!action.video || typeof action.video !== 'object') throw fail('Composition action requires video settings.');
-      const mergedVideo = Object.assign({ fps: 30 }, before.video, action.video);
+      const mergedVideo = Object.assign({ fps: 30 }, next.video, action.video);
       validateActionShape('video', mergedVideo);
       next.video = mergedVideo as Manifest['video'];
       break;
