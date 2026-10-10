@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { createProject, editProject, readProject } from '../../dist/project.js';
+import { normalizeError, StudioError } from '../../dist/errors.js';
 
 const cli = resolve('dist/cli.js');
 
@@ -12,6 +13,13 @@ function run(args, expectedCode = 0) {
   const result = spawnSync(process.execPath, [cli, ...args, '--json'], { encoding: 'utf8', windowsHide: true });
   assert.equal(result.status, expectedCode, `Command failed: ${args.join(' ')}\nOutput: ${result.stdout}\nStderr: ${result.stderr}`);
   return JSON.parse(result.stdout || '{}');
+}
+
+function runRaw(args) {
+  const result = spawnSync(process.execPath, [cli, ...args], { encoding: 'utf8', windowsHide: true });
+  let json;
+  try { json = JSON.parse(result.stdout || '{}'); } catch { json = null; }
+  return { status: result.status, stdout: result.stdout, stderr: result.stderr, json };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +81,56 @@ test('M1: missing project and missing arguments produce user-actionable exit cod
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('M1: malformed CLI options and option values produce machine-readable JSON failure with exit 2, stage "input", and INVALID_COMMAND', () => {
+  // 1. Unknown option with --json
+  const res1 = runRaw(['state', 'irrelevant.json', '--definitely-unknown-option', '--json']);
+  assert.equal(res1.status, 2);
+  assert.ok(res1.json);
+  assert.equal(res1.json.exitCode, 2);
+  assert.equal(res1.json.error.stage, 'input');
+  assert.equal(res1.json.error.code, 'INVALID_COMMAND');
+  assert.notEqual(res1.json.error.code, 'INTERNAL_ERROR');
+
+  // 2. Invalid boolean option value
+  const res2 = runRaw(['state', 'irrelevant.json', '--json=not-a-boolean']);
+  assert.equal(res2.status, 2);
+  assert.ok(res2.json);
+  assert.equal(res2.json.exitCode, 2);
+  assert.equal(res2.json.error.stage, 'input');
+  assert.equal(res2.json.error.code, 'INVALID_COMMAND');
+  assert.notEqual(res2.json.error.code, 'INTERNAL_ERROR');
+
+  // 3. Unknown option on another command
+  const res3 = runRaw(['new', '--dir', 'proj', '--bogus-flag', '--json']);
+  assert.equal(res3.status, 2);
+  assert.ok(res3.json);
+  assert.equal(res3.json.exitCode, 2);
+  assert.equal(res3.json.error.stage, 'input');
+  assert.equal(res3.json.error.code, 'INVALID_COMMAND');
+});
+
+test('M1: internal I/O errors and runtime failures are NOT globally converted to input errors', () => {
+  // Generic internal ENOENT must stay exit 4 and non-input stage
+  const internalErr = Object.assign(new Error('Internal controlled I/O failure'), { code: 'ENOENT' });
+  const internalNorm = normalizeError(internalErr);
+  assert.equal(internalNorm.exitCode, 4);
+  assert.equal(internalNorm.error.code, 'INTERNAL_ERROR');
+  assert.notEqual(internalNorm.error.stage, 'input');
+
+  // Explicit runtime StudioError keeps its stage and exitCode
+  const explicitErr = new StudioError('OWNED_RUNTIME_FAILURE', 'publish', 'Controlled explicit failure', 4);
+  const explicitNorm = normalizeError(explicitErr);
+  assert.equal(explicitNorm.exitCode, 4);
+  assert.equal(explicitNorm.error.code, 'OWNED_RUNTIME_FAILURE');
+  assert.equal(explicitNorm.error.stage, 'publish');
+
+  // Unhandled error normalizes to INTERNAL_ERROR/render/4
+  const crashNorm = normalizeError(new Error('Generic runtime crash'));
+  assert.equal(crashNorm.exitCode, 4);
+  assert.equal(crashNorm.error.code, 'INTERNAL_ERROR');
+  assert.equal(crashNorm.error.stage, 'render');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

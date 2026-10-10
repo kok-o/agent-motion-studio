@@ -6,8 +6,8 @@ export function normalizeError(error: unknown) {
     return { exitCode: error.exitCode, error: { code: error.code, stage: error.stage, message: error.message, ...(error.field ? { field: error.field } : {}) } };
   }
   const err = error as NodeJS.ErrnoException | undefined;
-  if (err?.code === 'ENOENT') {
-    return { exitCode: 2, error: { code: 'FILE_NOT_FOUND', stage: 'input', message: err.message || String(error) } };
+  if (typeof (err as any)?.code === 'string' && (err as any).code.startsWith('ERR_PARSE_ARGS_')) {
+    return { exitCode: 2, error: { code: 'INVALID_COMMAND', stage: 'input', message: err?.message || String(error) } };
   }
   const value = new StudioError('INTERNAL_ERROR', 'render', error instanceof Error ? error.message : String(error), 4);
   return { exitCode: value.exitCode, error: { code: value.code, stage: value.stage, message: value.message, ...(value.field ? { field: value.field } : {}) } };

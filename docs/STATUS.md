@@ -25,15 +25,19 @@
    - Музыка: gain-only правка сохраняет текущий `provider` (`procedural` или `file`) и `asset`; отключение музыки требует явного `provider: 'none'`; одновременное указание `asset` и `provider` отклоняется ошибкой.
    - Композиция: частичное изменение `video` (например, только `aspectRatio`) сохраняет действующие `style` и `safeArea`.
    - Последовательный batch: дочерние действия внутри batch читают текущее рабочее состояние `next`, а не исходный `before`. Последовательные правки музыки (например, procedural/-12 → gain-only/-20 → gain-only/-6, либо file/asset → gain-only) сохраняют настройки предыдущих children; последовательные composition patches сохраняют ранее установленные `style` и `safeArea`. Невалидный child в batch атомарно отклоняет весь batch без изменения принятых байтов, ETag, ревизии и истории.
-3. **M1 — ошибки ввода:**
+3. **M1 — ошибки ввода и внутренняя таксономия ошибок:**
+   - Неверные опции CLI (неизвестные флаги вроде `--definitely-unknown-option`, невалидные значения вроде `--json=not-a-boolean`) возвращают машиночитаемый JSON-отказ с exit: 2, stage: `'input'`, code: `'INVALID_COMMAND'`.
+   - Внутренние ошибки ввода-вывода (ENOENT) из публикации, рендеринга и рантайма не маппятся глобально в пользовательские ошибки `FILE_NOT_FOUND` / `input` / 2; они классифицируются как внутренние сбои `INTERNAL_ERROR` (exit: 4, stage: `'render'`). Проверка отсутствия пользовательских входных файлов осуществляется на границе CLI (`PROJECT_NOT_FOUND`, `FILE_NOT_FOUND`).
    - Отсутствующий файл проекта в `state`, `edit`, `preview`, `render` возвращает ошибку `PROJECT_NOT_FOUND` (stage: `'input'`, exit code: 2).
-   - Отсутствующий файл действия или импортируемого медиа возвращает `FILE_NOT_FOUND` (stage: `'input'`, exit code: 2).
+   - Отсутствующий файл действия, импортируемого медиа или проверяемого видео возвращает `FILE_NOT_FOUND` (stage: `'input'`, exit code: 2).
    - Отсутствие обязательных аргументов CLI команд возвращает `INVALID_COMMAND` (stage: `'input'`, exit code: 2).
 
 #### Фактические результаты проверок (VERIFIED)
 
-- **Интеграционный регрессионный сьют `tests/integration/h1-m7-m1-regressions.test.mjs` (12/12 PASS):**
+- **Интеграционный регрессионный сьют `tests/integration/h1-m7-m1-regressions.test.mjs` (14/14 PASS):**
   - M1: корректный exit code 2 и stage `input` для всех сценариев отсутствующих файлов и параметров.
+  - M1: некорректные флаги CLI и невалидные значения опций возвращают машиночитаемый JSON-отказ с кодом `INVALID_COMMAND`, stage `input`, exit code 2 (не `INTERNAL_ERROR`/4).
+  - M1: внутренние ошибки I/O (ENOENT) не маппятся в `FILE_NOT_FOUND`/input, а сохраняют статус `INTERNAL_ERROR`/render/4; явные ошибки рантайма сохраняют свои stage и exit code.
   - M7: сохранение музыкального провайдера/ассета и параметров композиции при частичных правках.
   - M7 (sequential batch): цепочки дочерних действий внутри batch корректно наследуют настройки предыдущих children (procedural → gain, file asset → gain, procedural → none, style/safeArea → aspectRatio).
   - M7 (atomic batch rejection): при ошибке любого child в batch все изменения изолируются, сохраняются исходные байты, ETag, ревизия и история проекта.
@@ -45,9 +49,9 @@
   - H1 (healing of shape-corrupted external snapshot): неполный внешний снимок с правильным ID (`scenes: []`, отсутствие video/audio/brand) автоматически исцеляется из встроенной копии, предотвращая ошибку валидации при последующем восстановлении после вытеснения.
   - H1 (healing of content-mutated external snapshot): внешний снимок с правильным ID, но изменённым текстом сцены автоматически восстанавливается до исходного состояния встроенной копии; восстановление после вытеснения возвращает аутентичный текст.
 - **`H1_SNAPSHOT_INTEGRITY.mjs` runner (3/3 PASS):** `SYNTAX_CORRUPTION` (PASS), `SHAPE_CORRUPTION_WITH_MATCHING_ID` (PASS), `VALID_BUT_CHANGED_CONTENT` (PASS).
-- **`EXECUTOR_CHECKS.mjs` runner (5 PASS / 2 FAIL):** `H1_3X12` (PASS), `H1_6X20` (PASS), `H1_ARCHIVE_BLOCKED` (PASS), `H1_REJECTED_COMMIT` (PASS), `M7_BATCH` (PASS); остаются неисправленными M1_FLAGS и M1_INTERNAL_IO.
+- **`EXECUTOR_CHECKS.mjs` runner (7/7 PASS):** `H1_3X12` (PASS), `H1_6X20` (PASS), `H1_ARCHIVE_BLOCKED` (PASS), `H1_REJECTED_COMMIT` (PASS), `M7_BATCH` (PASS), `M1_FLAGS` (PASS), `M1_INTERNAL_IO` (PASS).
 - **`npm run check`:** сборка `build` успешна, 89/89 модульных тестов прошли, аудит дистрибутива `check:release` пройден (231 файл, 212 ссылок).
-- **Интеграционные тесты:** CI head `f168fbc` показал 44/44 integration PASS (runs 38037381481 / 38037378933, 6/6 checks); локальный регрессионный сьют расширен до 12/12 PASS.
+- **Интеграционные тесты:** CI head `f168fbc` показал 44/44 integration PASS (runs 38037381481 / 38037378933, 6/6 checks); локальный регрессионный сьют расширен до 14/14 PASS.
 
 ### Что остаётся открытым
 

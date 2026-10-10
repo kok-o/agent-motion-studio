@@ -18,7 +18,13 @@ import { readJsonInput } from './json-input.js';
 const usage = 'agent-motion-studio doctor | new --dir <project> [--aspect 9:16|16:9] [--title TEXT] | state <project.json> | import <project.json> --file <media> [--if-match <etag>] | edit <project.json> --action <action.json> [--if-match <etag>] | preview <project.json> --action <action.json> --if-match <etag> --out <new-directory> | generation <capabilities|prepare|list|status|submit|resume|download|preview|accept|reject|stop|resolve-unknown|bind-store> <project.json> [--job <id>] [--request <file>] [--approval <file>] [--resolution <file>] [--draft <file>] [--preview <id>] [--if-match <etag>] [--operation-id <id>] [--out <directory>] | studio <project.json> [--port 4173] | init <template> --dir <project> | validate <manifest.json> | render <manifest.json> --out <directory> [--overwrite] [--no-cache] | verify <output.mp4> [--json]';
 process.on('SIGINT', () => cancelProcesses()); process.on('SIGTERM', () => cancelProcesses());
 try {
-  const { values, positionals } = parseArgs({ allowPositionals: true, options: { json: { type: 'boolean' }, out: { type: 'string' }, dir: { type: 'string' }, aspect: { type: 'string' }, title: { type: 'string' }, file: { type: 'string' }, action: { type: 'string' }, port: { type: 'string' }, request: { type: 'string' }, approval: { type: 'string' }, resolution: { type: 'string' }, job: { type: 'string' }, draft: { type: 'string' }, preview: { type: 'string' }, 'if-match': { type: 'string' }, 'operation-id': { type: 'string' }, overwrite: { type: 'boolean' }, 'no-cache': { type: 'boolean' }, help: { type: 'boolean', short: 'h' } } });
+  const { values, positionals } = (() => {
+    try {
+      return parseArgs({ allowPositionals: true, options: { json: { type: 'boolean' }, out: { type: 'string' }, dir: { type: 'string' }, aspect: { type: 'string' }, title: { type: 'string' }, file: { type: 'string' }, action: { type: 'string' }, port: { type: 'string' }, request: { type: 'string' }, approval: { type: 'string' }, resolution: { type: 'string' }, job: { type: 'string' }, draft: { type: 'string' }, preview: { type: 'string' }, 'if-match': { type: 'string' }, 'operation-id': { type: 'string' }, overwrite: { type: 'boolean' }, 'no-cache': { type: 'boolean' }, help: { type: 'boolean', short: 'h' } } });
+    } catch (error) {
+      throw new StudioError('INVALID_COMMAND', 'input', error instanceof Error ? error.message : String(error), 2);
+    }
+  })();
   const [command, input] = positionals;
   if (values.help || !command) { console.log(usage); }
   else {
@@ -99,6 +105,8 @@ try {
     }
     else if (command === 'verify') {
       if (!input) throw new StudioError('INVALID_COMMAND', 'input', 'verify requires <output.mp4>', 2);
+      try { await stat(resolve(input)); }
+      catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new StudioError('FILE_NOT_FOUND', 'input', `Video file does not exist: ${input}`, 2); throw error; }
       result = await verifyVideo(resolve(input), findTools());
     }
     else if (command === 'init' && input && values.dir && ['repo-promo', 'product-ad', 'feature-explainer', 'kinetic-promo', 'orbit-demo', 'coffee-ritual'].includes(input)) {
