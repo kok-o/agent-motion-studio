@@ -130,14 +130,36 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
     await writeFile(temporary, json(next), { flag: 'wx' });
     await loadManifest(temporary);
 
-    // 4. Backfill legacy inline history into .history if missing
+    // 4. Ensure all revisions in before.history are validly preserved in .history.
+    // If an external snapshot file is missing or corrupted, heal it from the intact inline copy.
     for (const rev of before.history ?? []) {
-      const revPath = join(historyDir, `${rev.id}.json`);
-      try { await writeFile(revPath, json(rev), { flag: 'wx' }); }
-      catch (err) { if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err; }
+      const existing = await readExternalRevision(canonicalDir, rev.id);
+      if (!existing || existing.id !== rev.id) {
+        const revTmp = join(historyDir, `.tmp-${randomUUID()}.json`);
+        try {
+          await writeFile(revTmp, json(rev), { flag: 'w' });
+          await rename(revTmp, join(historyDir, `${rev.id}.json`));
+        } finally {
+          await rm(revTmp, { force: true });
+        }
+        const verified = await readExternalRevision(canonicalDir, rev.id);
+        if (!verified || verified.id !== rev.id) {
+          throw fail(`External history snapshot ${rev.id} is corrupt and cannot be healed.`);
+        }
+      }
     }
 
-    // 5. Write the new revision snapshot atomically
+    // 5. Verify that any revision about to be evicted from inline history is safely preserved externally
+    for (const rev of allRevisions) {
+      if (!budgetedInline.some(r => r.id === rev.id)) {
+        const verified = await readExternalRevision(canonicalDir, rev.id);
+        if (!verified || verified.id !== rev.id) {
+          throw fail(`Cannot evict revision ${rev.id} from inline history: external snapshot is corrupt or missing.`);
+        }
+      }
+    }
+
+    // 6. Write the new revision snapshot atomically
     const tmpRev = join(historyDir, `.tmp-${randomUUID()}.json`);
     try {
       await writeFile(tmpRev, json(newRev), { flag: 'wx' });

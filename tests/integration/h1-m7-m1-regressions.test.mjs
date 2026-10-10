@@ -472,3 +472,48 @@ test('H1: rejected commit (e.g. invalid manifest removing last scene) never muta
   }
 });
 
+test('H1: corrupt external snapshot is healed from intact inline history before eviction; restore succeeds', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-h1-corrupt-heal-'));
+  try {
+    await createProject(root, { title: 'Corrupt snapshot heal test' });
+    const file = join(root, 'project.json');
+    let state = await readProject(file);
+
+    // Initial edit to create first revision in history
+    const targetRevId = state.manifest.revision;
+    state = await editProject(file, { type: 'brand', patch: { accent: '#112233' } }, state.etag);
+
+    // Verify targetRevId exists both inline and in .history
+    assert.ok(state.manifest.history.some(r => r.id === targetRevId));
+    const historyDir = join(root, '.history');
+    const targetSnapshotFile = join(historyDir, `${targetRevId}.json`);
+
+    // Corrupt the external snapshot file on disk
+    await writeFile(targetSnapshotFile, '{"corrupted": true, "garbage": 12345}');
+
+    // Next edit should heal the external snapshot using the intact inline copy in before.history
+    state = await editProject(file, { type: 'brand', patch: { accent: '#445566' } }, state.etag);
+
+    // Verify external snapshot was healed
+    const healedContent = await readFile(targetSnapshotFile, 'utf8');
+    assert.notEqual(healedContent, '{"corrupted": true, "garbage": 12345}');
+    assert.equal(JSON.parse(healedContent).id, targetRevId);
+
+    // Perform 16 more edits to evict targetRevId from inline history
+    for (let i = 1; i <= 16; i++) {
+      const hex = ((i * 99999) % 0xFFFFFF).toString(16).padStart(6, '0');
+      state = await editProject(file, { type: 'brand', patch: { accent: `#${hex}` } }, state.etag);
+    }
+
+    // Verify targetRevId is evicted from inline history
+    assert.ok(!state.manifest.history.some(r => r.id === targetRevId));
+
+    // Verify restore of targetRevId from external history succeeds
+    const restored = await editProject(file, { type: 'restore', revisionId: targetRevId }, state.etag);
+    assert.equal(restored.manifest.scenes[0].text, 'Corrupt snapshot heal test');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
