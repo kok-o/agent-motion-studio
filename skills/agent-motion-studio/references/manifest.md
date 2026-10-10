@@ -17,7 +17,7 @@ Required fields are schemaVersion, ASCII id, integer seed, video, brand, assets,
 - assets: stable IDs with image/audio/video type and relative local path inside the project. Accepted import copies bytes into content-addressed assets and adds sha256/name. Keep old sources. Cap 24; MP4 <=512 MiB, PNG/JPEG <=20 MiB, supported audio <=100 MiB.
 - audio: narration/music require provider; none/file, or explicit procedural music. Optional gain -60 to 0 dB. Source-video audio is muted.
 - scenes: 1-12 stable IDs, positive integer durationFrames; film 30-1800 frames. v2 hard cuts; 210 frames at 30 fps are seven seconds.
-- history: up to 100 complete scenes/video/audio/brand snapshots. Restore keeps sources. Optional acceptance receipts contain operation ID, normalized intent hash and revision ID, with finite retention.
+- history: recent inline cache of at most 15 snapshots, target 200 KiB (newest kept even if larger). Complete scenes/video/audio/brand snapshots also live in `.history/<revisionId>.json`; normal post-commit pruning retains the latest 100 by createdAt, with filename tie-breaker. Pruning failure can leave extra files. The manifest still has a 1 MiB read limit. Older inline-only projects are readable and archived on accepted edits. Restore keeps sources. Optional acceptance receipts contain operation ID, normalized intent hash and revision ID, with separate finite retention.
 
 Read before editing:
 
@@ -35,8 +35,14 @@ Separate scene-edit.json:
 
 Do not patch ID/type; null removes optional fields. Other actions: add-scene, remove-scene, move-scene (zero-based index), music, composition, restore and restore-scene. Pass current ETag; stale operations fail without overwriting other work.
 
+Gain-only music preserves provider/asset; disable explicitly with provider none, never combine asset/provider. Aspect-only composition preserves omitted style/safeArea/fps. Batch children see preceding working state.
+
+Record revision IDs before edits. State returns inline history, not all external revision IDs. Restore reads either location and validates the result; missing/pruned revisions fail without committing. Intact inline copies heal missing/altered external copies before eviction; external-only history is not independently authenticated. Keep the entire hidden `.history/` folder when transferring a project; never manually replace accepted JSON to restore.
+
+Missing project returns PROJECT_NOT_FOUND/input/2; missing action/media/verify input FILE_NOT_FOUND/input/2; malformed CLI options/required arguments INVALID_COMMAND/input/2. Internal I/O is not globally remapped to input errors. Final read failure after publication returns INTERNAL_ERROR/project/4 and means the operation may already be committed. Save original action/ETag/revision, then read state/history/sources before deciding whether any retry is needed. Ordinary edit/import is not idempotent; do not blindly repeat with a fresh ETag. Generated Accept alone uses the saved original operation ID and receipt recovery in [generation](generation.md).
+
 Ordinary browser draft preview does not commit. Generated candidate has another draft/preview contract in [generation](generation.md); do not import a candidate merely to preview. Atomic generation accept records immutable source, patch, prior snapshot and receipt in one commit.
 
 Narration/captions are checked against measured audio; exact scene/candidate preview currently requires no narration/captions. Code, shell commands and remote asset URLs are invalid. Unsupported text, impossible layout, out-of-range trim and missing sources fail.
 
-Diagnostic resolved-manifest.json records local paths, intervals, hashes, layout and tools; it is not portable input. Transfer manifest and all assets including history sources. Private .studio jobs/credentials are excluded; offline accepted export needs no provider account.
+Diagnostic resolved-manifest.json records local paths, intervals, hashes, layout and tools; it is not portable input. Transfer manifest, all assets, `.history/` and previous exports. Private .studio jobs/credentials are excluded from public delivery; preserve them locally for unresolved generation recovery. Offline accepted export needs no provider account.

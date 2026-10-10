@@ -69,7 +69,7 @@ Open the **complete session URL** printed by the CLI. Keep it private. The edito
 
 Your copy lives under `projects/`, which Git ignores. To reopen it, repeat only the `studio` command. Stop the server with Ctrl+C. If the port is busy, add `--port 4174`. [Detailed guide](docs/GETTING_STARTED.md) · [Инструкция на русском](docs/STUDIO_RU.md).
 
-Already have a film? Open its existing `project.json` with `studio`; give that path to your agent. Do not run `new` or `init` again. Keep its assets and history together. [Agent continuation](docs/AGENT_WORKFLOW_RU.md#продолжение-существующего-фильма) · [Independent user trial](docs/USER_TRIAL_RU.md).
+Already have a film? Open its existing `project.json` with `studio`; give that path to your agent. Do not run `new` or `init` again. Transfer the complete project folder with assets, hidden `.history/` and previous exports. Restore history is finite; `project.json` alone contains only its recent inline cache in the development checkout. [History and edit contracts](docs/MANIFEST.md) · [Agent continuation](docs/AGENT_WORKFLOW_RU.md#продолжение-существующего-фильма) · [Independent user trial](docs/USER_TRIAL_RU.md).
 
 ## Use the built runtime
 
