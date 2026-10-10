@@ -223,7 +223,16 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
     // Non-fatal if post-commit pruning fails
   }
 
-  return readProject(file);
+  try {
+    return await readProject(file);
+  } catch (error) {
+    throw new StudioError(
+      'INTERNAL_ERROR',
+      'project',
+      `Manifest was committed but reading the result failed: ${error instanceof Error ? error.message : String(error)}`,
+      4
+    );
+  }
 }
 
 export type OrdinaryAction =

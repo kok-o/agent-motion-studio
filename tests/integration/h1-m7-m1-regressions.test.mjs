@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, readFile, writeFile, stat, readdir, rename, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { createProject, editProject, readProject } from '../../dist/project.js';
 import { normalizeError, StudioError } from '../../dist/errors.js';
@@ -131,6 +132,104 @@ test('M1: internal I/O errors and runtime failures are NOT globally converted to
   assert.equal(crashNorm.exitCode, 4);
   assert.equal(crashNorm.error.code, 'INTERNAL_ERROR');
   assert.equal(crashNorm.error.stage, 'render');
+});
+
+test('M1: internal I/O failure before publication preserves project, and failure after publication does not return false input error', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-m1-fault-'));
+  try {
+    const preloadScript = join(root, 'fault-preload.mjs');
+    await writeFile(preloadScript, `
+import fs from 'node:fs/promises';
+import { resolve, basename } from 'node:path';
+import { syncBuiltinESMExports } from 'node:module';
+
+const target = resolve(process.env.TEST_TARGET_PROJECT ?? '');
+const mode = process.env.TEST_FAULT_MODE;
+let manifestPublished = false;
+let injections = 0;
+
+const originalRename = fs.rename;
+const originalRead = fs.readFile;
+
+fs.rename = async (from, to) => {
+  const publishing = resolve(to) === target && basename(from).startsWith('.project-');
+  if (publishing && mode === 'precommit' && injections === 0) {
+    injections++;
+    throw Object.assign(new Error('Controlled internal publication ENOENT'), { code: 'ENOENT', syscall: 'rename' });
+  }
+  const result = await originalRename(from, to);
+  if (publishing) manifestPublished = true;
+  return result;
+};
+
+fs.readFile = async (...args) => {
+  if (mode === 'postcommit' && manifestPublished && injections === 0 && typeof args[0] === 'string' && resolve(args[0]) === target) {
+    injections++;
+    throw Object.assign(new Error('Controlled internal post-publication read ENOENT'), { code: 'ENOENT', syscall: 'read' });
+  }
+  return originalRead(...args);
+};
+
+syncBuiltinESMExports();
+`);
+
+    // 1. Precommit failure: failure during rename keeps previous state intact and returns exit 4 / non-input
+    {
+      const projDir = join(root, 'precommit-proj');
+      await createProject(projDir, { title: 'Precommit fault test' });
+      const projFile = join(projDir, 'project.json');
+      const stateBefore = await readProject(projFile);
+      const actionFile = join(root, 'action-pre.json');
+      await writeFile(actionFile, JSON.stringify({ type: 'brand', patch: { accent: '#abcdef' } }));
+
+      const res = spawnSync(process.execPath, [
+        '--import', pathToFileURL(preloadScript).href,
+        cli, 'edit', projFile, '--action', actionFile, '--if-match', stateBefore.etag, '--json'
+      ], { encoding: 'utf8', windowsHide: true, env: { ...process.env, TEST_TARGET_PROJECT: projFile, TEST_FAULT_MODE: 'precommit' } });
+
+      assert.equal(res.status, 4);
+      const payload = JSON.parse(res.stdout);
+      assert.equal(payload.exitCode, 4);
+      assert.notEqual(payload.error.stage, 'input');
+      assert.notEqual(payload.error.code, 'PROJECT_NOT_FOUND');
+      assert.notEqual(payload.error.code, 'FILE_NOT_FOUND');
+
+      // Verify project state was completely untouched
+      const stateAfter = await readProject(projFile);
+      assert.equal(stateAfter.etag, stateBefore.etag);
+      assert.equal(stateAfter.manifest.brand.accent, stateBefore.manifest.brand.accent);
+    }
+
+    // 2. Postcommit failure: failure after rename returns exit 4 / non-input, committed state and history are verified by independent read
+    {
+      const projDir = join(root, 'postcommit-proj');
+      await createProject(projDir, { title: 'Postcommit fault test' });
+      const projFile = join(projDir, 'project.json');
+      const stateBefore = await readProject(projFile);
+      const actionFile = join(root, 'action-post.json');
+      await writeFile(actionFile, JSON.stringify({ type: 'brand', patch: { accent: '#112233' } }));
+
+      const res = spawnSync(process.execPath, [
+        '--import', pathToFileURL(preloadScript).href,
+        cli, 'edit', projFile, '--action', actionFile, '--if-match', stateBefore.etag, '--json'
+      ], { encoding: 'utf8', windowsHide: true, env: { ...process.env, TEST_TARGET_PROJECT: projFile, TEST_FAULT_MODE: 'postcommit' } });
+
+      assert.equal(res.status, 4);
+      const payload = JSON.parse(res.stdout);
+      assert.equal(payload.exitCode, 4);
+      assert.notEqual(payload.error.stage, 'input');
+      assert.notEqual(payload.error.code, 'PROJECT_NOT_FOUND');
+      assert.notEqual(payload.error.code, 'FILE_NOT_FOUND');
+
+      // Verify the edit was indeed committed to disk and can be read independently
+      const stateAfter = await readProject(projFile);
+      assert.notEqual(stateAfter.etag, stateBefore.etag);
+      assert.equal(stateAfter.manifest.brand.accent, '#112233');
+      assert.ok(stateAfter.manifest.history.some(r => r.id === stateBefore.manifest.revision));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
