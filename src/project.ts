@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, rename, rm, realpath, open, stat, readdir } from 'node:fs/promises';
 import { resolve, dirname, join, extname, basename, relative, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { hashBytes, loadManifest, validateManifest, validateActionShape, assertSupportedText } from './spec.js';
 import { parseJsonInput } from './json-input.js';
 import { StudioError } from './errors.js';
@@ -68,6 +69,17 @@ function snapshot(manifest: Manifest, label: string): Revision {
   return { id: manifest.revision ?? randomUUID(), label, createdAt: new Date().toISOString(), scenes: structuredClone(manifest.scenes), video: structuredClone(manifest.video), audio: structuredClone(manifest.audio), brand: structuredClone(manifest.brand) };
 }
 
+function isValidRevision(parsed: unknown, revisionId: string): parsed is Revision {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const rev = parsed as Record<string, unknown>;
+  if (rev.id !== revisionId || typeof rev.label !== 'string' || typeof rev.createdAt !== 'string') return false;
+  if (!Array.isArray(rev.scenes) || rev.scenes.length === 0) return false;
+  if (!rev.video || typeof rev.video !== 'object') return false;
+  if (!rev.audio || typeof rev.audio !== 'object') return false;
+  if (!rev.brand || typeof rev.brand !== 'object') return false;
+  return true;
+}
+
 async function readExternalRevision(projectDir: string, revisionId: string): Promise<Revision | undefined> {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(revisionId)) return undefined;
   try {
@@ -78,8 +90,8 @@ async function readExternalRevision(projectDir: string, revisionId: string): Pro
     if (await realpath(filePath) !== filePath) return undefined;
     const content = await readFile(filePath, 'utf8');
     if (content.length > 10 * 1024 * 1024) return undefined;
-    const parsed = JSON.parse(content) as Revision;
-    if (parsed && typeof parsed === 'object' && parsed.id === revisionId && Array.isArray(parsed.scenes)) {
+    const parsed = JSON.parse(content) as unknown;
+    if (isValidRevision(parsed, revisionId)) {
       return parsed;
     }
   } catch {
@@ -131,10 +143,10 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
     await loadManifest(temporary);
 
     // 4. Ensure all revisions in before.history are validly preserved in .history.
-    // If an external snapshot file is missing or corrupted, heal it from the intact inline copy.
+    // If an external snapshot file is missing or corrupted/altered, heal it from the intact inline copy.
     for (const rev of before.history ?? []) {
       const existing = await readExternalRevision(canonicalDir, rev.id);
-      if (!existing || existing.id !== rev.id) {
+      if (!existing || !isDeepStrictEqual(existing, rev)) {
         const revTmp = join(historyDir, `.tmp-${randomUUID()}.json`);
         try {
           await writeFile(revTmp, json(rev), { flag: 'w' });
@@ -143,7 +155,7 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
           await rm(revTmp, { force: true });
         }
         const verified = await readExternalRevision(canonicalDir, rev.id);
-        if (!verified || verified.id !== rev.id) {
+        if (!verified || !isDeepStrictEqual(verified, rev)) {
           throw fail(`External history snapshot ${rev.id} is corrupt and cannot be healed.`);
         }
       }
@@ -153,7 +165,7 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
     for (const rev of allRevisions) {
       if (!budgetedInline.some(r => r.id === rev.id)) {
         const verified = await readExternalRevision(canonicalDir, rev.id);
-        if (!verified || verified.id !== rev.id) {
+        if (!verified || !isDeepStrictEqual(verified, rev)) {
           throw fail(`Cannot evict revision ${rev.id} from inline history: external snapshot is corrupt or missing.`);
         }
       }
@@ -167,6 +179,10 @@ async function commit(file: string, before: Manifest, next: Manifest, label: str
       stagedRevPath = join(historyDir, `${newRev.id}.json`);
     } finally {
       await rm(tmpRev, { force: true });
+    }
+    const verifiedNew = await readExternalRevision(canonicalDir, newRev.id);
+    if (!verifiedNew || !isDeepStrictEqual(verifiedNew, newRev)) {
+      throw fail(`Failed to persist external revision snapshot for ${newRev.id}.`);
     }
 
     // 6. Manifest publication

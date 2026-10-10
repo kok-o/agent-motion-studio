@@ -516,4 +516,90 @@ test('H1: corrupt external snapshot is healed from intact inline history before 
   }
 });
 
+test('H1: shape-corrupted external snapshot with matching ID is healed from intact inline history before eviction; restore succeeds', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-h1-shape-heal-'));
+  try {
+    await createProject(root, { title: 'Shape corrupted snapshot heal test' });
+    const file = join(root, 'project.json');
+    let state = await readProject(file);
+
+    const targetRevId = state.manifest.revision;
+    state = await editProject(file, { type: 'brand', patch: { accent: '#112233' } }, state.etag);
+
+    assert.ok(state.manifest.history.some(r => r.id === targetRevId));
+    const historyDir = join(root, '.history');
+    const targetSnapshotFile = join(historyDir, `${targetRevId}.json`);
+
+    // Write shape-corrupted JSON: matching ID, but scenes: [] and missing video/audio/brand
+    await writeFile(targetSnapshotFile, JSON.stringify({ id: targetRevId, scenes: [] }));
+
+    // Next edit should heal the external snapshot using the intact inline copy
+    state = await editProject(file, { type: 'brand', patch: { accent: '#445566' } }, state.etag);
+
+    // Verify external snapshot was healed with valid shape
+    const healed = JSON.parse(await readFile(targetSnapshotFile, 'utf8'));
+    assert.equal(healed.id, targetRevId);
+    assert.ok(Array.isArray(healed.scenes) && healed.scenes.length > 0);
+    assert.ok(healed.video && healed.audio && healed.brand);
+
+    // Perform 16 more edits to evict targetRevId from inline history
+    for (let i = 1; i <= 16; i++) {
+      const hex = ((i * 99999) % 0xFFFFFF).toString(16).padStart(6, '0');
+      state = await editProject(file, { type: 'brand', patch: { accent: `#${hex}` } }, state.etag);
+    }
+
+    assert.ok(!state.manifest.history.some(r => r.id === targetRevId));
+
+    // Verify restore succeeds
+    const restored = await editProject(file, { type: 'restore', revisionId: targetRevId }, state.etag);
+    assert.equal(restored.manifest.scenes[0].text, 'Shape corrupted snapshot heal test');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('H1: externally mutated snapshot with matching ID is healed from intact inline history before eviction; restore succeeds with original content', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'ams-h1-content-heal-'));
+  try {
+    await createProject(root, { title: 'Original retained content' });
+    const file = join(root, 'project.json');
+    let state = await readProject(file);
+
+    const targetRevId = state.manifest.revision;
+    state = await editProject(file, { type: 'brand', patch: { accent: '#112233' } }, state.etag);
+
+    const intact = state.manifest.history.find(r => r.id === targetRevId);
+    assert.ok(intact);
+    const historyDir = join(root, '.history');
+    const targetSnapshotFile = join(historyDir, `${targetRevId}.json`);
+
+    // Write valid JSON with matching ID but altered scene text
+    const altered = structuredClone(intact);
+    altered.scenes[0].text = 'Altered corrupted title';
+    await writeFile(targetSnapshotFile, JSON.stringify(altered));
+
+    // Next edit should heal the external snapshot because content differs from intact inline copy
+    state = await editProject(file, { type: 'brand', patch: { accent: '#445566' } }, state.etag);
+
+    // Verify external snapshot was restored to original content
+    const healed = JSON.parse(await readFile(targetSnapshotFile, 'utf8'));
+    assert.equal(healed.scenes[0].text, 'Original retained content');
+
+    // Perform 16 more edits to evict targetRevId from inline history
+    for (let i = 1; i <= 16; i++) {
+      const hex = ((i * 99999) % 0xFFFFFF).toString(16).padStart(6, '0');
+      state = await editProject(file, { type: 'brand', patch: { accent: `#${hex}` } }, state.etag);
+    }
+
+    assert.ok(!state.manifest.history.some(r => r.id === targetRevId));
+
+    // Verify restore returns original content, not altered text
+    const restored = await editProject(file, { type: 'restore', revisionId: targetRevId }, state.etag);
+    assert.equal(restored.manifest.scenes[0].text, 'Original retained content');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+
 
