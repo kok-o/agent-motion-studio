@@ -1,6 +1,81 @@
 # Текущее состояние Agent Motion Studio
 
-## Current — первый человеческий preview, 8 октября 2026
+## Current — план после аудита и исследования motion stack, 10 октября 2026
+
+Принятая база main перед этапом 1: `dbbe94c91255794393e9743621dffc46f471c183`, лицензионный PR #19 слит; application code — Apache-2.0. Пакет остаётся `0.1.0` experimental developer preview. Старые release/kit snapshots сохраняют свои исходные лицензии и stamps. Исправления этапа 1 и подготовка P4 находятся в открытом [PR #20](https://github.com/kok-o/agent-motion-studio/pull/20); merge и запуск пилота не выполнялись.
+
+[Единственный PLAN](PLAN_V0.2_RU.md) теперь начинает со стабилизации правок, реального сравнительного пилота, целевых creative/QA/setup улучшений и решения по renderer. [Каталог источников](MOTION_STACK_SOURCES.md) содержит /brag и все 20 позиций поста: короткие ссылки раскрыты, README каждого pinned snapshot получен и сверён с Git blob. Углублённое чтение ограничено явно указанными материалами, не всеми репозиториями; новые model/alternative workflow runs не выполнялись.
+
+### Реализация и подтверждение этапа 1 — надёжные проектные правки (H1, M7, M1)
+
+База: `dbbe94c91255794393e9743621dffc46f471c183`. Диагностические RED подтверждены на `dbbe94c` (H1: отказ на 40-й правке из-за потолка 1 MiB; M7: сброс music provider и video style/safeArea; M1: exit 4/INTERNAL_ERROR при отсутствующем файле проекта).
+
+#### Утверждённый контракт и исправления
+
+1. **H1 — хранение и удержание истории:**
+   - Внешнее хранилище: полные снимки ревизий сохраняются в `<projectDir>/.history/<revisionId>.json`. Нормальная post-commit ротация удерживает последние **100 снимков** по `createdAt`, с именем файла как tie-breaker. Сбой ротации не отменяет commit и может оставить больше файлов; история не бесконечна.
+   - Бюджет в манифесте: `manifest.history` в `project.json` содержит не более **15 последних ревизий**, целевой бюджет **200 КиБ**. Новейший снимок сохраняется даже при превышении этого бюджета; общий read limit 1 МиБ остаётся. `state` показывает inline-кэш, а не полный список external revisions; IDs нужно записывать до правок.
+   - Восстановление: `restore` и `restore-scene` прозрачно считывают ревизии как из встроенной `manifest.history`, так и из `.history/<revisionId>.json`.
+   - Переносимость: папка `.history/` расположена внутри каталога проекта; перенос или переименование **полной** директории с hidden history/assets/exports сохраняет доступ к retained истории. Один `project.json` не содержит весь архив.
+   - Защита состояния: попытка восстановить ревизию за пределами окна удержания или несуществующую ревизию безопасно отклоняется ошибкой `Revision does not exist.` с сохранением неизменными байтов файла и ETag проекта.
+   - Атомарность и отказоустойчивость: валидация манифеста строго предшествует записи или ротации архива (validation rejection не мутирует и не обрезает предыдущие снимки). Блокировка или недоступность директории `.history` вызывает явный безопасный отказ без потери первоначальных ревизий.
+   - Исцеление и контроль вытеснения: перед коммитом все ревизии из `before.history` проверяются во внешнем хранилище; при повреждении формы, несовпадении или отсутствии снимка в `.history/<revId>.json` (проверка полного содержимого через `isDeepStrictEqual` и проверка базовой структуры через `isValidRevision`) файл атомарно восстанавливается из целой встроенной копии манифеста. До публикации нового манифеста проверяется идентичность и валидность внешних снимков для всех ревизий, вытесняемых из встроенного бюджета (`budgetedInline`); при невозможности верификации коммит безопасно отклоняется, сохраняя встроенную историю.
+   - Логический порядок: ротация архива до 100 записей сортируется по логическому таймстампу `createdAt` внутри JSON ревизий, а не по файловому `mtime`, обеспечивая детерминированный порядок при копировании проекта.
+2. **M7 — частичные действия и последовательный batch:**
+   - Музыка: gain-only правка сохраняет текущий `provider` (`procedural` или `file`) и `asset`; отключение музыки требует явного `provider: 'none'`; одновременное указание `asset` и `provider` отклоняется ошибкой.
+   - Композиция: частичное изменение `video` (например, только `aspectRatio`) сохраняет действующие `style` и `safeArea`.
+   - Последовательный batch: дочерние действия внутри batch читают текущее рабочее состояние `next`, а не исходный `before`. Последовательные правки музыки (например, procedural/-12 → gain-only/-20 → gain-only/-6, либо file/asset → gain-only) сохраняют настройки предыдущих children; последовательные composition patches сохраняют ранее установленные `style` и `safeArea`. Невалидный child в batch атомарно отклоняет весь batch без изменения принятых байтов, ETag, ревизии и истории.
+3. **M1 — ошибки ввода и внутренняя таксономия ошибок:**
+   - Неверные опции CLI (неизвестные флаги вроде `--definitely-unknown-option`, невалидные значения вроде `--json=not-a-boolean`) возвращают машиночитаемый JSON-отказ с exit: 2, stage: `'input'`, code: `'INVALID_COMMAND'`.
+   - Внутренние ошибки ввода-вывода (ENOENT) из публикации, рендеринга и рантайма не маппятся глобально в пользовательские ошибки `FILE_NOT_FOUND` / `input` / 2; они классифицируются как внутренние сбои `INTERNAL_ERROR` (exit: 4, stage: `'render'`). Проверка отсутствия пользовательских входных файлов осуществляется на границе CLI (`PROJECT_NOT_FOUND`, `FILE_NOT_FOUND`).
+   - Внутреннее чтение проекта после завершения публикации (`commit()`) отделено от проверки пользовательского ввода: при отказе чтения уже опубликованного манифеста возвращается правдивый внутренний результат (`INTERNAL_ERROR`, stage: `'project'`, exit: 4), предотвращая ложное сообщение `PROJECT_NOT_FOUND` / `input` / 2 и ошибочный повтор уже принятой правки.
+   - В проверенных pre-commit отказах принятые байты и ETag неизменны; проверки validation rejection/инъекции I/O также сохраняют архив. Это не обещает неизменные bytes всех sidecars при любом отказе: healing может восстановить external copy до публикации. После публикации принятое состояние и сохранённая ревизия подтверждаются независимым чтением. Обычные edit/import нельзя слепо повторять; generated Accept согласуется по исходному intent/receipt.
+   - Отсутствующий файл проекта в `state`, `edit`, `preview`, `render` возвращает ошибку `PROJECT_NOT_FOUND` (stage: `'input'`, exit code: 2).
+   - Отсутствующий файл действия, импортируемого медиа или проверяемого видео возвращает `FILE_NOT_FOUND` (stage: `'input'`, exit code: 2).
+   - Отсутствие обязательных аргументов CLI команд возвращает `INVALID_COMMAND` (stage: `'input'`, exit code: 2).
+
+#### Фактические результаты проверок (VERIFIED)
+
+- **Интеграционный регрессионный сьют `tests/integration/h1-m7-m1-regressions.test.mjs` (15/15 PASS):**
+  - M1: корректный exit code 2 и stage `input` для всех сценариев отсутствующих файлов и параметров.
+  - M1: некорректные флаги CLI и невалидные значения опций возвращают машиночитаемый JSON-отказ с кодом `INVALID_COMMAND`, stage `input`, exit code 2 (не `INTERNAL_ERROR`/4).
+  - M1: внутренние ошибки I/O (ENOENT) не маппятся в `FILE_NOT_FOUND`/input, а сохраняют статус `INTERNAL_ERROR`/render/4; явные ошибки рантайма сохраняют свои stage и exit code.
+  - M1: pre-commit отказ ввода-вывода сохраняет неизменными байты, ETag и архив; post-commit отказ финального чтения возвращает exit 4 / non-input, а принятая правка и история подтверждаются независимым чтением.
+  - M7: сохранение музыкального провайдера/ассета и параметров композиции при частичных правках.
+  - M7 (sequential batch): цепочки дочерних действий внутри batch корректно наследуют настройки предыдущих children (procedural → gain, file asset → gain, procedural → none, style/safeArea → aspectRatio).
+  - M7 (atomic batch rejection): при ошибке любого child в batch все изменения изолируются, сохраняются исходные байты, ETag, ревизия и история проекта.
+  - H1 (3 сцены × 12 объектов): 150 последовательных принятых правок выполнены без ошибок. Размер `project.json` ограничен 257 842 байтами (< 1 МиБ). Восстановление ревизии сопоставимого размера (правка 75, 3 сцены) и существенно меньшего размера (правка 80, 1 сцена) успешно выполнено. Запрос ревизии старше 100 правок отклонён с сохранением ETag/байтов. Восстановление после перемещения папки проекта подтверждено.
+  - H1 (6 сцен × 20 объектов): 150 последовательных принятых правок выполнены без ошибок. Размер `project.json` ограничен 271 849 байтами (< 1 МиБ). Восстановление внешней ревизии 75 подтверждено.
+  - H1 (archive obstruction): при занятом файлом пути `.history` правка безопасно отклоняется с сохранением неизменными байтов, ETag и доступности исходной ревизии.
+  - H1 (rejected commit): отклонённый коммит (удаление единственной сцены) не изменяет и не удаляет ни один из 100 ранее сохранённых файлов архива.
+  - H1 (healing of corrupt external snapshot): при синтаксическом повреждении внешнего снимка ревизии на диске последующая правка автоматически восстанавливает его из целой встроенной копии; при последующем вытеснении ревизии из встроенного бюджета манифеста восстановление из внешнего архива выполняется успешно.
+  - H1 (healing of shape-corrupted external snapshot): неполный внешний снимок с правильным ID (`scenes: []`, отсутствие video/audio/brand) автоматически исцеляется из встроенной копии, предотвращая ошибку валидации при последующем восстановлении после вытеснения.
+  - H1 (healing of content-mutated external snapshot): внешний снимок с правильным ID, но изменённым текстом сцены автоматически восстанавливается до исходного состояния встроенной копии; восстановление после вытеснения возвращает аутентичный текст.
+- **`H1_SNAPSHOT_INTEGRITY.mjs` runner (3/3 PASS):** `SYNTAX_CORRUPTION` (PASS), `SHAPE_CORRUPTION_WITH_MATCHING_ID` (PASS), `VALID_BUT_CHANGED_CONTENT` (PASS).
+- **`EXECUTOR_CHECKS.mjs` runner (7/7 PASS):** `H1_3X12` (PASS), `H1_6X20` (PASS), `H1_ARCHIVE_BLOCKED` (PASS), `H1_REJECTED_COMMIT` (PASS), `M7_BATCH` (PASS), `M1_FLAGS` (PASS), `M1_INTERNAL_IO` (PASS).
+- **`artifacts/reviews/pr20-e4e8d23/M1_CLI_REVIEW.mjs` runner (10/10 PASS):** 6 malformed option checks, valid state + malformed action JSON, missing verify input, precommit ENOENT (exit 4 / INTERNAL_ERROR / render), postcommit ENOENT (exit 4 / INTERNAL_ERROR / project, manifest & archive preserved and verified).
+- **`npm run check`:** сборка `build` успешна, 89/89 модульных тестов прошли, аудит дистрибутива `check:release` пройден (231 файл, 212 ссылок).
+- **Hosted integration exact SHA `afd195c8f3ea2513829641b15d759f8c9d3642a8`:** [pull_request Verify](https://github.com/kok-o/agent-motion-studio/actions/runs/38048933805) и [push Verify](https://github.com/kok-o/agent-motion-studio/actions/runs/38048931413) завершились SUCCESS, **6/6 checks** суммарно. Логи PR media job подтверждают **49/49 PASS**, fail/skip 0, и `verify:package` status passed. Согласованный assertion — `INTERNAL_ERROR/project/4`; receipt/history/source/replay assertions сохранены. Прежний RED другого SHA не является результатом этого head.
+
+### P4 — подготовка пилота и согласование docs/skill, 10 октября 2026
+
+- [Бриф и протокол](PILOT_BRIEF_AND_RUBRIC_RU.md) — **PREPARED / NOT RUN**: нейтральная демонстрация функции AMS, общий screenshot и один разрешённый музыкальный WAV для обоих путей, без утверждений о недостатках конкурентов. Это self-run, не внешний заказ или доказательство спроса.
+- Две собственные просьбы человека остаются NOT RUN. Предписанные shortening/gain/aspect проверки выделены отдельно; они не засчитываются как человеческий выбор. Записаны просмотр/прослушивание, restore/reopen, пригодность, помощь и blockers.
+- Расходы не заполнены нулями: subscription quota, API usage/estimate/invoice, optional media и неизвестные charges учитываются отдельно. Setup/создание/правки разделены на активное время и ожидание. Ни одна оценка человека или сумма пилота не выдумана.
+- [Контракт проекта](MANIFEST.md), [generation recovery](GENERATION_RU.md) и [bundled skill](../skills/agent-motion-studio/SKILL.md) согласованы с H1/M7/M1 и receipt/replay: finite retention, newest-snapshot budget exception, hidden history, sequential batch, post-commit reconciliation без повторного применения.
+- Свежий локальный `npm run check` после docs/skill правок — **exit 0**, build, **89/89 unit**, distribution audit PASS; `quick_validate.py skills/agent-motion-studio` — exit 0 / Skill is valid. Финальные link/whitespace проверки повторяются перед commit. Runtime и тесты P4 не изменяет; полный локальный media suite не повторялся. CI `afd195c` выше — доказательство предыдущего head; финальный P4 head проверяется отдельно в Checks PR #20.
+
+Пилот, новые model/media calls, installs внешних skills, uploads, публикация и merge не запускались. P4 закрывает подготовку документов, не приёмку этапа 2. Посторонний `IDEA.md` сохранён вне commit.
+
+### Что остаётся открытым
+
+- Сравнение AMS с /brag + HyperFrames (Этап 2) — brief/rubric/protocol подготовлены; сам пилот **NOT RUN**, требует отдельного поручения и согласованных клиента/материалов/лимитов.
+- Независимый human preview/прослушивание/zero-help setup остаются **NOT RUN**. Приёмка владельцем fastgrep и прежняя Codex-сессия с помощью разработчика остаются своими отдельными фактами.
+- Смена renderer, заимствование стороннего кода/ассетов и публикация не выполнялись. Решение по renderer зависит от результатов сравнительного пилота.
+
+Ниже — датированное evidence прежних итераций. Старые «current», CI counts и поручения относятся к своим SHA; они не заменяют проверку новой базы или выполнение нового плана.
+
+## Сохранённая сводка — первый человеческий preview, 8 октября 2026
 
 **0.1.0 остаётся experimental developer preview.** Stable release и registry publication не объявлены. Текущая принятая база: [PR #17 слит, #16 закрыт](https://github.com/kok-o/agent-motion-studio/pull/17#issuecomment-6063071144), reviewed `9215464aedbbca4759ff3b12a415b4a5ca71711f` → squash main `4a9b65e518973af7ecac819df2347189b231f430`, деревья совпадают. Candidate CI — 6/6; отдельный [Verify main 37797002502](https://github.com/kok-o/agent-motion-studio/actions/runs/37797002502) — 3/3 SUCCESS, attempt 1. Actual main logs прочитаны: Windows 89/89, Ubuntu 88 + один ожидаемый Windows-only skip, sequential Linux integration 34/34, installed-package status passed.
 

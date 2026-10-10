@@ -20,6 +20,34 @@ Create with `new --dir film [--aspect 9:16|16:9] [--title TEXT]`. Title supplies
 
 API-agent initial creation permits batch until its first render. When scene preview is required, batch is rejected; use separate exact preview/edit operations. Global brand/format changes require a full export. Ordinary scene preview does not represent a global change.
 
+Partial actions use the current working state, including earlier children in a batch:
+
+- `{"type":"music","gainDb":-22}` preserves the selected provider and file asset; it does not enable music when provider is `none`. Explicit `provider:"none"` disables music. Select a file with `asset` or a generator with `provider:"procedural"`; supplying both asset and provider is rejected. When selecting a source/provider without gain, the current gain is retained (default −12 dB if absent). An empty music action is rejected.
+- `{"type":"composition","video":{"aspectRatio":"9:16"}}` preserves omitted `style`, `safeArea` and fps. Explicit supplied fields override them; invalid settings fail validation. A later child sees earlier music/video changes; invalid children reject the entire batch.
+
+## Retained history and portability
+
+Accepted edits save complete prior scenes/video/audio/brand snapshots in `.history/<revisionId>.json` beside `project.json`. Normal pruning retains the latest 100 snapshots ordered by snapshot `createdAt`, with revision filename as a tie-breaker, after manifest publication. Pruning failure is non-fatal and may leave more files; retention is finite, not an unlimited archive. Existing inline-only v1/v2 history remains readable and is preserved externally on an accepted edit.
+
+`manifest.history` is a recent inline cache, not the full archive: at most 15 snapshots with a target budget of 200 KiB. The newest snapshot is kept even if it alone exceeds that budget. The complete manifest still has a 1 MiB read limit; this change removes accumulated-history growth, not every possible size limit. Record revision IDs before edits; `state` returns inline history, not a listing of all external revisions.
+
+Before evicting an inline snapshot, the editor verifies its complete external contents against the inline copy and heals a missing/altered external file from that copy. If preservation cannot be verified, the commit fails. Restore resolves inline or external snapshots and validates the resulting project; a missing/pruned revision fails with `Revision does not exist.` without overwriting accepted state. External files are not a tamper-proof archive: after inline eviction there is no independent original copy for content comparison.
+
+Transfer the **whole project folder**, including hidden `.history/`, assets and previous exports. Copying only `project.json` loses older restore points. Keep source bytes and revision IDs; restore through `edit`, never by replacing accepted JSON. Full restore returns scenes/video/audio/brand while retaining imported sources and receipts; scene restore preserves current global settings.
+
+## Input errors and uncertain acknowledgements
+
+| Failure | Code / stage / exit | Next step |
+| --- | --- | --- |
+| Missing project input | `PROJECT_NOT_FOUND` / `input` / 2 | Correct the project path |
+| Missing action/media/verify input | `FILE_NOT_FOUND` / `input` / 2 | Correct the input path |
+| Missing required arguments or malformed CLI options | `INVALID_COMMAND` / `input` / 2 | Correct the invocation |
+| Malformed action JSON | `INVALID_JSON` / `input` / 2 | Correct UTF-8 JSON |
+| Unclassified internal I/O failure | `INTERNAL_ERROR` / `render` / 4 | Inspect diagnostics; do not infer that input is missing |
+| Final read failed after manifest publication | `INTERNAL_ERROR` / `project` / 4 | Reconcile accepted state before any retry |
+
+Explicit runtime errors retain their own code/stage/exit. Exit 4 alone does not prove that an edit failed before commit. If the message says the manifest was committed but reading the result failed, save the original action/ETag/revision, read fresh `state` and inspect history/sources. The accepted operation may already be present; ordinary `edit`/`import` have no general idempotent replay guarantee. Do not blindly resend them with a new ETag. For generated Accept, preserve the original operation ID, draft and preview binding and use [receipt recovery](GENERATION_RU.md); its same-intent replay reconciles acknowledgement without overwriting later edits/restore.
+
 The schema accepts v1 and v2. v1 retains its original motion rendering behavior. v2 adds `video` assets, `video` scenes with `trimStartSeconds`, optional accepted-source `sha256`/`name`, `revision` and bounded composition `history`. Generated-take acceptance can also write up to 100 `operationReceipts`, each containing `operationId`, `requestHash` and `revisionId`, in the same project commit as the scene/source change. See [the studio format and CLI actions](STUDIO_RU.md) and [generation workflow](GENERATION_RU.md). Imported v2 source files must not be edited in place: import a replacement and select its new asset ID instead. v2 scene boundaries are hard cuts; v1 kinetic transitions remain unchanged.
 
 Receipts survive restore and ordinary edits. Their revision may have left the bounded scene history; this does not invalidate proof of an earlier accepted operation. Receipt metadata does not change the render fingerprint. Receipt retention is finite: an absent old receipt does not prove an operation never ran. New code reads older v1/v2 files, but an older binary with a strict schema may reject projects containing the new optional field. Private generation jobs, prompts and credentials do not belong in the accepted manifest.

@@ -1,6 +1,7 @@
-import { mkdir, readFile, writeFile, rename, rm, realpath, open, stat } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, rm, realpath, open, stat, readdir } from 'node:fs/promises';
 import { resolve, dirname, join, extname, basename, relative, sep, isAbsolute } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { hashBytes, loadManifest, validateManifest, validateActionShape, assertSupportedText } from './spec.js';
 import { parseJsonInput } from './json-input.js';
 import { StudioError } from './errors.js';
@@ -36,13 +37,28 @@ export async function createProject(directory: string, options: { aspect?: Manif
 }
 
 export async function readProject(file: string) {
-  const content = await readFile(file);
+  let content: Buffer;
+  try { content = await readFile(resolve(file)); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new StudioError('PROJECT_NOT_FOUND', 'input', `Project file does not exist: ${file}`, 2);
+    }
+    throw error;
+  }
   const manifest = validateManifest(parseJsonInput(content.toString('utf8'), file));
   return { manifest, etag: hashBytes(content) };
 }
 
 export async function withProjectLock<T>(file: string, task: () => Promise<T>): Promise<T> {
-  const canonical = await realpath(file); const lockPath = `${canonical}.edit-lock`;
+  let canonical: string;
+  try { canonical = await realpath(file); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new StudioError('PROJECT_NOT_FOUND', 'input', `Project file does not exist: ${file}`, 2);
+    }
+    throw error;
+  }
+  const lockPath = `${canonical}.edit-lock`;
   let lock;
   try { lock = await open(lockPath, 'wx'); await lock.writeFile(json({ pid: process.pid })); }
   catch (error) { if ((error as NodeJS.ErrnoException).code === 'EEXIST') throw new StudioError('PROJECT_BUSY', 'project', 'Another edit/export is using this project. Try again after it finishes.', 2); throw error; }
@@ -53,22 +69,170 @@ function snapshot(manifest: Manifest, label: string): Revision {
   return { id: manifest.revision ?? randomUUID(), label, createdAt: new Date().toISOString(), scenes: structuredClone(manifest.scenes), video: structuredClone(manifest.video), audio: structuredClone(manifest.audio), brand: structuredClone(manifest.brand) };
 }
 
+function isValidRevision(parsed: unknown, revisionId: string): parsed is Revision {
+  if (!parsed || typeof parsed !== 'object') return false;
+  const rev = parsed as Record<string, unknown>;
+  if (rev.id !== revisionId || typeof rev.label !== 'string' || typeof rev.createdAt !== 'string') return false;
+  if (!Array.isArray(rev.scenes) || rev.scenes.length === 0) return false;
+  if (!rev.video || typeof rev.video !== 'object') return false;
+  if (!rev.audio || typeof rev.audio !== 'object') return false;
+  if (!rev.brand || typeof rev.brand !== 'object') return false;
+  return true;
+}
+
+async function readExternalRevision(projectDir: string, revisionId: string): Promise<Revision | undefined> {
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(revisionId)) return undefined;
+  try {
+    const canonicalDir = await realpath(projectDir);
+    const historyDir = join(canonicalDir, '.history');
+    if (await realpath(historyDir) !== historyDir) return undefined;
+    const filePath = join(historyDir, `${revisionId}.json`);
+    if (await realpath(filePath) !== filePath) return undefined;
+    const content = await readFile(filePath, 'utf8');
+    if (content.length > 10 * 1024 * 1024) return undefined;
+    const parsed = JSON.parse(content) as unknown;
+    if (isValidRevision(parsed, revisionId)) {
+      return parsed;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 async function commit(file: string, before: Manifest, next: Manifest, label: string, operation?: Omit<OperationReceipt, 'revisionId'>, beforeManifestRename?: () => void) {
   next.schemaVersion = 2;
-  next.history = [...(before.history ?? []), snapshot(before, label)].slice(-100);
+  const newRev = snapshot(before, label);
+  const allRevisions = [...(before.history ?? []), newRev];
+  const budgetedInline: Revision[] = [];
+  let inlineBytes = 0;
+  for (let i = allRevisions.length - 1; i >= 0; i--) {
+    const rev = allRevisions[i];
+    const revSize = Buffer.byteLength(json(rev), 'utf8');
+    if (budgetedInline.length >= 15 || (budgetedInline.length >= 1 && inlineBytes + revSize > 200 * 1024)) {
+      break;
+    }
+    budgetedInline.unshift(rev);
+    inlineBytes += revSize;
+  }
+  next.history = budgetedInline;
   next.revision = randomUUID();
   if (operation) next.operationReceipts = [...(before.operationReceipts ?? []), { ...operation, revisionId: next.revision }].slice(-100);
+
+  // 1. Validate manifest before modifying any filesystem state
   validateManifest(next);
-  const temporary = join(dirname(resolve(file)), `.project-${randomUUID()}.json`);
+
+  // 2. Ensure project directory and .history directory are safe and accessible
+  const projectDir = dirname(resolve(file));
+  const canonicalDir = await realpath(projectDir);
+  const historyDir = join(canonicalDir, '.history');
+  try {
+    await mkdir(historyDir, { recursive: true });
+    if (await realpath(historyDir) !== historyDir) {
+      throw fail('The history directory must not be a symlink.');
+    }
+  } catch (error) {
+    throw fail(`Cannot access history directory: ${(error as Error).message}`);
+  }
+
+  // 3. Write temporary manifest file and verify it loads
+  const temporary = join(canonicalDir, `.project-${randomUUID()}.json`);
+  let stagedRevPath: string | undefined;
   try {
     await writeFile(temporary, json(next), { flag: 'wx' });
     await loadManifest(temporary);
-    // Once rename is attempted, a thrown error must not assert that publication
-    // did not happen. Receipts, not the exception, resolve an uncertain outcome.
+
+    // 4. Ensure all revisions in before.history are validly preserved in .history.
+    // If an external snapshot file is missing or corrupted/altered, heal it from the intact inline copy.
+    for (const rev of before.history ?? []) {
+      const existing = await readExternalRevision(canonicalDir, rev.id);
+      if (!existing || !isDeepStrictEqual(existing, rev)) {
+        const revTmp = join(historyDir, `.tmp-${randomUUID()}.json`);
+        try {
+          await writeFile(revTmp, json(rev), { flag: 'w' });
+          await rename(revTmp, join(historyDir, `${rev.id}.json`));
+        } finally {
+          await rm(revTmp, { force: true });
+        }
+        const verified = await readExternalRevision(canonicalDir, rev.id);
+        if (!verified || !isDeepStrictEqual(verified, rev)) {
+          throw fail(`External history snapshot ${rev.id} is corrupt and cannot be healed.`);
+        }
+      }
+    }
+
+    // 5. Verify that any revision about to be evicted from inline history is safely preserved externally
+    for (const rev of allRevisions) {
+      if (!budgetedInline.some(r => r.id === rev.id)) {
+        const verified = await readExternalRevision(canonicalDir, rev.id);
+        if (!verified || !isDeepStrictEqual(verified, rev)) {
+          throw fail(`Cannot evict revision ${rev.id} from inline history: external snapshot is corrupt or missing.`);
+        }
+      }
+    }
+
+    // 6. Write the new revision snapshot atomically
+    const tmpRev = join(historyDir, `.tmp-${randomUUID()}.json`);
+    try {
+      await writeFile(tmpRev, json(newRev), { flag: 'wx' });
+      await rename(tmpRev, join(historyDir, `${newRev.id}.json`));
+      stagedRevPath = join(historyDir, `${newRev.id}.json`);
+    } finally {
+      await rm(tmpRev, { force: true });
+    }
+    const verifiedNew = await readExternalRevision(canonicalDir, newRev.id);
+    if (!verifiedNew || !isDeepStrictEqual(verifiedNew, newRev)) {
+      throw fail(`Failed to persist external revision snapshot for ${newRev.id}.`);
+    }
+
+    // 6. Manifest publication
     beforeManifestRename?.();
     await rename(temporary, resolve(file));
-  } finally { await rm(temporary, { force: true }); }
-  return readProject(file);
+    stagedRevPath = undefined;
+  } catch (error) {
+    if (stagedRevPath) {
+      await rm(stagedRevPath, { force: true });
+    }
+    throw error;
+  } finally {
+    await rm(temporary, { force: true });
+  }
+
+  // 7. Prune retained history to 100 entries using logical createdAt timestamps
+  try {
+    const entries = await readdir(historyDir, { withFileTypes: true });
+    const revFiles = entries.filter(e => e.isFile() && e.name.endsWith('.json') && !e.name.startsWith('.tmp-'));
+    if (revFiles.length > 100) {
+      const withStats = await Promise.all(revFiles.map(async f => {
+        try {
+          const content = await readFile(join(historyDir, f.name), 'utf8');
+          const parsed = JSON.parse(content);
+          const time = typeof parsed.createdAt === 'string' ? Date.parse(parsed.createdAt) : 0;
+          return { name: f.name, time: isNaN(time) ? 0 : time };
+        } catch {
+          return { name: f.name, time: 0 };
+        }
+      }));
+      withStats.sort((a, b) => a.time - b.time || a.name.localeCompare(b.name));
+      const toRemove = withStats.slice(0, withStats.length - 100);
+      for (const r of toRemove) {
+        await rm(join(historyDir, r.name), { force: true });
+      }
+    }
+  } catch {
+    // Non-fatal if post-commit pruning fails
+  }
+
+  try {
+    return await readProject(file);
+  } catch (error) {
+    throw new StudioError(
+      'INTERNAL_ERROR',
+      'project',
+      `Manifest was committed but reading the result failed: ${error instanceof Error ? error.message : String(error)}`,
+      4
+    );
+  }
 }
 
 export type OrdinaryAction =
@@ -77,7 +241,7 @@ export type OrdinaryAction =
   | { type: 'remove-scene'; sceneId: string }
   | { type: 'move-scene'; sceneId: string; index: number }
   | { type: 'music'; asset?: string; gainDb?: number; provider?: 'none' | 'procedural' }
-  | { type: 'composition'; video: Manifest['video'] }
+  | { type: 'composition'; video: Partial<Manifest['video']> & { aspectRatio: Manifest['video']['aspectRatio'] } }
   | { type: 'brand'; patch: Partial<Omit<Manifest['brand'], 'font'>> };
 export type ProjectAction = OrdinaryAction
   | { type: 'batch'; actions: OrdinaryAction[]; label?: string }
@@ -102,7 +266,7 @@ const palettes = {
 };
 
 /** Shared validation/application for single edits and each batch child. No IO. */
-function applyAction(next: Manifest, before: Manifest, action: ProjectAction, inBatch = false) {
+async function applyAction(next: Manifest, before: Manifest, action: ProjectAction, projectDir: string, inBatch = false) {
   const allowed: Record<ProjectAction['type'], string[]> = {
     'add-scene': ['type', 'scene'], 'edit-scene': ['type', 'sceneId', 'patch'], 'remove-scene': ['type', 'sceneId'], 'move-scene': ['type', 'sceneId', 'index'],
     music: ['type', 'asset', 'gainDb', 'provider'], composition: ['type', 'video'], brand: ['type', 'patch'], batch: ['type', 'actions', 'label'], restore: ['type', 'revisionId'], 'restore-scene': ['type', 'revisionId', 'sceneId']
@@ -122,10 +286,11 @@ function applyAction(next: Manifest, before: Manifest, action: ProjectAction, in
   switch (action.type) {
     case 'batch': {
       if (!Array.isArray(action.actions) || action.actions.length < 1 || action.actions.length > 32 || (action.label !== undefined && (typeof action.label !== 'string' || !action.label.trim() || action.label.length > 80 || /[\r\n]/.test(action.label)))) throw fail('Batch requires 1–32 ordinary actions and an optional 1–80 character single-line label.');
-      action.actions.forEach((child, childIndex) => {
-        try { applyAction(next, before, child, true); }
+      for (const [childIndex, child] of action.actions.entries()) {
+        try { await applyAction(next, before, child, projectDir, true); }
         catch (error) { throw fail(`Batch action[${childIndex}]: ${error instanceof Error ? error.message : String(error)}`); }
-      }); break;
+      }
+      break;
     }
     case 'add-scene':
       validateActionShape('scene', action.scene); sceneReferences(action.scene);
@@ -138,20 +303,53 @@ function applyAction(next: Manifest, before: Manifest, action: ProjectAction, in
     case 'move-scene':
       if (!Number.isInteger(action.index) || action.index < 0 || action.index >= next.scenes.length) throw fail('Invalid scene position.');
       next.scenes.splice(action.index, 0, next.scenes.splice(index, 1)[0]); break;
-    case 'music':
+    case 'music': {
       if ((action.asset !== undefined && !id(action.asset)) || (action.provider !== undefined && !['none', 'procedural'].includes(action.provider)) || (action.gainDb !== undefined && (!Number.isFinite(action.gainDb) || action.gainDb < -60 || action.gainDb > 0))) throw fail('Invalid music asset, provider or gainDb.');
       if (action.asset && action.provider) throw fail('Choose either a file asset or a music provider.');
-      if (action.asset && next.assets[action.asset]?.type !== 'audio') throw fail('Music requires an imported audio asset.');
-      next.audio.music = action.asset ? { provider: 'file', asset: action.asset, gainDb: action.gainDb ?? -12 } : { provider: action.provider ?? 'none', gainDb: action.gainDb ?? -12 }; break;
-    case 'composition': validateActionShape('video', action.video); next.video = structuredClone(action.video); break;
+      if (action.asset === undefined && action.provider === undefined && action.gainDb === undefined) throw fail('Music action requires at least one of asset, provider or gainDb.');
+      if (action.asset) {
+        if (next.assets[action.asset]?.type !== 'audio') throw fail('Music requires an imported audio asset.');
+        next.audio.music = { provider: 'file', asset: action.asset, gainDb: action.gainDb ?? next.audio.music.gainDb ?? -12 };
+      } else if (action.provider !== undefined) {
+        next.audio.music = { provider: action.provider, gainDb: action.gainDb ?? next.audio.music.gainDb ?? -12 };
+      } else if (action.gainDb !== undefined) {
+        const current = next.audio.music;
+        if (current.provider === 'file' && current.asset) {
+          next.audio.music = { provider: 'file', asset: current.asset, gainDb: action.gainDb };
+        } else if (current.provider === 'procedural') {
+          next.audio.music = { provider: 'procedural', gainDb: action.gainDb };
+        } else {
+          next.audio.music = { provider: 'none', gainDb: action.gainDb };
+        }
+      }
+      break;
+    }
+    case 'composition': {
+      if (!action.video || typeof action.video !== 'object') throw fail('Composition action requires video settings.');
+      const mergedVideo = Object.assign({ fps: 30 }, next.video, action.video);
+      validateActionShape('video', mergedVideo);
+      next.video = mergedVideo as Manifest['video'];
+      break;
+    }
     case 'brand':
       validateActionShape('brand', action.patch);
       next.brand = { ...next.brand, ...(action.patch.theme ? palettes[action.patch.theme] : {}), ...action.patch }; break;
     case 'restore': case 'restore-scene': {
-      const revision = before.history?.find(item => item.id === action.revisionId);
+      let revision = before.history?.find(item => item.id === action.revisionId);
+      if (!revision) {
+        revision = await readExternalRevision(projectDir, action.revisionId);
+      }
       if (!revision) throw fail('Revision does not exist.');
-      if (action.type === 'restore') { next.scenes = structuredClone(revision.scenes); next.video = structuredClone(revision.video); next.audio = structuredClone(revision.audio); next.brand = structuredClone(revision.brand); }
-      else { const scene = revision.scenes.find(item => item.id === action.sceneId); if (!scene) throw fail('Scene did not exist in that revision.'); next.scenes[index] = structuredClone(scene); }
+      if (action.type === 'restore') {
+        next.scenes = structuredClone(revision.scenes);
+        next.video = structuredClone(revision.video);
+        next.audio = structuredClone(revision.audio);
+        next.brand = structuredClone(revision.brand);
+      } else {
+        const scene = revision.scenes.find(item => item.id === action.sceneId);
+        if (!scene) throw fail('Scene did not exist in that revision.');
+        next.scenes[index] = structuredClone(scene);
+      }
       break;
     }
   }
@@ -162,7 +360,7 @@ export async function editProject(file: string, action: ProjectAction, expectedE
     const { manifest: before, etag } = await readProject(file);
     if (expectedEtag && expectedEtag !== etag) throw new StudioError('PROJECT_CONFLICT', 'project', 'Project changed elsewhere. Reload before editing.', 2);
     const next = structuredClone(before);
-    applyAction(next, before, action);
+    await applyAction(next, before, action, dirname(resolve(file)));
     return commit(file, before, next, action.type === 'batch' ? action.label ?? 'batch' : action.type);
   });
 }

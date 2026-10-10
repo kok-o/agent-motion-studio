@@ -120,9 +120,11 @@ node dist/cli.js edit projects/my-generated-remix/project.json --action restore-
 node dist/cli.js render projects/my-generated-remix/project.json --out projects/my-generated-remix/restored --no-cache --json
 ```
 
-`restore-scene.json`: `{"type":"restore-scene","sceneId":"first-pour","revisionId":"REVISION_WITH_PREVIOUS_SCENE"}`. Найдите нужный snapshot в history через `state`. Для reject/stop используйте `generation reject|stop PROJECT --job ID --json`. Accepted take восстанавливается через project history; reject не отменяет accepted commit.
+`restore-scene.json`: `{"type":"restore-scene","sceneId":"first-pour","revisionId":"REVISION_WITH_PREVIOUS_SCENE"}`. Сохраните revision ID до принятия; `state` показывает только недавнюю inline history, более старые retained snapshots находятся в `.history/`. Для переноса и retention см. [контракт проекта](MANIFEST.md). Для reject/stop используйте `generation reject|stop PROJECT --job ID --json`. Accepted take восстанавливается через project history; reject не отменяет accepted commit.
 
 Atomic `operationReceipts` в manifest позволяют распознать уже принятый operation после сбоя между project commit и job ack, включая последующие edit/restore. Receipt не содержит prompt, credentials или URLs. Если исход принятия доказать нельзя, service возвращает diagnostic вместо автоматического повторного применения. Новая версия читает прежние v1/v2; старый бинарник со строгой schema может не читать новое optional receipt поле.
+
+Если manifest уже опубликован, но финальное чтение результата не удалось, возвращается `INTERNAL_ERROR`, stage `project`, exit 4. Это не `PROJECT_NOT_FOUND/input/2` и не доказательство отказа до commit: источник, предыдущий snapshot и receipt могут уже быть сохранены. Сверьте свежий state и исходный intent, затем используйте тот же Accept для acknowledgement по процедуре ниже. Receipts сохраняются при edit/restore независимо от окна history; отсутствие старого receipt не доказывает, что операция не выполнялась. Не создавайте новый operation ID и не редактируйте receipt вручную.
 
 Если candidate исчез или повредился до нового Accept и сервис доказал отказ **до commit**, он очищает только этот новый acceptance intent и инвалидирует его preview. Accepted bytes/история не меняются. Скачайте результат прежнего remote job, соберите новый точный preview и явно примите его; новая generation не требуется.
 
