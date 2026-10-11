@@ -11,7 +11,7 @@ import { normalizeError, StudioError } from './errors.js';
 import { previewScene } from './preview.js';
 import { GenerationService } from './generation.js';
 import type { GenerationProvider } from './generation-provider.js';
-import { VisualTickets, visualETag, assertVisualETag, validateVisualAction, visualSpec, visualSelectedObject } from './visual-editor.js';
+import { VisualTickets, visualETag, assertVisualETag, validateVisualAction, visualSpec, visualSelectedObject, visualObjectIntent } from './visual-editor.js';
 
 async function body(request: IncomingMessage, limit: number) {
   if (Number(request.headers['content-length'] ?? 0) > limit) throw new Error('Request exceeds upload limit.');
@@ -163,9 +163,10 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       if (request.method === 'POST' && (job.status === 'running' || previewBusy)) { send({ error: 'Render is running. Wait before editing.' }, 409); return; }
       if (request.method === 'POST' && url.pathname === '/api/visual/preview') {
         const selectedId = visualSelectedObject(request.headers['x-ams-selected-object'], request.rawHeaders);
+        const intent = visualObjectIntent(request.headers['x-ams-object-intent'], request.rawHeaders);
         const expected = visualETag(request.headers['if-match']), state = await readProject(file);
         assertVisualETag(state.etag, expected);
-        const action = validateVisualAction(state.manifest, JSON.parse((await body(request, 1024 * 1024)).toString()), selectedId);
+        const action = validateVisualAction(state.manifest, JSON.parse((await body(request, 1024 * 1024)).toString()), selectedId, intent);
         // Recheck busy after async body/state reads, before starting work.
         if (previewBusy || visualApplying || job.status === 'running') throw new StudioError('VISUAL_BUSY', 'visual', 'Render is running.');
         previewBusy = true;
@@ -174,7 +175,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
           const work = previewScene(file, action, expected, output); previewWork = work;
           const result = await work;
           previews.set(id, join(output, 'output.mp4'));
-          if (!result.stale) visualTickets.add(id, expected, action, selectedId);
+          if (!result.stale) visualTickets.add(id, expected, action, selectedId, intent);
           while (previews.size > 2) { const old = previews.keys().next().value!; previews.delete(old); await rm(join(previewRoot, old), { recursive: true, force: true }); }
           send({ ...result, previewId: result.stale ? null : id, url: `/previews/${id}/output.mp4` });
         } catch (error) { await rm(output, { recursive: true, force: true }); throw error; }
@@ -183,13 +184,14 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       }
       if (request.method === 'POST' && url.pathname === '/api/visual/apply') {
         const selectedId = visualSelectedObject(request.headers['x-ams-selected-object'], request.rawHeaders);
+        const intent = visualObjectIntent(request.headers['x-ams-object-intent'], request.rawHeaders);
         const expected = visualETag(request.headers['if-match']);
         const input = JSON.parse((await body(request, 1024 * 1024)).toString());
         if (!input || Object.keys(input).some(key => !['previewId', 'action'].includes(key))) throw new StudioError('VISUAL_INPUT', 'visual', 'Expected previewId and exact action.');
         const state = await readProject(file); assertVisualETag(state.etag, expected);
-        const action = validateVisualAction(state.manifest, input.action, selectedId);
+        const action = validateVisualAction(state.manifest, input.action, selectedId, intent);
         if (previewBusy || visualApplying || job.status === 'running') throw new StudioError('VISUAL_BUSY', 'visual', 'Render or Apply is running.');
-        visualTickets.consume(input.previewId, expected, action, selectedId);
+        visualTickets.consume(input.previewId, expected, action, selectedId, intent);
         visualApplying = true;
         try { send({ ...await editProject(file, action, expected), committed: true }); }
         catch (error) {

@@ -26,10 +26,10 @@ test('pending render cannot unlock invalid styles; other edits preserve errors u
   class Input extends Element {} class Button extends Element {} class Select extends Element {} class Textarea extends Element {}
   class Video extends Element {} class Canvas extends Element {} class SVG extends Element {} class Dialog extends Element {}
   const inputs=['visual-x','visual-y','visual-width','visual-height','visual-frame','duration','visual-color','visual-font-size','visual-stroke','visual-stroke-width','visual-radius'];
-  const buttons=['save-scene','preview-scene','visual-cancel','reload','visual-dialog-apply','visual-dialog-discard','visual-dialog-stay','visual-layer-up','visual-layer-down'];
-  const selects=['visual-mode','visual-weight','visual-align'];
+  const buttons=['save-scene','preview-scene','visual-cancel','reload','visual-dialog-apply','visual-dialog-discard','visual-dialog-stay','visual-layer-up','visual-layer-down','visual-add-text','visual-add-rect','visual-add-ellipse','visual-add-image','visual-image-add','visual-image-cancel'];
+  const selects=['visual-mode','visual-weight','visual-align','visual-image-asset'];
   function node(id) {
-    if(!nodes.has(id)) { const C=inputs.includes(id)?Input:buttons.includes(id)?Button:selects.includes(id)?Select:id==='visual-text'?Textarea:id==='scene-preview'?Video:id==='stage'?Canvas:id==='visual-overlay'?SVG:id==='visual-dialog'?Dialog:Element;nodes.set(id,new C()); }
+    if(!nodes.has(id)) { const C=inputs.includes(id)?Input:buttons.includes(id)?Button:selects.includes(id)?Select:id==='visual-text'?Textarea:id==='scene-preview'?Video:id==='stage'?Canvas:id==='visual-overlay'?SVG:['visual-dialog','visual-image-dialog'].includes(id)?Dialog:Element;nodes.set(id,new C()); }
     return nodes.get(id);
   }
   node('visual-stage-space').clientWidth=540;
