@@ -1,12 +1,13 @@
-import { readFile, writeFile, rm, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, rm, mkdir, rename } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { readProject, patchScene, generatedTakeRequestHash, type GeneratedTakeDraft, type ProjectAction } from './project.js';
 import { loadManifest, hashBytes } from './spec.js';
 import { encodeScene } from './pipeline.js';
-import { findTools } from './runtime.js';
+import { findTools, runProcess } from './runtime.js';
 import { verifyVideo } from './media.js';
 import { StudioError } from './errors.js';
+import { prepareSceneAudio } from './audio.js';
 
 /** Render-only composition. Validate the whole accepted project before pruning history-only assets. */
 export async function previewGeneratedTake(file: string, draft: GeneratedTakeDraft, candidatePath: string, output: string) {
@@ -49,17 +50,41 @@ export async function previewScene(file: string, action: Extract<ProjectAction, 
   const index = manifest.scenes.findIndex(scene => scene.id === action.sceneId);
   if (index < 0) throw new Error('Scene does not exist.');
   manifest.scenes[index] = patchScene(manifest.scenes[index], action.patch);
-  if (manifest.scenes.some(scene => scene.narration || scene.captions)) throw new Error('Scene preview currently supports projects without narration/captions. Full export remains available.');
+  if (manifest.audio.narration.provider === 'edge' && manifest.scenes.some(scene => scene.narration)) throw new StudioError('ONLINE_PREVIEW_UNSUPPORTED', 'preview', 'Online Edge narration is not available in scene preview. Use offline file narration.', 2);
   const temporary = join(dirname(file), `.preview-${randomUUID()}.json`);
+  const work = join(output, `.preview-work-${randomUUID()}`);
+  let failure: { error: unknown } | undefined;
   try {
     await writeFile(temporary, JSON.stringify(manifest), { flag: 'wx' });
     const spec = await loadManifest(temporary), scene = spec.scenes[index], tools = findTools();
-    await mkdir(join(output, 'logs'), { recursive: true });
-    const video = join(output, 'output.mp4');
-    await encodeScene(spec, scene, video, output, tools);
-    const verification = await verifyVideo(video, tools, { width: spec.width, height: spec.height, totalFrames: scene.durationFrames, fps: 30 });
+    await mkdir(join(work, 'logs'), { recursive: true });
+    const silent = join(work, 'scene.mp4'), video = join(work, 'output.mp4');
+    const audio = await prepareSceneAudio(spec, scene, work, tools);
+    // prepareAudio resolves file captions onto the global frame timeline before rendering.
+    await encodeScene(spec, scene, silent, work, tools);
+    if (audio) {
+      await runProcess(tools.ffmpeg, ['-y', '-hide_banner', '-loglevel', 'error', '-i', silent, '-i', audio,
+        '-map', '0:v:0', '-map', '1:a:0', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
+        '-t', String(scene.durationFrames / 30), '-movflags', '+faststart', video],
+      { timeoutMs: 300000, logPath: join(work, 'logs', 'mux.log') });
+    } else await rename(silent, video);
+    const verification = await verifyVideo(video, tools, { width: spec.width, height: spec.height, totalFrames: scene.durationFrames, fps: 30, audio: Boolean(audio) });
+    if (audio && (Number(verification.audio?.sampleRate) !== 48000 || verification.audio?.channels !== 2)) throw new StudioError('AUDIO_MISMATCH', 'preview', 'Expected 48kHz stereo preview audio.', 4);
     for (const asset of Object.values(spec.assets)) if (hashBytes(await readFile(asset.absolutePath)) !== asset.hash) throw new Error('Source changed while preparing preview; rebuild it.');
     const start = scene.type === 'video' ? scene.trimStartSeconds ?? 0 : 0;
-    return { sceneId: scene.id, projectHash: etag, durationSeconds: scene.durationFrames / 30, totalFrames: scene.durationFrames, sourceStart: start, sourceEndExclusive: start + scene.durationFrames / 30, verification, stale: (await readProject(file)).etag !== etag };
-  } finally { await rm(temporary, { force: true }); }
+    const stale = (await readProject(file)).etag !== etag;
+    // Publish only a fully verified clip; failed audio/source validation preserves any prior MP4.
+    await rename(video, join(output, 'output.mp4'));
+    return { sceneId: scene.id, projectHash: etag, durationSeconds: scene.durationFrames / 30, totalFrames: scene.durationFrames, sourceStart: start, sourceEndExclusive: start + scene.durationFrames / 30, verification, stale };
+  } catch (error) { failure = { error }; throw error; }
+  finally {
+    // Attempt both paths even if one is locked; retain the original render/source failure.
+    const cleanup = await Promise.allSettled([rm(temporary, { force: true }), rm(work, { recursive: true, force: true })]);
+    const errors = cleanup.flatMap(result => result.status === 'rejected' ? [result.reason] : []);
+    if (errors.length) {
+      const error = new AggregateError(errors, 'Could not clean temporary scene preview files.');
+      if (!failure) throw error;
+      if (failure.error instanceof Error && failure.error.cause === undefined) failure.error.cause = error;
+    }
+  }
 }

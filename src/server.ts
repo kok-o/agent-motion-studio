@@ -91,7 +91,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
     try {
       if (request.headers.host !== new URL(origin).host || (request.headers.origin && request.headers.origin !== origin)) { send({ error: 'Origin/Host rejected' }, 403); return; }
       const url = new URL(request.url ?? '/', origin);
-      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/object-editor.js': 'object-editor.js', '/composition-entry.js': 'composition-entry.js', '/native-fonts.css': 'native-fonts.css', '/style.css': 'style.css' };
+      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/object-editor.js': 'object-editor.js', '/composition-entry.js': 'composition-entry.js', '/source-audio.js': 'source-audio.js', '/native-fonts.css': 'native-fonts.css', '/style.css': 'style.css' };
       if (publicFiles[url.pathname] && (request.method === 'GET' || request.method === 'HEAD')) { await sendFile(request, response, join(packageRoot, 'dist/studio', publicFiles[url.pathname])); return; }
       if (request.method === 'POST' && url.pathname === '/api/session') {
         if (request.headers.origin !== origin) { send({ error: 'Origin required' }, 403); return; }
@@ -117,7 +117,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       if (request.method === 'POST' && visualApplying) { send({ error: { code: 'VISUAL_BUSY', message: 'Apply is running. Wait before editing.' } }, 409); return; }
       if (request.method === 'GET' && url.pathname === '/api/state') {
         const state = await readProject(file), spec = await resolvedProject(state.etag);
-        send({ ...state, projectPath: file, projectName, metadata: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { width: asset.width, height: asset.height, durationSeconds: asset.durationSeconds, sourceFps: asset.sourceFps, bytes: asset.bytes, hash: asset.hash }])), exports: await exportsList(), job }); return;
+        send({ ...state, projectPath: file, projectName, metadata: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { width: asset.width, height: asset.height, durationSeconds: asset.durationSeconds, sourceFps: asset.sourceFps, hasAudio: asset.hasAudio, bytes: asset.bytes, hash: asset.hash }])), exports: await exportsList(), job }); return;
       }
       if (request.method === 'GET' && url.pathname === '/api/job') { send(job); return; }
       if (request.method === 'GET' && url.pathname === '/api/generation/capabilities') { send(generation.capabilities()); return; }

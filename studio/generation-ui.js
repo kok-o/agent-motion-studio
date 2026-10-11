@@ -79,7 +79,7 @@ export function initGeneration(context) {
     if (selected.candidate) {
       const url = `/api/generation/${encodeURIComponent(selected.id)}/candidate`;
       if ($('generation-raw').getAttribute('src') !== url) $('generation-raw').src = url;
-      $('generation-source').textContent = t`Исходный candidate: ${selected.candidate.width}×${selected.candidate.height} · ${selected.candidate.sourceFps} fps · ${selected.candidate.durationSeconds} с. Фильм: 1080p/30 fps; duration сцены сохраняется, source audio выключен.`;
+      $('generation-source').textContent = t`Исходный candidate: ${selected.candidate.width}×${selected.candidate.height} · ${selected.candidate.sourceFps} fps · ${selected.candidate.durationSeconds} с. Фильм: 1080p/30 fps; длительность и настройка звука видео сохраняются.`;
     }
     updateControls();
   }

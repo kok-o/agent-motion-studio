@@ -5,9 +5,9 @@ import { createHash } from 'node:crypto';
 import { Ajv } from 'ajv';
 import { imageSize } from 'image-size';
 import { StudioError } from './errors.js';
-import { probeSource } from './media.js';
+import { probeSource, resolveSourceAudioClock } from './media.js';
 import { parseJsonInput } from './json-input.js';
-import type { Manifest, ResolvedSpec, ResolvedAsset } from './types.js';
+import type { Manifest, ResolvedSpec, ResolvedAsset, SourceAudioClock } from './types.js';
 export const ENGINE_VERSION = '0.1.0';
 export const SCENE_VERSION = '4';
 export const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -127,10 +127,13 @@ export async function loadManifest(manifestPath: string): Promise<ResolvedSpec> 
     assets[id] = resolved;
   }
   let cursor = 0;
+  const sourceClocks = new Map<string, SourceAudioClock>();
+  const clockKey = (scene: Manifest['scenes'][number]) => JSON.stringify([scene.asset, scene.trimStartSeconds ?? 0, scene.durationFrames]);
   for (const scene of [...manifest.scenes, ...(manifest.history ?? []).flatMap(revision => revision.scenes)]) {
     if (scene.type === 'video' && (scene.trimStartSeconds ?? 0) + scene.durationFrames / 30 > assets[scene.asset!].durationSeconds! + 0.001) throw new StudioError('TRIM_OUT_OF_RANGE', 'validate', `${scene.id}: trim plus scene duration exceeds the video source.`, 2);
+    if (scene.sourceAudio?.enabled && !sourceClocks.has(clockKey(scene))) sourceClocks.set(clockKey(scene), await resolveSourceAudioClock(assets[scene.asset!], scene));
   }
-  const scenes = manifest.scenes.map(scene => { const startFrame = cursor; cursor += scene.durationFrames; return { ...scene, startFrame, endFrame: cursor }; });
+  const scenes = manifest.scenes.map(scene => { const startFrame = cursor; cursor += scene.durationFrames; return { ...scene, startFrame, endFrame: cursor, ...(scene.sourceAudio?.enabled ? { sourceAudioClock: sourceClocks.get(clockKey(scene))! } : {}) }; });
   const [width, height] = manifest.video.aspectRatio === '9:16' ? [1080, 1920] : [1920, 1080];
   return { ...manifest, assets, scenes, width, height, totalFrames: cursor, projectDir, engineVersion: ENGINE_VERSION, sceneVersion: SCENE_VERSION };
 }

@@ -53,6 +53,7 @@ test('unsaved UI scene previews match full export frames for trim, crop, contain
   await editProject(file, { type:'edit-scene',sceneId:'opening',patch:{durationFrames:30} });
   await editProject(file, { type:'add-scene',scene:{id:'trim-test',type:'video',asset:colors.importedId,durationFrames:60,trimStartSeconds:0} });
   await editProject(file, { type:'add-scene',scene:{id:'crop-test',type:'video',asset:split.importedId,durationFrames:30,fit:'cover'} });
+  await editProject(file, { type:'music', provider:'procedural', gainDb:-9 });
   const studio = await startStudio(file, 0), browser = await launchBrowser(tools.chrome), page = await browser.newPage(); let closed = false;
   const idle = () => page.waitForFunction(() => !document.querySelector('#reload').disabled);
   const fill = (id, value) => page.$eval(`#${id}`, (n,v) => {n.value=v;n.dispatchEvent(new Event('input',{bubbles:true}));},String(value));
@@ -68,7 +69,10 @@ test('unsaved UI scene previews match full export frames for trim, crop, contain
       const url = await page.$eval('#scene-preview',n=>n.src), cookies=await page.cookies();
       const bytes = await fetch(url,{headers:{Cookie:cookies.map(c=>`${c.name}=${c.value}`).join('; ')}}); assert.equal(bytes.status,200);
       const output=join(root,`${name}-preview.mp4`); await writeFile(output,Buffer.from(await bytes.arrayBuffer()));
+      const controls = await page.$eval('#scene-preview', n => ({controls:n.controls, muted:n.muted, defaultMuted:n.defaultMuted, autoplay:n.autoplay, paused:n.paused}));
+      assert.deepEqual(controls, {controls:true, muted:false, defaultMuted:false, autoplay:false, paused:true}, 'explicit user playback, with music audible by default');
       await page.$eval('#scene-preview',async n=>{n.currentTime=.3;await n.play();}); await page.waitForFunction(()=>document.querySelector('#scene-preview').currentTime>.5); await page.$eval('#scene-preview',n=>n.pause());
+      assert.ok(await page.$eval('#scene-preview',n=>n.webkitAudioDecodedByteCount)>0, 'actual music samples decoded during user-requested browser playback');
       await page.screenshot({path:join(root,`${name}-ui.png`)});
       await page.click('#save-scene'); await page.waitForFunction(()=>document.querySelector('#notice').textContent.startsWith('Сохранено')); await idle();
       const manifest=join(root,`${name}-project.json`);await copyFile(file,manifest); cases.push({name,sceneId,start,count,output,manifest});
@@ -90,6 +94,6 @@ test('unsaved UI scene previews match full export frames for trim, crop, contain
     const trimRaw=join(root,'trim.rgb');await runProcess(tools.ffmpeg,['-y','-v','error','-i',cases[0].output,'-vf','scale=1:1','-pix_fmt','rgb24','-f','rawvideo',trimRaw]);const rgb=await readFile(trimRaw);
     for(let i=0;i<60;i++){const [r,g,b]=rgb.subarray(i*3,i*3+3);assert.ok(i<30?g>110&&r<15&&b<15:b>235&&r<15&&g<15);}
     assert.equal((await readdir(root)).some(n=>n.startsWith('.preview-')),false);
-    await writeFile(join(root,'verification.json'),JSON.stringify({passed:true,cases,checks:['no accepted writes from preview','same full-resolution decoded frames','30 green then 30 blue frames','real muted browser playback','stale preview conflict','temporary manifests cleaned'],errors},null,2));
+    await writeFile(join(root,'verification.json'),JSON.stringify({passed:true,cases,checks:['no accepted writes from preview','same full-resolution decoded frames','30 green then 30 blue frames','explicit real browser playback, unmuted controls, no autoplay','stale preview conflict','temporary manifests cleaned'],errors},null,2));
   } finally {if(!closed) await browser.close();await studio.close();}
 });

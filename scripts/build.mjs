@@ -29,3 +29,5 @@ const editor = await build({ entryPoints: ['studio/object-editor.ts'], outfile: 
 assert.deepEqual(Object.keys(editor.metafile.inputs).sort(), ['src/composition.ts', 'studio/object-caption.ts', 'studio/object-editor-geometry.ts', 'studio/object-editor.ts'], 'The editor bundle must contain only browser code; contracts are type-only.');
 const entry = await build({ entryPoints: ['studio/composition-entry.ts'], outfile: 'dist/studio/composition-entry.js', platform: 'browser', format: 'esm', target: 'chrome120', bundle: true, external: ['./i18n.js'], metafile: true });
 assert.deepEqual(Object.keys(entry.metafile.inputs), ['studio/composition-entry.ts'], 'Composition entry must contain only browser code; native contracts are type-only.');
+const sourceAudio = await build({ entryPoints: ['studio/source-audio.ts'], outfile: 'dist/studio/source-audio.js', platform: 'browser', format: 'esm', target: 'chrome120', bundle: true, metafile: true });
+assert.deepEqual(Object.keys(sourceAudio.metafile.inputs), ['studio/source-audio.ts'], 'Source audio inspector must contain only browser code; native contracts are type-only.');

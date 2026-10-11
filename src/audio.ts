@@ -235,6 +235,7 @@ export async function prepareAudio(spec: ResolvedSpec, jobDir: string, tools: To
   const filters: string[] = [];
   const labels: string[] = [];
   const voices: { scene: string; start: number; end: number; duration: number; hash: string; provider: string; cache?: string }[] = [];
+  const sourceTracks: Record<string, unknown>[] = [];
   const addInput = (file: string, loop = false) => {
     const index = inputs.filter(value => value === '-i').length;
     if (loop) inputs.push('-stream_loop', '-1');
@@ -268,6 +269,21 @@ export async function prepareAudio(spec: ResolvedSpec, jobDir: string, tools: To
     filters.push(`[${index}:a:0]aresample=${SAMPLE_RATE},aformat=channel_layouts=stereo,volume=${spec.audio.narration.gainDb ?? -3}dB,adelay=${Math.round(start * 1000)}:all=1,apad,atrim=duration=${duration}[${label}]`);
     labels.push(`[${label}]`);
   }
+  for (const scene of spec.scenes) {
+    if (!scene.sourceAudio?.enabled) continue;
+    const asset = spec.assets[scene.asset!], clock = scene.sourceAudioClock;
+    if (!clock) throw new StudioError('SOURCE_AUDIO_CLOCK_UNSUPPORTED', 'audio', `${scene.id}: source audio requires a validated source clock.`, 2);
+    const source = path.join(jobDir, `source-${scene.id}.wav`), sampleCount = scene.durationFrames * SAMPLE_RATE / 30;
+    // Preserve the container clock, including leading/internal silence; never reset to
+    // the first audio packet. Only the retained picture interval becomes local time zero.
+    await runProcess(tools.ffmpeg, ['-y', '-v', 'error', '-xerror', '-err_detect', 'explode', '-copyts', '-i', asset.absolutePath,
+      '-map', '0:a:0', '-af', `asetpts=PTS-(${clock.originSeconds})/TB,aresample=${SAMPLE_RATE}:async=1:first_pts=0:min_comp=0.0000208333333333:min_hard_comp=0.0000208333333333,atrim=start_sample=${clock.startSample}:end_sample=${clock.endSample},asetpts=N/SR/TB,apad=whole_len=${sampleCount},atrim=end_sample=${sampleCount}`,
+      '-ar', String(SAMPLE_RATE), '-ac', '2', '-c:a', 'pcm_s16le', source], { timeoutMs: 120000, logPath: path.join(jobDir, `source-${scene.id}.log`) });
+    const index = addInput(source), label = `source${index}`, gainDb = scene.sourceAudio.gainDb ?? 0;
+    filters.push(`[${index}:a:0]aformat=channel_layouts=stereo,volume=${gainDb}dB,adelay=${scene.startFrame * SAMPLE_RATE / 30}S:all=1,apad,atrim=duration=${duration}[${label}]`);
+    labels.push(`[${label}]`);
+    sourceTracks.push({ scene: scene.id, hash: asset.hash, streamIndex: clock.streamIndex, originSeconds: clock.originSeconds, firstVideoSeconds: clock.firstVideoSeconds, trimStartSeconds: scene.trimStartSeconds ?? 0, startSample: clock.startSample, endSample: clock.endSample, globalStartFrame: scene.startFrame, globalEndFrame: scene.endFrame, gainDb });
+  }
   const music = spec.audio.music;
   const kineticMusic = music.provider === 'procedural' && spec.video.style === 'kinetic';
   const musicGainDb = music.provider === 'none' ? undefined : music.gainDb ?? (kineticMusic ? -3 : -22);
@@ -296,7 +312,7 @@ export async function prepareAudio(spec: ResolvedSpec, jobDir: string, tools: To
   const beatGrid = proceduralStyle === 'kinetic'
     ? { bpm: 120, framesPerBeat: 15, sceneAccentFrames: spec.scenes.map(scene => scene.startFrame), arrangementVersion: 'kinetic-2' }
     : undefined;
-  const report = { version: AUDIO_VERSION, narration: spec.audio.narration.provider, music: music.provider, duration, voices, musicHash, musicGainDb, musicLoudnessTarget, proceduralStyle, beatGrid, captions: spec.scenes.map(scene => ({ scene: scene.id, captions: scene.resolvedCaptions || [] })) };
+  const report = { version: AUDIO_VERSION, narration: spec.audio.narration.provider, music: music.provider, duration, voices, sourceTracks, musicHash, musicGainDb, musicLoudnessTarget, proceduralStyle, beatGrid, captions: spec.scenes.map(scene => ({ scene: scene.id, captions: scene.resolvedCaptions || [] })) };
   const fingerprint = sha(JSON.stringify({ ...report, voices: voices.map(({ cache, ...voice }) => voice), settings: spec.audio, seed: spec.seed }));
   if (!labels.length) return { report: { ...report, fingerprint } };
   filters.push(`${labels.join('')}amix=inputs=${labels.length}:normalize=0:duration=longest,alimiter=limit=0.95:level=false:latency=1,apad,atrim=duration=${duration}[mixed]`);
@@ -305,4 +321,19 @@ export async function prepareAudio(spec: ResolvedSpec, jobDir: string, tools: To
   const finalDuration = await audioDuration(output, tools);
   if (Math.abs(finalDuration - duration) > 1 / 30) throw new StudioError('AUDIO_LENGTH', 'audio', 'Mixed audio does not match the timeline.', 4);
   return { path: output, report: { ...report, fingerprint, sampleRate: SAMPLE_RATE, channels: 2, verifiedDuration: finalDuration, outputHash: sha(await readFile(output)) } };
+}
+
+/** Cut the shared full draft mix, preserving global seed, accents, looping and fades. */
+export async function prepareSceneAudio(spec: ResolvedSpec, scene: ResolvedScene, jobDir: string, tools: ToolPaths): Promise<string | undefined> {
+  // Block active online speech before provider/cache access anywhere on the full timeline.
+  if (spec.audio.narration.provider === 'edge' && spec.scenes.some(item => item.narration)) throw new StudioError('ONLINE_PREVIEW_UNSUPPORTED', 'preview', 'Online Edge narration is not available in scene preview. Use offline file narration.', 2);
+  const audio = await prepareAudio(spec, jobDir, tools);
+  if (!audio.path) return undefined;
+  const output = path.join(jobDir, 'scene-audio.wav');
+  const samplesPerFrame = SAMPLE_RATE / 30;
+  await runProcess(tools.ffmpeg, ['-y', '-v', 'error', '-i', audio.path, '-map', '0:a:0',
+    '-af', `atrim=start_sample=${scene.startFrame * samplesPerFrame}:end_sample=${scene.endFrame * samplesPerFrame},asetpts=PTS-STARTPTS`,
+    '-ar', String(SAMPLE_RATE), '-ac', '2', '-c:a', 'pcm_s16le', output],
+  { timeoutMs: 120000, logPath: path.join(jobDir, 'logs', 'scene-audio.log') });
+  return output;
 }

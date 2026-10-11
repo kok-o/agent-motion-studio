@@ -90,7 +90,7 @@ if ($preview.stale -ne $false -or $preview.projectHash -ne $before.etag -or $pre
 if (Compare-Object $beforeFiles (Film-Hashes)) { throw 'Accepted project/assets/history changed; reconcile before any edit.' }
 ```
 
-Preview is **silent**, shares export scene encoding and saves no draft/accepted state. It currently rejects a project with scene narration/captions; do not strip those fields to pass. Report the limitation or choose a supported case. Internal scene PNGs are removed by encoding; extract proofs from the returned MP4.
+Preview shares export scene encoding and the full patched timeline's local audio mix, including file narration/captions on motion scenes and explicitly enabled source-video sound. It saves no draft/accepted state. Active online Edge narration in any scene blocks preview before provider/cache access; do not strip fields to pass. Report the limitation or choose a supported offline case. Internal scene PNGs are removed by encoding; extract proofs from the returned MP4. Play sound explicitly; numerical decode checks do not prove human sound quality.
 
 ## Exact decoded proofs
 
@@ -105,7 +105,7 @@ if ($proof.complete -ne $true) { throw 'Incomplete proof set.' }
 
 The read-only [helper](../scripts/extract-motion-proof.mjs) checks actual decoded count/fps, sorted unique in-range integer indices and exclusive new output. It uses FFmpeg `select=eq(n\,0)+eq(n\,24)+eq(n\,57)+eq(n\,90)+eq(n\,149)`, `-fps_mode vfr`, PNG and `-n`. **`n` is local decode index from the start of the preview: no approximate `-ss`, scene offset or input renumbering.** Mapping in `proof.json`: `proof-000.png`→0, `001`→24, `002`→57, `003`→90, `004`→149. Actual FFprobe/FFmpeg argv/exits/stdout/stderr are recorded. Short/mismatched video, invalid/duplicate indices, existing output, encoder failure or missing PNG makes it fail. Keep partial output as failed evidence; do not reuse it or report PASS.
 
-Inspect all five PNGs at delivery size and the continuous preview MP4: identity/centred zoom, initial hold, middle, destination/final hold, unchanged neighbours. PNGs come from lossy H.264, so held-pose PNG hashes can differ; inspect geometry/content. Independent property tracks define the exact poses. Sampled proofs do **not** establish every intermediate frame, smoothness, sound, artistic quality or human acceptance. Report continuous viewing/listening/ratings separately; this silent preview is not a music-mix test.
+Inspect all five PNGs at delivery size and the continuous preview MP4: identity/centred zoom, initial hold, middle, destination/final hold, unchanged neighbours. PNGs come from lossy H.264, so held-pose PNG hashes can differ; inspect geometry/content. Independent property tracks define the exact poses. Sampled proofs do **not** establish every intermediate frame, smoothness, sound, artistic quality or human acceptance. Report continuous viewing/listening/ratings separately; these picture proofs are not a music-mix test.
 
 ## Accept the same action, restore, reopen
 
