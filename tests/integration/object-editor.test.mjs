@@ -71,7 +71,7 @@ for (const aspect of ['16:9', '9:16']) test(`selected properties and layer order
     await page.select('#visual-mode', 'base'); await page.click('#visual-layer-up'); await page.click('#visual-layer-up'); await settled();
   };
   try {
-    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en')); await open(); await page.click('[data-object-id="title"]'); await settled();
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => { if (!localStorage.getItem('ams-language')) localStorage.setItem('ams-language', 'en'); }); await open(); await page.click('[data-object-id="title"]'); await settled();
     assert.equal(await page.$eval('#visual-color', node => node.value), ''); assert.equal(await page.$eval('#visual-align', node => node.value), '');
     const initialPixels = await pixels();
     await field(page, '#visual-color', 'red'); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#visual-color', node => node.disabled), false); assert.deepEqual(await readFile(file), originalBytes);
