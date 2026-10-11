@@ -17,6 +17,13 @@ import { syncBuiltinESMExports } from 'node:module';
 const root = resolve('artifacts/object-editor', randomUUID());
 await mkdir(root, { recursive: true });
 const tools = findTools();
+async function propertiesFixture(aspect) {
+  const result = await fixture(aspect), state = await readProject(result.file), objects = structuredClone(state.manifest.scenes[1].objects);
+  objects[2].x = 250; objects[2].y = 190;
+  objects.push({ id: 'ellipse', type: 'shape', shape: 'ellipse', x: 850, y: 600, width: 100, height: 100, color: 'accent' });
+  await editProject(result.file, { type: 'edit-scene', sceneId: 'objects', patch: { objects } }, state.etag);
+  return result;
+}
 async function fixture(aspect) {
   const dir = join(root, `${aspect.replace(':', '-')}-${randomUUID()}`); await mkdir(dir);
   const image = join(dir, 'synthetic.png');
@@ -35,7 +42,7 @@ async function fixture(aspect) {
 }
 async function field(page, selector, value) {
   await page.click(selector); await page.keyboard.down('Control'); await page.keyboard.press('A'); await page.keyboard.up('Control');
-  await page.keyboard.type(String(value)); await page.keyboard.press('Tab');
+  if (String(value) === '') await page.keyboard.press('Backspace'); else await page.keyboard.type(String(value)); await page.keyboard.press('Tab');
 }
 async function ready(page) { await page.waitForFunction(() => !document.querySelector('#object-editor').hidden && !document.querySelector('#visual-x').disabled); }
 async function previewDraft(page) { await page.waitForFunction(() => !document.querySelector('#preview-scene').disabled); await page.click('#preview-scene'); }
@@ -43,6 +50,166 @@ async function nativePoint(page, x, y) {
   return page.$eval('#stage', (canvas, p) => { const r = canvas.getBoundingClientRect(); return { x: r.left + p.x * r.width / canvas.width, y: r.top + p.y * r.height / canvas.height }; }, { x, y });
 }
 async function drag(page, from, to) { await page.mouse.move(from.x, from.y); await page.mouse.down(); await page.mouse.move(to.x, to.y, { steps: 5 }); await page.mouse.up(); }
+
+test('pending native render preserves invalid style entries and blocks writes until correction or Cancel', { timeout: 90000 }, async () => {
+  const { file, dir } = await fixture('16:9'), originalBytes = await readFile(file), before = await readProject(file);
+  const browser = await launchBrowser(tools.chrome), page = await browser.newPage(), studio = await startStudio(file, 0), writes = [], errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (['/api/visual/preview', '/api/visual/apply'].includes(path)) writes.push({ path, body: request.postData() }); });
+  const rendered = () => page.waitForFunction(() => document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest);
+  const blocked = async () => {
+    assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#save-scene', node => node.disabled), true);
+    await page.evaluate(() => { document.querySelector('#preview-scene').dispatchEvent(new Event('click')); });
+    await page.waitForFunction(() => !document.querySelector('#visual-font-size').disabled);
+    await page.evaluate(() => { document.querySelector('#save-scene').dispatchEvent(new Event('click')); });
+    await page.waitForFunction(() => !document.querySelector('#visual-font-size').disabled);
+  };
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en'));
+    await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); await page.click('[data-object-id="title"]'); await rendered();
+    await page.evaluate(() => {
+      const native = window.studio.initialize.bind(window.studio), probe = window.invalidStyleProbe = { entered: false, finished: false };
+      let first = true;
+      window.studio.initialize = async (...args) => { if (first) { first = false; probe.entered = true; await new Promise(resolve => { probe.release = resolve; }); } const result = await native(...args); probe.finished = true; return result; };
+    });
+    await field(page, '#visual-color', '#123456'); await page.waitForFunction(() => window.invalidStyleProbe.entered);
+    await field(page, '#visual-font-size', 301); assert.notEqual(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked();
+    await page.evaluate(() => window.invalidStyleProbe.release()); await page.waitForFunction(() => window.invalidStyleProbe.finished); await page.evaluate(() => new Promise(requestAnimationFrame));
+    assert.equal(await page.$eval('#visual-font-size', node => node.value), '301'); assert.notEqual(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked(); assert.equal(writes.length, 0);
+    await page.select('#visual-weight', '700'); await field(page, '#visual-x', 170); await rendered();
+    assert.equal(await page.$eval('#visual-font-size', node => node.value), '301'); assert.notEqual(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked(); assert.equal(writes.length, 0);
+    await field(page, '#visual-color', 'red'); await field(page, '#visual-font-size', 40); await rendered();
+    assert.equal(await page.$eval('#visual-color', node => node.value), 'red'); assert.notEqual(await page.$eval('#visual-color', node => node.validationMessage), ''); assert.equal(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked(); assert.equal(writes.length, 0);
+    await field(page, '#visual-color', '#d834aa'); await rendered(); await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled);
+    assert.equal(writes.length, 1); const outgoing = JSON.parse(writes[0].body).patch.objects.find(object => object.id === 'title');
+    assert.deepEqual([outgoing.color, outgoing.fontSize, outgoing.weight, outgoing.x], ['#d834aa', 40, 700, 170]); assert.deepEqual(await readFile(file), originalBytes);
+    await field(page, '#visual-font-size', 301); await blocked(); assert.equal(writes.length, 1, 'an invalid field consumes no Apply request even after a successful preview');
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await ready(page); await rendered();
+    assert.equal(await page.$eval('#visual-font-size', node => node.value), '32'); assert.equal(await page.$eval('#visual-font-size', node => node.validationMessage), ''); assert.equal(await page.$eval('#visual-color', node => node.value), ''); assert.equal(await page.$eval('#preview-scene', node => node.disabled), false);
+    assert.deepEqual(await readFile(file), originalBytes); assert.deepEqual((await readProject(file)).manifest.history, before.manifest.history); assert.deepEqual(errors, []);
+    await (await page.$('#object-editor')).screenshot({ path: join(dir, 'invalid-style-cancel.png') });
+    await writeFile(join(dir, 'invalid-style-pending.json'), JSON.stringify({ status: 'PASS', actualBrowserDeferredNativeInitialize: true, staleRenderCannotUnlock: true, programmaticPreviewApplyBlocked: true, unrelatedStyleAndGeometryPreserveInvalidEntry: true, correctingOneErrorPreservesAnother: true, explicitCorrectionPreviewMatchesFields: true, existingTicketInvalidated: true, cancelRestoresInputsAndAcceptedBytes: true, acceptedHistoryUnchanged: true, previewRequests: 1, applyRequests: 0, errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
+for (const aspect of ['16:9', '9:16']) test(`selected properties and layer order use native draft/preview/apply/restore ${aspect}`, { timeout: 180000 }, async () => {
+  const { file, dir } = await propertiesFixture(aspect), before = await readProject(file), originalBytes = await readFile(file), originalObjects = before.manifest.scenes[1].objects;
+  const sourceHashes = async () => Object.fromEntries(await Promise.all(Object.entries((await readProject(file)).manifest.assets).map(async ([id, asset]) => [id, hashBytes(await readFile(join(file, '..', asset.path)))])));
+  const sourceBefore = await sourceHashes(), browser = await launchBrowser(tools.chrome), page = await browser.newPage(), errors = [], requests = [];
+  let studio = await startStudio(file, 0);
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (['/api/visual/preview', '/api/visual/apply'].includes(path)) requests.push({ path, selectedId: request.headers()['x-ams-selected-object'], etag: request.headers()['if-match'], body: request.postData() }); });
+  const settled = () => page.waitForFunction(() => document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest && !document.querySelector('#preview-scene').disabled);
+  const open = async () => { await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); await settled(); };
+  const preview = async () => { await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled && document.querySelector('#scene-preview').readyState >= 2, { timeout: 60000 }); };
+  const apply = async () => { await preview(); const old = await readProject(file); await page.click('#save-scene'); await page.waitForFunction(() => document.querySelector('#draft-status').textContent.includes('saved')); await settled(); const next = await readProject(file); assert.equal(next.manifest.history.length, old.manifest.history.length + 1); return next; };
+  const pixels = async () => hashBytes(Buffer.from((await page.$eval('#stage', node => node.toDataURL('image/png'))).split(',')[1], 'base64'));
+  const preserveNeighbours = (state, prior, selected) => assert.deepEqual(state.manifest.scenes[1].objects.filter(object => object.id !== selected), prior.manifest.scenes[1].objects.filter(object => object.id !== selected));
+  const textDraft = async () => {
+    await field(page, '#visual-color', '#d834aa'); await field(page, '#visual-font-size', 40); await page.select('#visual-weight', '700'); await page.select('#visual-align', 'right');
+    await page.select('#visual-mode', 'key'); assert.equal(await page.$eval('#visual-font-size', node => node.disabled), true); assert.equal(await page.$eval('#visual-layer-up', node => node.disabled), true);
+    await page.$eval('#visual-frame', node => { node.value = '15'; node.dispatchEvent(new Event('input', { bubbles: true })); }); await field(page, '#visual-x', 202);
+    await page.select('#visual-mode', 'base'); await page.click('#visual-layer-up'); await page.click('#visual-layer-up'); await settled();
+  };
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => { if (!localStorage.getItem('ams-language')) localStorage.setItem('ams-language', 'en'); }); await open(); await page.click('[data-object-id="title"]'); await settled();
+    assert.equal(await page.$eval('#visual-color', node => node.value), ''); assert.equal(await page.$eval('#visual-align', node => node.value), '');
+    const initialPixels = await pixels();
+    await field(page, '#visual-color', 'red'); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#visual-color', node => node.disabled), false); assert.deepEqual(await readFile(file), originalBytes);
+    await field(page, '#visual-font-size', '-'); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true, 'an incomplete number is not an optional reset');
+    await field(page, '#visual-font-size', 301); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#visual-font-size', node => node.disabled), false);
+    await field(page, '#visual-font-size', 300); await page.waitForFunction(() => document.querySelector('#visual-status').textContent.includes('TEXT_OVERFLOW')); assert.equal(await page.$eval('#visual-font-size', node => node.disabled), false); assert.deepEqual(await readFile(file), originalBytes);
+    await textDraft(); await preview(); assert.deepEqual(await readFile(file), originalBytes); assert.deepEqual(await sourceHashes(), sourceBefore);
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-stay'); assert.deepEqual(await readFile(file), originalBytes);
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled();
+    assert.deepEqual(await readFile(file), originalBytes); assert.equal(await page.$eval('#visual-color', node => node.value), '');
+    await textDraft(); const textAccepted = await apply(), title = textAccepted.manifest.scenes[1].objects.find(object => object.id === 'title');
+    assert.deepEqual(textAccepted.manifest.scenes[1].objects.map(object => object.id), ['back', 'image', 'ellipse', 'title']); preserveNeighbours(textAccepted, before, 'title');
+    assert.deepEqual([title.color, title.fontSize, title.weight, title.align], ['#d834aa', 40, 700, 'right']);
+    assert.equal(title.keyframes[0].x, 202); for (const key of ['opacity', 'rotation', 'reveal', 'easing', 'frame']) assert.equal(title.keyframes[0][key], originalObjects[1].keyframes[0][key]);
+    assert.deepEqual(title.keyframes[1], originalObjects[1].keyframes[1]); assert.notEqual(await pixels(), initialPixels);
+    const renderer = await openRenderer(await loadManifest(file), tools.chrome);
+    let nativeFrame;
+    try { const local = Number(await page.$eval('#visual-frame', node => node.value)); nativeFrame = { local, global: 6 + local, sha256: hashBytes(await renderer.frame(6 + local)) }; assert.equal(await pixels(), nativeFrame.sha256); } finally { await renderer.finish(); }
+    await page.screenshot({ path: join(dir, 'properties-text.png') });
+    await editProject(file, { type: 'restore', revisionId: before.manifest.revision }, textAccepted.etag); await studio.close(); studio = await startStudio(file, 0); await open();
+    assert.deepEqual((await readProject(file)).manifest.scenes, before.manifest.scenes);
+    await page.click('[data-object-id="ellipse"]'); assert.equal(await page.$eval('#visual-radius-field', node => node.hidden), true); assert.equal(await page.$eval('#visual-text-style', node => node.hidden), true);
+    await page.click('[data-object-id="back"]'); const beforeShape = await readProject(file), shapePixels = await pixels();
+    await field(page, '#visual-color', '#45aa77'); await field(page, '#visual-stroke', 'foreground'); await field(page, '#visual-stroke-width', 5); await field(page, '#visual-radius', 24); await page.click('#visual-layer-up');
+    const shapeAccepted = await apply(), shape = shapeAccepted.manifest.scenes[1].objects.find(object => object.id === 'back'); preserveNeighbours(shapeAccepted, beforeShape, 'back');
+    assert.deepEqual([shape.color, shape.stroke, shape.strokeWidth, shape.radius], ['#45aa77', 'foreground', 5, 24]); assert.deepEqual(shape.keyframes, originalObjects[0].keyframes); assert.notEqual(await pixels(), shapePixels);
+    await page.screenshot({ path: join(dir, 'properties-shape.png') });
+    for (const selector of ['#visual-stroke', '#visual-stroke-width', '#visual-radius']) await field(page, selector, '');
+    const resetAccepted = await apply(), reset = resetAccepted.manifest.scenes[1].objects.find(object => object.id === 'back');
+    for (const key of ['stroke', 'strokeWidth', 'radius']) assert.equal(key in reset, false, key + ' reset removes the field'); preserveNeighbours(resetAccepted, shapeAccepted, 'back');
+    await page.click('[data-object-id="image"]'); assert.equal(await page.$eval('#visual-style-fields', node => node.hidden), true);
+    const beforeImage = await readProject(file), imagePixels = await pixels(); await field(page, '#visual-x', 270); await page.click('#visual-layer-down'); await page.click('#visual-layer-down');
+    const imageAccepted = await apply(); preserveNeighbours(imageAccepted, beforeImage, 'image'); assert.equal(imageAccepted.manifest.scenes[1].objects[0].id, 'image'); assert.notEqual(await pixels(), imagePixels);
+    await page.$eval('#visual-stage-wrap', node => node.scrollIntoView({ block: 'center' })); const pick = await nativePoint(page, 360, 280); await page.mouse.click(pick.x, pick.y);
+    assert.equal(await page.$eval('#visual-selection-name', node => node.textContent), 'back · shape', 'topmost native order also owns picking');
+    await page.screenshot({ path: join(dir, 'properties-layers.png') });
+    for (let index = 0; index < requests.length; index++) if (requests[index].path === '/api/visual/apply') {
+      const acceptedRequest = requests[index], previewRequest = requests.slice(0, index).findLast(request => request.path === '/api/visual/preview');
+      assert.equal(acceptedRequest.selectedId, previewRequest.selectedId); assert.equal(acceptedRequest.etag, previewRequest.etag); assert.equal(JSON.stringify(JSON.parse(acceptedRequest.body).action), previewRequest.body);
+    }
+    assert.deepEqual(await sourceHashes(), sourceBefore); assert.deepEqual(imageAccepted.manifest.scenes[0], before.manifest.scenes[0]); assert.deepEqual(imageAccepted.manifest.history.slice(0, before.manifest.history.length), before.manifest.history);
+    await editProject(file, { type: 'restore', revisionId: before.manifest.revision }, imageAccepted.etag); await studio.close(); studio = await startStudio(file, 0); await open(); await page.click('[data-object-id="title"]');
+    assert.deepEqual((await readProject(file)).manifest.scenes, before.manifest.scenes); assert.deepEqual(await sourceHashes(), sourceBefore); assert.equal(await page.$eval('#visual-color', node => node.value), '');
+    await Promise.all([page.waitForNavigation({ waitUntil: 'networkidle0' }), page.select('#language', 'ru')]); await page.click('[data-scene-id="objects"]'); await ready(page); await settled(); await page.click('[data-object-id="title"]');
+    assert.equal(await page.$eval('#visual-layer-up', node => node.textContent), 'На слой выше'); const restoredBytes = await readFile(file);
+    await page.focus('#visual-layer-up'); await page.keyboard.press('Enter'); await settled(); assert.deepEqual(await readFile(file), restoredBytes);
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled(); assert.deepEqual(await readFile(file), restoredBytes); assert.deepEqual(errors, []);
+    await page.screenshot({ path: join(dir, 'properties-reopen-ru.png') });
+    await writeFile(join(dir, 'properties-layers.json'), JSON.stringify({ aspect, status: 'PASS', cancelStayPreviewNoMutation: true, selectedIdBoundToExactAction: true, nativeFrame, defaultsNotMaterialized: true, optionalResetRemoves: ['stroke', 'strokeWidth', 'radius'], textShapeImage: true, ellipseRadiusHidden: true, neighbourValuesAndRelativeOrderPreserved: true, layerChangesPixelsAndPicking: true, applyRevisionDeltas: [1, 1, 1, 1], invalidColorSizeOverflowCorrectable: true, ruEnglishAndKeyboard: true, restoreNewSessionReopen: true, sourceHashes: sourceBefore, errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
+test('selected visual headers reject cross-object tickets, neighbour mutation and malformed metadata before publication', { timeout: 90000 }, async () => {
+  const { file, dir } = await propertiesFixture('16:9'), studio = await startStudio(file, 0), origin = new URL(studio.url).origin;
+  try {
+    const session = await fetch(origin + '/api/session', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: new URL(studio.url).hash.slice(1) }) });
+    const cookie = session.headers.get('set-cookie').split(';')[0], state = await readProject(file), bytes = await readFile(file), objects = state.manifest.scenes[1].objects;
+    const headers = { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json', 'If-Match': state.etag };
+    const action = () => ({ type: 'edit-scene', sceneId: 'objects', patch: { objects: structuredClone(objects) } });
+    const call = (route, input, selection) => fetch(origin + route, { method: 'POST', headers: { ...headers, ...(selection === undefined ? {} : { 'X-AMS-Selected-Object': selection }) }, body: JSON.stringify(input) });
+    for (const id of ['', 'unknown', 'title,title', 'title title']) for (const route of ['/api/visual/preview', '/api/visual/apply']) assert.equal((await call(route, route.endsWith('apply') ? { previewId: 'missing', action: action() } : action(), id)).status, 400);
+    const duplicate = await new Promise((ok, bad) => { const req = httpRequest(origin + '/api/visual/preview', { method: 'POST', headers: { ...headers, 'X-AMS-Selected-Object': ['title', 'title'] } }, reply => { reply.resume(); ok(reply.statusCode); }); req.on('error', bad); req.end(JSON.stringify(action())); }); assert.equal(duplicate, 400);
+    const negatives = [
+      ['title', a => a.patch.objects[0].x++],
+      ['back', a => a.patch.objects[1].color = 'accent'],
+      ['title', a => [a.patch.objects[2], a.patch.objects[3]] = [a.patch.objects[3], a.patch.objects[2]]],
+      ['title', a => a.patch.objects[0].strokeWidth = 2],
+      ['image', a => a.patch.objects[2].color = 'accent'],
+      ['back', a => a.patch.objects[0].fontSize = 32],
+      ['title', a => a.patch.objects[1].radius = 2],
+      ['ellipse', a => a.patch.objects[3].radius = 2],
+      ['title', a => a.patch.objects[1].color = 'red'],
+      ['title', a => a.patch.objects[1].fontSize = 301],
+      ['title', a => a.patch.objects[1].id = 'other'],
+      ['title', a => a.patch.objects[1].type = 'image'],
+      ['image', a => a.patch.objects[2].asset = 'other'],
+      ['title', a => a.patch.objects.pop()],
+      ['title', a => a.patch.objects.push({ ...a.patch.objects[1], id: 'new' })],
+      ['title', a => a.patch.objects[2].id = 'title'],
+      ['title', a => a.patch.objects[1].keyframes[0].easing = 'linear'],
+      ['title', a => a.patch.objects[1].keyframes[0].frame++],
+      ['title', a => a.patch.objects[1].keyframes[0].opacity = 1],
+      ['title', a => a.patch.objects[1].keyframes[0].rotation = 90],
+      ['title', a => a.patch.objects[1].keyframes[0].reveal = .1],
+      ['title', a => a.patch.objects[1].keyframes = []],
+      ['title', a => a.patch.objects[1].keyframes[0].color = 'accent']
+    ];
+    for (const [id, mutate] of negatives) { const bad = action(); mutate(bad); for (const route of ['/api/visual/preview', '/api/visual/apply']) assert.equal((await call(route, route.endsWith('apply') ? { previewId: 'missing', action: bad } : bad, id)).status, 400); assert.deepEqual(await readFile(file), bytes); }
+    const swap = action(); [swap.patch.objects[0], swap.patch.objects[1]] = [swap.patch.objects[1], swap.patch.objects[0]];
+    const preview = await (await call('/api/visual/preview', swap, 'title')).json(); assert.ok(preview.previewId);
+    for (const selected of ['back', undefined]) { const reply = await call('/api/visual/apply', { previewId: preview.previewId, action: swap }, selected); assert.equal(reply.status, 400); assert.deepEqual(await readFile(file), bytes); }
+    const result = await call('/api/visual/apply', { previewId: preview.previewId, action: swap }, 'title'); assert.equal(result.status, 200);
+    assert.equal((await readProject(file)).manifest.history.length, state.manifest.history.length + 1);
+    const accepted = await readProject(file); assert.equal(JSON.stringify(accepted.manifest).includes('X-AMS-Selected-Object'), false);
+    await writeFile(join(dir, 'selected-server.json'), JSON.stringify({ status: 'PASS', invalidSelectedIDs: 4, duplicateRawHeaderRejected: true, negativeActions: negatives.length, checkedBothPostRoutes: true, crossSelectionAndMissingHeaderRejected: true, sameActionAndETag: true, correctTicketAppliedOnce: true, transportMetadataNotPersisted: true }, null, 2));
+  } finally { await studio.close(); }
+});
 
 for (const aspect of ['16:9', '9:16']) test(`native object editor mouse/keyboard and explicit preview/apply ${aspect}`, { timeout: 180000 }, async () => {
   const { file, scene, dir } = await fixture(aspect), studio = await startStudio(file, 0), browser = await launchBrowser(tools.chrome), page = await browser.newPage();

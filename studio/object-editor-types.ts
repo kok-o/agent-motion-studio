@@ -15,7 +15,7 @@ export type VisualAction = ProjectVisualAction & { patch: DurationPatch & { obje
 export type PreviewReply = Pick<Awaited<ReturnType<typeof previewScene>>, 'stale' | 'projectHash'> & { previewId: string | null; url: string };
 export type ApplyReply = ProjectState & { committed: true };
 type VisualReadOptions = { headers: { 'If-Match': string } };
-type VisualWriteOptions = { method: 'POST'; headers: { 'Content-Type': 'application/json'; 'If-Match': string }; body: string };
+type VisualWriteOptions = { method: 'POST'; headers: { 'Content-Type': 'application/json'; 'If-Match': string; 'X-AMS-Selected-Object': string }; body: string };
 
 /** Concrete bridge to the remaining JS app. No generic JSON-to-T assertion.
  * Runtime ETag/ticket and commit-response validation remain in their owners. */
@@ -41,7 +41,7 @@ export interface EditorHost {
   reopen(): Promise<void>;
 }
 type DeepReadonly<T> = T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : T;
-export interface PreviewTicket { actionJSON: string; readonly action: DeepReadonly<VisualAction>; baseETag: string; previewId: string }
+export interface PreviewTicket { actionJSON: string; readonly action: DeepReadonly<VisualAction>; readonly selectedId: string; baseETag: string; previewId: string }
 export interface EditorModel {
   sceneId: string; etag: string; objects: CompositionObject[]; selectedId: string | undefined;
   frame: number; loaded: boolean; ready: boolean; stale: boolean; unknown: boolean;
