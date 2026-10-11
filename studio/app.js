@@ -5,7 +5,7 @@ const $ = id => document.getElementById(id);
 let state, selected, busy = false, dirty = false, jobTimer, stateTimer, formBase, conflict;
 let languageReload = false;
 initializeI18n(() => {
-  if (visual.active() && (dirty || visual.hasGesture())) { notice(t('Сначала примените или отмените черновик композиции.'), true); return false; }
+  if (visual.active() && (dirty || visual.hasGesture() || visual.hasPicker())) { notice(t('Сначала примените или отмените черновик композиции.'), true); return false; }
   if (dirty) {
     try { sessionStorage.setItem(draftKey(), JSON.stringify(captureDraft())); }
     catch { notice(t('Черновик остаётся в памяти. Не закрывайте вкладку: хранилище браузера недоступно.'), true); return false; }
@@ -50,7 +50,7 @@ const visual = initObjectEditor({
 async function contextTask(fn) {
   if (busy) return;
   const aspectChoice = $('aspect').value;
-  if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture()) && !await visual.resolveContext()) { $('aspect').value = state.manifest.video.aspectRatio; return; }
+  if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture() || visual.hasPicker()) && !await visual.resolveContext()) { $('aspect').value = state.manifest.video.aspectRatio; return; }
   $('aspect').value = aspectChoice;
   await task(fn);
 }
@@ -78,7 +78,7 @@ function setSceneConstraints() {
   generation.updateControls();
   visual.constraints();
 }
-async function refresh() { const fresh = await api('/api/state'); if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture())) { state.exports = fresh.exports; visual.externalChanged(fresh.etag); paintExports(); return; } state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id; paint(); await generation.refreshLocal(); }
+async function refresh() { const fresh = await api('/api/state'); if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture() || visual.hasPicker())) { state.exports = fresh.exports; visual.externalChanged(fresh.etag); paintExports(); return; } state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id; paint(); await generation.refreshLocal(); }
 async function edit(action) { await post('/api/edit', action); forgetDraft(); await refresh(); notice(t('Сохранено в project.json. Исходные материалы сохранены.')); }
 function mediaNode(scene, controls = false) {
   if (scene.type === 'composition') return el('div', scene.objects.filter(object => object.type === 'text').slice(0, 3).map(object => object.text).join('\n'), 'text-source');
@@ -134,7 +134,7 @@ function paint() {
 }
 function paintScene() {
   const scene = current();
-  if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture())) { visual.constraints(); return; }
+  if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture() || visual.hasPicker())) { visual.constraints(); return; }
   dirty = false;
   $('selection-title').textContent = `${state.manifest.scenes.indexOf(scene) + 1}. ${types[scene.type]}`;
   $('source-preview').replaceChildren(mediaNode(scene, true));
@@ -239,14 +239,17 @@ for (const [id, offset] of [['move-left', -1], ['move-right', 1]]) $(id).onclick
 $('aspect').onchange = () => contextTask(async () => { const aspectRatio = $('aspect').value; if (dirty) await saveScene(); await edit({ type: 'composition', video: { ...state.manifest.video, aspectRatio } }); });
 $('add-title').onclick = () => contextTask(async () => { if (dirty) await saveScene(); const scene = { id: `title-${crypto.randomUUID().slice(0, 8)}`, type: 'kinetic_title', durationFrames: 120, text: t('Новый титр') }; await edit({ type: 'add-scene', scene }); selected = scene.id; paint(); });
 $('save-music').onclick = () => { const choice = $('music').value, gainDb = Number($('gain').value); void contextTask(async () => { if (dirty) await saveScene(); await edit({ type: 'music', ...(choice === '__procedural' ? { provider: 'procedural' } : { asset: choice || undefined }), gainDb }); }); };
-$('import').onchange = () => contextTask(async () => {
+$('import').onchange = () => {
+  if (visual.active()) { const files = Array.from($('import').files); $('import').value = ''; void visual.importFiles(files); return; }
+  void contextTask(async () => {
   if (dirty) await saveScene();
   for (const file of Array.from($('import').files)) {
     notice(t`Импорт: ${file.name}`);
     await api(`/api/import?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: file }); await refresh();
   }
   $('import').value = ''; notice(t('Материалы импортированы. Добавьте их в сцены или выберите музыкальную дорожку.'));
-});
+  });
+};
 $('exports').onchange = showExport;
 async function pollExternalState() {
   clearTimeout(stateTimer);
@@ -256,7 +259,7 @@ async function pollExternalState() {
     if (state !== base || busy || conflict) return;
     const hasNew = fresh.exports.some(item => !state.exports.some(old => old.id === item.id));
     const followLatest = (!$('exports').value || $('exports').value === state.exports[0]?.id) && $('player').paused;
-    if (!dirty && !visual.isUnknown() && !visual.hasGesture() && fresh.etag !== state.etag) {
+    if (!dirty && !visual.isUnknown() && !visual.hasGesture() && !visual.hasPicker() && fresh.etag !== state.etag) {
       state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id;
       paint();
     } else { state.exports = fresh.exports; state.diskEtag = fresh.etag; visual.externalChanged(fresh.etag); }

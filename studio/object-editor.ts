@@ -5,9 +5,9 @@ import { resolveCenterResizeSize, adjustNumericToken, containsPoint, geometryKey
 import { t } from './i18n.js';
 
 type InputId = 'visual-x' | 'visual-y' | 'visual-width' | 'visual-height' | 'visual-frame' | 'duration' | 'visual-color' | 'visual-font-size' | 'visual-stroke' | 'visual-stroke-width' | 'visual-radius';
-type SelectId = 'visual-mode' | 'visual-weight' | 'visual-align';
-type ButtonId = 'save-scene' | 'preview-scene' | 'visual-cancel' | 'reload' | 'visual-dialog-apply' | 'visual-dialog-discard' | 'visual-dialog-stay' | 'visual-layer-up' | 'visual-layer-down';
-type PlainId = 'visual-status' | 'object-editor' | 'visual-text-field' | 'visual-key-note' | 'visual-stage-wrap' | 'visual-stage-space' | 'visual-selection-name' | 'visual-frame-label' | 'visual-layers' | 'preview-status' | 'visual-dialog-note' | 'visual-style-fields' | 'visual-color-field' | 'visual-text-style' | 'visual-shape-style' | 'visual-radius-field';
+type SelectId = 'visual-mode' | 'visual-weight' | 'visual-align' | 'visual-image-asset';
+type ButtonId = 'save-scene' | 'preview-scene' | 'visual-cancel' | 'reload' | 'visual-dialog-apply' | 'visual-dialog-discard' | 'visual-dialog-stay' | 'visual-layer-up' | 'visual-layer-down' | 'visual-add-text' | 'visual-add-rect' | 'visual-add-ellipse' | 'visual-add-image' | 'visual-image-add' | 'visual-image-cancel';
+type PlainId = 'visual-status' | 'object-editor' | 'visual-text-field' | 'visual-key-note' | 'visual-stage-wrap' | 'visual-stage-space' | 'visual-selection-name' | 'visual-frame-label' | 'visual-layers' | 'preview-status' | 'visual-dialog-note' | 'visual-style-fields' | 'visual-color-field' | 'visual-text-style' | 'visual-shape-style' | 'visual-radius-field' | 'visual-image-note';
 const styleKeys = ['color', 'fontSize', 'weight', 'align', 'stroke', 'strokeWidth', 'radius'] as const;
 type StyleKey = typeof styleKeys[number];
 const styleControls = { color: 'visual-color', fontSize: 'visual-font-size', weight: 'visual-weight', align: 'visual-align', stroke: 'visual-stroke', strokeWidth: 'visual-stroke-width', radius: 'visual-radius' } as const;
@@ -24,17 +24,17 @@ function $(id: 'visual-text'): HTMLTextAreaElement;
 function $(id: 'scene-preview'): HTMLVideoElement;
 function $(id: 'stage'): HTMLCanvasElement;
 function $(id: 'visual-overlay'): SVGSVGElement;
-function $(id: 'visual-dialog'): HTMLDialogElement;
+function $(id: 'visual-dialog' | 'visual-image-dialog'): HTMLDialogElement;
 function $(id: PlainId): HTMLElement;
 function $(id: string): HTMLElement | SVGSVGElement {
   if (['visual-x', 'visual-y', 'visual-width', 'visual-height', 'visual-frame', 'duration', 'visual-color', 'visual-font-size', 'visual-stroke', 'visual-stroke-width', 'visual-radius'].includes(id)) return required(id, HTMLInputElement);
-  if (['save-scene', 'preview-scene', 'visual-cancel', 'reload', 'visual-dialog-apply', 'visual-dialog-discard', 'visual-dialog-stay', 'visual-layer-up', 'visual-layer-down'].includes(id)) return required(id, HTMLButtonElement);
-  if (['visual-mode', 'visual-weight', 'visual-align'].includes(id)) return required(id, HTMLSelectElement);
+  if (['save-scene', 'preview-scene', 'visual-cancel', 'reload', 'visual-dialog-apply', 'visual-dialog-discard', 'visual-dialog-stay', 'visual-layer-up', 'visual-layer-down', 'visual-add-text', 'visual-add-rect', 'visual-add-ellipse', 'visual-add-image', 'visual-image-add', 'visual-image-cancel'].includes(id)) return required(id, HTMLButtonElement);
+  if (['visual-mode', 'visual-weight', 'visual-align', 'visual-image-asset'].includes(id)) return required(id, HTMLSelectElement);
   if (id === 'visual-text') return required(id, HTMLTextAreaElement);
   if (id === 'scene-preview') return required(id, HTMLVideoElement);
   if (id === 'stage') return required(id, HTMLCanvasElement);
   if (id === 'visual-overlay') return required(id, SVGSVGElement);
-  if (id === 'visual-dialog') return required(id, HTMLDialogElement);
+  if (id === 'visual-dialog' || id === 'visual-image-dialog') return required(id, HTMLDialogElement);
   return required(id, HTMLElement);
 }
 type FormControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement;
@@ -55,6 +55,7 @@ function loadRenderer() {
 /** One memory draft; native rendering and accepted edits stay behind their existing APIs. */
 export function initObjectEditor(host: EditorHost): EditorController {
   let model: EditorModel | undefined, preferredId: string | undefined, epoch = 0, renderQueue = Promise.resolve(), gesture: Gesture | undefined, choosing = false;
+  let adding = false, picker: EditorModel | undefined;
   const invalidStyles = new Map<StyleKey, string>();
   const active = (candidate = model): candidate is EditorModel => Boolean(candidate && host.getScene()?.id === candidate.sceneId && host.getScene()?.type === 'composition');
   const selected = () => { const current = model; return current?.objects.find(object => object.id === current.selectedId); };
@@ -100,6 +101,13 @@ export function initObjectEditor(host: EditorHost): EditorController {
     $('visual-key-note').hidden = $('visual-mode').value !== 'key';
     $('visual-stage-wrap').setAttribute('aria-busy', String(unavailable));
     $('duration').disabled = host.isBusy() || model.unknown || Boolean(gesture);
+    for (const id of ['visual-add-text', 'visual-add-rect', 'visual-add-ellipse', 'visual-add-image'] as const) $(id).disabled = unavailable || model.stale || choosing || adding || Boolean(picker) || model.objects.length >= 96;
+    if (picker) {
+      $('visual-image-asset').disabled = host.isBusy() || model.stale || model.unknown;
+      $('visual-image-add').disabled = host.isBusy() || model.stale || model.unknown || picker !== model || !acceptedImage($('visual-image-asset').value);
+      $('visual-image-cancel').disabled = host.isBusy();
+      if (model.stale) $('visual-image-note').textContent = t('Проект изменён. Закройте выбор изображения и явно перечитайте проект.');
+    }
     if (model.unknown) {
       // A generic unlock/poll cannot reenable mutations after an unreadable commit reply.
       document.querySelectorAll<FormControl>('button,input,textarea,select').forEach(node => { node.disabled = true; });
@@ -189,6 +197,54 @@ export function initObjectEditor(host: EditorHost): EditorController {
       button.textContent = `${object.id} · ${object.type}`; button.onclick = () => void chooseObject(object.id); return button;
     }));
   }
+  const acceptedImage = (id: string) => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id) && host.getManifest().assets[id]?.type === 'image';
+  function closePicker() {
+    picker = undefined;
+    if ($('visual-image-dialog').open) $('visual-image-dialog').close();
+    constraints();
+  }
+  function insertObject(kind: 'text' | 'rect' | 'ellipse' | 'image', asset?: string) {
+    if (blocked() || !model || gesture || model.stale || model.createdId) return;
+    if (model.objects.length >= 96) { status('Достигнут лимит объектов композиции.'); return; }
+    if (kind === 'image' && (!asset || !acceptedImage(asset))) return;
+    const landscape = host.getManifest().video.aspectRatio === '16:9', width = landscape ? 1920 : 1080, height = landscape ? 1080 : 1920;
+    const boxWidth = Math.round(width * .4), boxHeight = Math.round(height * (kind === 'text' ? .15 : .3));
+    let id: string;
+    do { id = `object-${crypto.randomUUID()}`; } while (model.objects.some(object => object.id === id));
+    const object: CompositionObject = { id, type: kind === 'rect' || kind === 'ellipse' ? 'shape' : kind, x: Math.round((width - boxWidth) / 2), y: Math.round((height - boxHeight) / 2), width: boxWidth, height: boxHeight };
+    if (kind === 'text') Object.assign(object, { text: t('Новый текст'), fontSize: 48, color: 'foreground' });
+    else if (kind === 'image') Object.assign(object, { asset, fit: 'contain' });
+    else Object.assign(object, { shape: kind, color: 'accent' });
+    invalidStyles.clear(); model.objects = [...model.objects, object]; model.selectedId = id; model.createdId = id;
+    model.frame = 0; $('visual-mode').value = 'base'; markDirty(); layers(); fields(); render();
+  }
+  async function addObject(kind: 'text' | 'rect' | 'ellipse' | 'image') {
+    if (blocked() || !model?.loaded || gesture || choosing || adding || picker || model.stale || model.objects.length >= 96) return;
+    const sceneId = model.sceneId;
+    adding = true; constraints();
+    try {
+      if (host.isDirty() && !await resolveContext()) return;
+      if (blocked() || !model || model.sceneId !== sceneId || model.stale || model.createdId) return;
+      if (kind !== 'image') { insertObject(kind); return; }
+      const entries = Object.entries(host.getManifest().assets).filter(([id]) => acceptedImage(id));
+      $('visual-image-asset').replaceChildren(...entries.map(([id, asset]) => { const option = document.createElement('option'); option.value = id; option.textContent = asset.name ?? id; return option; }));
+      $('visual-image-note').textContent = entries.length ? '' : t('Сначала импортируйте изображение в материалы проекта.');
+      picker = model; $('visual-image-dialog').showModal();
+    } finally { adding = false; constraints(); }
+  }
+  $('visual-add-text').onclick = () => void addObject('text');
+  $('visual-add-rect').onclick = () => void addObject('rect');
+  $('visual-add-ellipse').onclick = () => void addObject('ellipse');
+  $('visual-add-image').onclick = () => void addObject('image');
+  $('visual-image-asset').onchange = constraints;
+  $('visual-image-add').onclick = () => {
+    if (!picker || picker !== model || blocked() || model?.stale || gesture) return;
+    const asset = $('visual-image-asset').value;
+    if (!acceptedImage(asset)) return;
+    closePicker(); insertObject('image', asset);
+  };
+  $('visual-image-cancel').onclick = closePicker;
+  $('visual-image-dialog').oncancel = event => { event.preventDefault(); closePicker(); };
   function sync(scene: Scene, state: ProjectState) {
     $('object-editor').hidden = scene.type !== 'composition';
     $('save-scene').textContent = t(scene.type === 'composition' ? 'Применить просмотренную правку' : 'Сохранить сцену');
@@ -331,27 +387,28 @@ export function initObjectEditor(host: EditorHost): EditorController {
     invalidate(); model.frame = Number.isFinite(duration) ? Math.min(model.frame, Math.max(0, duration - 1)) : 0; fields(); render();
   }
   async function preview() {
-    if (!active(model) || !model.ready || invalidStyles.size > 0 || gesture || model.stale || model.unknown) return;
+    if (!active(model) || !model.ready || invalidStyles.size > 0 || gesture || picker || model.stale || model.unknown) return;
     invalidate();
     const previewEpoch = epoch;
     const selectedId = model.selectedId; if (!selectedId) return;
-    const identity = model, frozen: { selectedId: string; baseETag: string; action: VisualAction } = { selectedId, baseETag: model.etag, action: { type: 'edit-scene', sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
+    const identity = model, intent = model.createdId ? 'create' as const : null;
+    const frozen = { selectedId, intent, baseETag: model.etag, action: { type: 'edit-scene' as const, sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
     const actionJSON = JSON.stringify(frozen.action);
     try {
-      const result = await host.api('/api/visual/preview', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': frozen.baseETag, 'X-AMS-Selected-Object': frozen.selectedId }, body: actionJSON });
+      const result = await host.api('/api/visual/preview', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': frozen.baseETag, 'X-AMS-Selected-Object': frozen.selectedId, ...(frozen.intent ? { 'X-AMS-Object-Intent': frozen.intent } : {}) }, body: actionJSON });
       if (model !== identity || epoch !== previewEpoch || invalidStyles.size > 0 || !model.ready) return;
       if (result.stale || !result.previewId || result.projectHash !== model.etag) { externalChanged('changed'); return; }
-      model.ticket = { actionJSON, action: frozen.action, selectedId: frozen.selectedId, baseETag: frozen.baseETag, previewId: result.previewId };
+      model.ticket = { actionJSON, action: frozen.action, selectedId: frozen.selectedId, intent: frozen.intent, baseETag: frozen.baseETag, previewId: result.previewId };
       $('scene-preview').src = result.url; $('scene-preview').hidden = false;
       $('preview-status').textContent = t('Preview готов. Посмотрите его и явно примените эту правку.');
       status('Preview готов. Посмотрите его и явно примените эту правку.');
     } catch (cause) { const error = errorInfo(cause); if (error.code === 'PROJECT_CONFLICT') externalChanged('changed'); else host.notice(error.message, true); }
   }
   async function apply() {
-    if (!active(model) || !model.ready || invalidStyles.size > 0 || gesture || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
+    if (!active(model) || !model.ready || invalidStyles.size > 0 || gesture || picker || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
     const ticket = model.ticket; model.ticket = undefined;
     try {
-      const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag, 'X-AMS-Selected-Object': ticket.selectedId }, body: `{"previewId":${JSON.stringify(ticket.previewId)},"action":${ticket.actionJSON}}` });
+      const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag, 'X-AMS-Selected-Object': ticket.selectedId, ...(ticket.intent ? { 'X-AMS-Object-Intent': ticket.intent } : {}) }, body: `{"previewId":${JSON.stringify(ticket.previewId)},"action":${ticket.actionJSON}}` });
       const before = host.getManifest(), action = ticket.action, expectedScenes = before.scenes.map(scene => scene.id === action.sceneId ? { ...scene, ...action.patch } : scene);
       if (result?.committed !== true || !/^[a-f0-9]{64}$/.test(result.etag ?? '') || result.etag === ticket.baseETag || typeof result.manifest?.revision !== 'string' || result.manifest.revision === before.revision || !Array.isArray(result.manifest.history)) throw new Error('Unreadable commit response');
       if (JSON.stringify(result.manifest.scenes) !== JSON.stringify(expectedScenes) || (['id', 'seed', 'schemaVersion', 'video', 'brand', 'audio', 'assets', 'operationReceipts'] as const).some(key => JSON.stringify(result.manifest[key]) !== JSON.stringify(before[key]))) throw new Error('Commit response does not match the previewed edit');
@@ -385,6 +442,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     });
   }
   async function resolveContext() {
+    if (picker) closePicker();
     if (gesture) endGesture(true);
     if (!active(model) || (!host.isDirty() && !model.unknown && !model.stale)) return true;
     const answer = await choice(model.stale || model.unknown);
@@ -397,10 +455,34 @@ export function initObjectEditor(host: EditorHost): EditorController {
   }
   async function reopen() {
     if (!active(model)) return false;
+    closePicker();
     if (!host.isDirty() && !model.unknown) { await host.task(host.reopen); return true; }
     if (await choice(true) === 'discard') await host.task(host.reopen);
     return true;
   }
+  async function importFiles(files: readonly File[]) {
+    if (blocked() || gesture || choosing || adding) return;
+    if (!await resolveContext() || !active(model)) return;
+    await host.task(async () => {
+      for (const file of files) {
+        if (!active(model) || model.stale || model.unknown) return;
+        try {
+          const result = await host.api(`/api/import?name=${encodeURIComponent(file.name)}`, { method: 'POST', headers: { 'Content-Type': 'application/octet-stream', 'If-Match': model.etag }, body: file });
+          if (!isRecord(result) || !isRecord(result.manifest) || typeof result.etag !== 'string' || !/^[a-f0-9]{64}$/.test(result.etag)) throw new Error('Unreadable import response');
+          // A successful import is its own accepted revision. Reread the native
+          // state/spec before authoring any object, keeping its copied source.
+          await host.reopen();
+        } catch (cause) {
+          const error = errorInfo(cause);
+          if (error.code === 'PROJECT_CONFLICT') externalChanged('changed');
+          else if (!error.code || error.code === 'INTERNAL_ERROR' || error.committed === true) {
+            model.unknown = true; model.reconciliationMessage = t('Исход импорта неизвестен. Не повторяйте импорт; явно перечитайте проект и проверьте материалы.'); status(model.reconciliationMessage);
+          } else host.notice(error.message, true);
+          constraints(); return;
+        }
+      }
+    });
+  }
   $('visual-cancel').onclick = () => void reopen();
-  return { active, sync, constraints, externalChanged, scalarChanged, preview, apply, resolveContext, reopen, invalidate, hasGesture: () => Boolean(gesture), reset: () => { endGesture(false); epoch++; preferredId = model?.selectedId; model = undefined; }, isUnknown: () => active(model) && model.unknown };
+  return { active, sync, constraints, externalChanged, scalarChanged, preview, apply, resolveContext, reopen, invalidate, hasGesture: () => Boolean(gesture), hasPicker: () => Boolean(picker), importFiles, reset: () => { closePicker(); endGesture(false); epoch++; preferredId = model?.selectedId; model = undefined; }, isUnknown: () => active(model) && model.unknown };
 }

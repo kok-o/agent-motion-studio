@@ -2,7 +2,7 @@ import type { CompositionObject, ObjectState, Manifest, Scene } from '../src/typ
 import type { NativeRenderSpec } from '../renderer/types.js';
 import type { readProject } from '../src/project.js';
 import type { previewScene } from '../src/preview.js';
-import type { VisualAction as ProjectVisualAction } from '../src/visual-editor.js';
+import type { VisualAction as ProjectVisualAction, VisualIntent } from '../src/visual-editor.js';
 
 // The exact path-free server projection, never a filesystem ResolvedSpec.
 export type NativeSnapshot = NativeRenderSpec;
@@ -15,7 +15,7 @@ export type VisualAction = ProjectVisualAction & { patch: DurationPatch & { obje
 export type PreviewReply = Pick<Awaited<ReturnType<typeof previewScene>>, 'stale' | 'projectHash'> & { previewId: string | null; url: string };
 export type ApplyReply = ProjectState & { committed: true };
 type VisualReadOptions = { headers: { 'If-Match': string } };
-type VisualWriteOptions = { method: 'POST'; headers: { 'Content-Type': 'application/json'; 'If-Match': string; 'X-AMS-Selected-Object': string }; body: string };
+type VisualWriteOptions = { method: 'POST'; headers: { 'Content-Type': 'application/json'; 'If-Match': string; 'X-AMS-Selected-Object': string; 'X-AMS-Object-Intent'?: 'create' }; body: string };
 
 /** Concrete bridge to the remaining JS app. No generic JSON-to-T assertion.
  * Runtime ETag/ticket and commit-response validation remain in their owners. */
@@ -23,6 +23,7 @@ export interface VisualAPI {
   (path: `/api/visual/state?scene=${string}`, options: VisualReadOptions): Promise<{ etag: string; spec: NativeSnapshot }>;
   (path: '/api/visual/preview', options: VisualWriteOptions): Promise<PreviewReply>;
   (path: '/api/visual/apply', options: VisualWriteOptions): Promise<ApplyReply>;
+  (path: `/api/import?name=${string}`, options: { method: 'POST'; headers: { 'Content-Type': 'application/octet-stream'; 'If-Match': string }; body: File }): Promise<unknown>;
 }
 export interface EditorHost {
   getScene(): Scene | undefined;
@@ -41,11 +42,12 @@ export interface EditorHost {
   reopen(): Promise<void>;
 }
 type DeepReadonly<T> = T extends object ? { readonly [K in keyof T]: DeepReadonly<T[K]> } : T;
-export interface PreviewTicket { actionJSON: string; readonly action: DeepReadonly<VisualAction>; readonly selectedId: string; baseETag: string; previewId: string }
+export interface PreviewTicket { actionJSON: string; readonly action: DeepReadonly<VisualAction>; readonly selectedId: string; readonly intent: VisualIntent; baseETag: string; previewId: string }
 export interface EditorModel {
   sceneId: string; etag: string; objects: CompositionObject[]; selectedId: string | undefined;
   frame: number; loaded: boolean; ready: boolean; stale: boolean; unknown: boolean;
   reconciliationMessage?: string; spec?: NativeSnapshot; ticket?: PreviewTicket;
+  createdId?: string;
 }
 export interface Gesture {
   model: EditorModel; etag: string; objectId: string; frame: number; mode: string; pointerId: number;
@@ -66,4 +68,6 @@ export interface EditorController {
   hasGesture(): boolean;
   reset(): void;
   isUnknown(): boolean;
+  hasPicker(): boolean;
+  importFiles(files: readonly File[]): Promise<void>;
 }

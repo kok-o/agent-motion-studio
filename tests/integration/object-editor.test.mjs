@@ -51,6 +51,186 @@ async function nativePoint(page, x, y) {
 }
 async function drag(page, from, to) { await page.mouse.move(from.x, from.y); await page.mouse.down(); await page.mouse.move(to.x, to.y, { steps: 5 }); await page.mouse.up(); }
 
+for (const aspect of ['16:9', '9:16']) test(`create four native objects with stable drafts, explicit Apply and reopen ${aspect}`, { timeout: 180000 }, async () => {
+  const { file, dir, asset } = await fixture(aspect), before = await readProject(file), bytes = await readFile(file);
+  const sources = async () => Object.fromEntries(await Promise.all(Object.entries((await readProject(file)).manifest.assets).map(async ([id, value]) => [id, hashBytes(await readFile(join(file, '..', value.path)))])));
+  const sourceBefore = await sources(), browser = await launchBrowser(tools.chrome), page = await browser.newPage(), errors = [], requests = [], createdIDs = [], deltas = [];
+  let studio = await startStudio(file, 0);
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (request.method() === 'POST') requests.push({ path, intent: request.headers()['x-ams-object-intent'], selected: request.headers()['x-ams-selected-object'], etag: request.headers()['if-match'], body: request.postData() }); });
+  const settled = () => page.waitForFunction(() => document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest && !document.querySelector('#visual-x').disabled);
+  const selection = () => page.$eval('#visual-selection-name', node => node.textContent.split(' · ')[0]);
+  const open = async () => { await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); await settled(); };
+  const preview = async () => { await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled); };
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(value => localStorage.setItem('ams-language', value), aspect === '16:9' ? 'ru' : 'en'); await open();
+    assert.equal(await page.$eval('#visual-add-text', node => node.textContent), aspect === '16:9' ? '+ Текст' : '+ Text');
+    await page.click('#visual-add-text'); await settled(); const cancelledID = await selection(); assert.match(cancelledID, /^object-[a-f0-9-]{36}$/);
+    assert.equal(await page.$eval(`[data-object-id="${cancelledID}"]`, node => node.getAttribute('aria-pressed')), 'true');
+    await preview(); assert.deepEqual(await readFile(file), bytes); assert.deepEqual(await sources(), sourceBefore);
+    await page.click('#visual-add-rect'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-stay'); assert.equal(await selection(), cancelledID);
+    await page.click('[data-object-id="back"]'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-stay'); assert.equal(await selection(), cancelledID);
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled();
+    assert.equal(await page.$(`[data-object-id="${cancelledID}"]`), null); assert.deepEqual(await readFile(file), bytes); assert.deepEqual((await readProject(file)).manifest.history, before.manifest.history);
+    for (const kind of ['text', 'rect', 'ellipse', 'image']) {
+      const prior = await readProject(file), priorBytes = await readFile(file);
+      await page.click(`#visual-add-${kind}`);
+      if (kind === 'image') {
+        await page.waitForSelector('#visual-image-dialog[open]');
+        assert.deepEqual(await page.$$eval('#visual-image-asset option', nodes => nodes.map(node => node.value)), Object.entries(prior.manifest.assets).filter(([, value]) => value.type === 'image').map(([id]) => id));
+        await page.select('#visual-image-asset', asset); await page.click('#visual-image-add');
+      }
+      await settled(); const id = await selection(); createdIDs.push(id); assert.notEqual(id, cancelledID); assert.equal(new Set(createdIDs).size, createdIDs.length);
+      const defaults = await page.$$eval('#visual-x,#visual-y,#visual-width,#visual-height', nodes => nodes.map(node => Number(node.value)));
+      const [x, y, w, h] = defaults, landscape = aspect === '16:9'; assert.ok(x >= 0 && y >= 0 && x + w <= (landscape ? 1920 : 1080) && y + h <= (landscape ? 1080 : 1920));
+      await field(page, '#visual-x', x + 3); await page.click('#visual-layer-down');
+      if (kind === 'text') { await field(page, '#visual-text', 'Created title'); await field(page, '#visual-font-size', 40); await field(page, '#visual-color', '#f4b544'); }
+      else if (kind !== 'image') { await field(page, '#visual-color', '#41a992'); await field(page, '#visual-stroke', 'foreground'); if (kind === 'rect') await field(page, '#visual-radius', 18); else assert.equal(await page.$eval('#visual-radius-field', node => node.hidden), true); }
+      else assert.equal(await page.$eval('#visual-style-fields', node => node.hidden), true);
+      await settled(); assert.equal(await selection(), id); assert.deepEqual(await readFile(file), priorBytes);
+      await preview(); assert.equal(await selection(), id); assert.deepEqual(await readFile(file), priorBytes); assert.deepEqual(await sources(), sourceBefore);
+      const previewRequest = requests.findLast(item => item.path === '/api/visual/preview');
+      assert.equal(previewRequest.intent, 'create'); assert.equal(previewRequest.selected, id);
+      const action = JSON.parse(previewRequest.body); assert.equal(action.patch.objects.filter(object => object.id === id).length, 1);
+      assert.deepEqual(action.patch.objects.filter(object => object.id !== id), prior.manifest.scenes[1].objects);
+      await (await page.$('#object-editor')).screenshot({ path: join(dir, `created-${kind}-draft.png`) });
+      await page.click('#save-scene'); await page.waitForFunction(() => document.querySelector('#draft-status').textContent === 'Все изменения сохранены' || document.querySelector('#draft-status').textContent === 'All changes saved'); await settled();
+      const accepted = await readProject(file), applyRequest = requests.findLast(item => item.path === '/api/visual/apply');
+      deltas.push(accepted.manifest.history.length - prior.manifest.history.length); assert.equal(deltas.at(-1), 1);
+      assert.equal(accepted.manifest.scenes[1].objects.length, prior.manifest.scenes[1].objects.length + 1);
+      assert.deepEqual(accepted.manifest.scenes[1].objects, action.patch.objects); assert.deepEqual(accepted.manifest.scenes[0], before.manifest.scenes[0]); assert.deepEqual(accepted.manifest.assets, before.manifest.assets);
+      assert.deepEqual([applyRequest.intent, applyRequest.selected, applyRequest.etag], [previewRequest.intent, id, previewRequest.etag]); assert.equal(JSON.stringify(JSON.parse(applyRequest.body).action), previewRequest.body);
+      assert.equal(await selection(), id); assert.equal(requests.some(item => item.path === '/api/edit' || item.path === '/api/import'), false);
+    }
+    const accepted = await readProject(file), renderer = await openRenderer(await loadManifest(file), tools.chrome);
+    let nativeFrame;
+    try { nativeFrame = { local: 0, global: 6, sha256: hashBytes(await renderer.frame(6)) }; assert.equal(await page.$eval('#stage', canvas => canvas.toDataURL()), `data:image/png;base64,${(await renderer.frame(6)).toString('base64')}`); } finally { await renderer.finish(); }
+    await studio.close(); studio = await startStudio(file, 0); await open();
+    for (const id of createdIDs) assert.ok(await page.$(`[data-object-id="${id}"]`)); assert.deepEqual((await readProject(file)).manifest.scenes, accepted.manifest.scenes);
+    await editProject(file, { type: 'restore', revisionId: before.manifest.revision }, accepted.etag); await studio.close(); studio = await startStudio(file, 0); await open();
+    assert.deepEqual((await readProject(file)).manifest.scenes, before.manifest.scenes); assert.deepEqual(await sources(), sourceBefore); for (const id of createdIDs) assert.equal(await page.$(`[data-object-id="${id}"]`), null);
+    assert.deepEqual(errors, []);
+    await writeFile(join(dir, 'created-objects.json'), JSON.stringify({ status: 'PASS', aspect, language: aspect === '16:9' ? 'ru' : 'en', types: ['text', 'rect', 'ellipse', 'image'], createdIDs, oneStableIdPerDraft: true, insertionAndSelectionAtomic: true, addPreviewCancelNoAcceptedMutation: true, applyRevisionDeltas: deltas, neighboursAndSourcesPreserved: true, exactIntentSelectionETagAction: true, explicitStayPreservesNewObject: true, propertiesGeometryLayerBeforeApply: true, newSessionReopenAndRestore: true, nativeFrame, sourceHashes: sourceBefore, errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
+test('create intent routes reject extra objects, neighbour changes and mismatched metadata before publication', { timeout: 90000 }, async () => {
+  const { file, dir, asset } = await fixture('16:9'), studio = await startStudio(file, 0), origin = new URL(studio.url).origin;
+  try {
+    const session = await fetch(origin + '/api/session', { method: 'POST', headers: { Origin: origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ token: new URL(studio.url).hash.slice(1) }) });
+    const cookie = session.headers.get('set-cookie').split(';')[0], before = await readProject(file), bytes = await readFile(file), original = before.manifest.scenes[1].objects;
+    const created = { id: 'new-object', type: 'image', asset, x: 200, y: 300, width: 300, height: 200, fit: 'contain' };
+    const action = () => ({ type: 'edit-scene', sceneId: 'objects', patch: { objects: [...structuredClone(original), structuredClone(created)] } });
+    const headers = { Origin: origin, Cookie: cookie, 'Content-Type': 'application/json', 'If-Match': before.etag, 'X-AMS-Object-Intent': 'create', 'X-AMS-Selected-Object': created.id };
+    const call = (route, input, changes = {}) => { const merged = { ...headers, ...changes }; for (const key of Object.keys(merged)) if (merged[key] === undefined) delete merged[key]; return fetch(origin + route, { method: 'POST', headers: merged, body: JSON.stringify(input) }); };
+    const negatives = [
+      a => a.patch.objects.push({ ...created, id: 'second-new' }), a => a.patch.objects.push({ ...created }),
+      a => a.patch.objects.splice(0, 1), a => a.patch.objects[0].id = 'replacement', a => a.patch.objects[0].x++,
+      a => [a.patch.objects[0], a.patch.objects[1]] = [a.patch.objects[1], a.patch.objects[0]],
+      a => a.patch.objects.at(-1).asset = 'missing', a => a.patch.objects.at(-1).asset = '../private.png',
+      a => a.patch.objects.at(-1).type = 'video', a => a.patch.objects.at(-1).width = 3841,
+      a => a.patch.objects.at(-1).keyframes = [{ frame: 2, x: 1 }, { frame: 1, x: 2 }],
+      a => a.patch.objects.at(-1).id = 'back', a => a.patch.durationFrames = 0,
+      a => a.patch.objects.at(-1).path = 'private.png'
+    ];
+    for (const route of ['/api/visual/preview', '/api/visual/apply']) {
+      for (const mutate of negatives) { const bad = action(); mutate(bad); assert.equal((await call(route, route.endsWith('apply') ? { previewId: 'missing', action: bad } : bad)).status, 400); assert.deepEqual(await readFile(file), bytes); }
+      for (const value of ['', 'edit', 'CREATE', 'create, create', undefined]) assert.equal((await call(route, route.endsWith('apply') ? { previewId: 'missing', action: action() } : action(), { 'X-AMS-Object-Intent': value })).status, 400);
+      for (const value of ['', 'back', 'wrong-new', undefined]) assert.equal((await call(route, route.endsWith('apply') ? { previewId: 'missing', action: action() } : action(), { 'X-AMS-Selected-Object': value })).status, 400);
+      const duplicate = await new Promise((ok, bad) => { const req = httpRequest(origin + route, { method: 'POST', headers: { ...headers, 'X-AMS-Object-Intent': ['create', 'create'] } }, reply => { reply.resume(); ok(reply.statusCode); }); req.on('error', bad); req.end(JSON.stringify(route.endsWith('apply') ? { previewId: 'missing', action: action() } : action())); }); assert.equal(duplicate, 400);
+    }
+    assert.deepEqual(await readFile(file), bytes);
+    let rendered = await (await call('/api/visual/preview', action())).json(); assert.ok(rendered.previewId);
+    const mismatch = action(); mismatch.patch.objects.at(-1).x++;
+    assert.equal((await call('/api/visual/apply', { previewId: rendered.previewId, action: mismatch })).status, 400); assert.deepEqual(await readFile(file), bytes);
+    assert.equal((await call('/api/visual/apply', { previewId: rendered.previewId, action: action() }, { 'If-Match': '0'.repeat(64) })).status, 409);
+    const originalRename = filesystem.rename; let failedPublicationAttempts = 0;
+    try {
+      filesystem.rename = async (from, to) => { if (to === resolve(file)) { failedPublicationAttempts++; throw Object.assign(new Error('Controlled create publication failure'), { code: 'EIO' }); } return originalRename(from, to); }; syncBuiltinESMExports();
+      const failed = await call('/api/visual/apply', { previewId: rendered.previewId, action: action() }); assert.equal(failed.status, 503); assert.equal((await failed.json()).error.code, 'VISUAL_COMMIT_OUTCOME_UNKNOWN');
+    } finally { filesystem.rename = originalRename; syncBuiltinESMExports(); }
+    assert.equal(failedPublicationAttempts, 1); assert.deepEqual(await readFile(file), bytes);
+    assert.equal((await call('/api/visual/apply', { previewId: rendered.previewId, action: action() })).status, 400, 'ticket was consumed before the failed publication attempt');
+    rendered = await (await call('/api/visual/preview', action())).json(); assert.ok(rendered.previewId);
+    const result = await call('/api/visual/apply', { previewId: rendered.previewId, action: action() }); assert.equal(result.status, 200);
+    const accepted = await readProject(file); assert.equal(accepted.manifest.history.length, before.manifest.history.length + 1); assert.deepEqual(accepted.manifest.scenes[1].objects.filter(object => object.id !== created.id), original);
+    assert.equal((await call('/api/visual/apply', { previewId: rendered.previewId, action: action() })).status, 409);
+    assert.equal((await call('/api/visual/apply', { previewId: rendered.previewId, action: action() }, { 'If-Match': accepted.etag })).status, 400);
+    assert.deepEqual(accepted.manifest.assets, before.manifest.assets); assert.equal(JSON.stringify(accepted.manifest).includes('X-AMS-Object-Intent'), false);
+    const fullObjects = [...structuredClone(accepted.manifest.scenes[1].objects), ...Array.from({ length: 92 }, (_, index) => ({ id: `limit-${index}`, type: 'shape', shape: 'rect', x: 0, y: 0, width: 10, height: 10, color: 'accent' }))];
+    const almostFull = await editProject(file, { type: 'edit-scene', sceneId: 'objects', patch: { objects: fullObjects.slice(0, 95) } }, accepted.etag);
+    const browser = await launchBrowser(tools.chrome), page = await browser.newPage();
+    try {
+      await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page);
+      assert.equal(await page.$eval('#visual-add-rect', node => node.disabled), false); await page.click('#visual-add-rect');
+      await page.waitForFunction(() => document.querySelectorAll('#visual-layers button').length === 96 && !document.querySelector('#preview-scene').disabled);
+      assert.equal(await page.$eval('#visual-add-text', node => node.disabled), true); assert.equal((await readProject(file)).etag, almostFull.etag);
+      await page.evaluate(() => document.querySelector('#visual-add-text').dispatchEvent(new Event('click'))); assert.equal(await page.$eval('#visual-dialog', node => node.open), false);
+      await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await ready(page);
+      await editProject(file, { type: 'edit-scene', sceneId: 'objects', patch: { objects: fullObjects } }, almostFull.etag);
+      await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); assert.equal(await page.$eval('#visual-add-text', node => node.disabled), true);
+    } finally { await browser.close(); }
+    const full = await readProject(file), fullBytes = await readFile(file);
+    const overflow = { type: 'edit-scene', sceneId: 'objects', patch: { objects: [...fullObjects, { ...created, id: 'overflow' }] } };
+    for (const route of ['/api/visual/preview', '/api/visual/apply']) assert.equal((await call(route, route.endsWith('apply') ? { previewId: 'missing', action: overflow } : overflow, { 'If-Match': full.etag, 'X-AMS-Selected-Object': 'overflow' })).status, 400);
+    assert.deepEqual(await readFile(file), fullBytes);
+    await writeFile(join(dir, 'create-server.json'), JSON.stringify({ status: 'PASS', negativeActions: negatives.length, bothPostRoutes: true, malformedMissingDuplicateIntent: true, missingIncorrectSelected: true, mismatchExactActionAndETag: true, ticketConsumedBeforeFailedPublication: true, failedPublicationAttempts, ticketAppliedOnce: true, actualUI95To96DraftAllowed: true, actualUI96To97Blocked: true, native96ObjectLimitRejected: true, noHiddenPublicationOnReject: true, neighboursAndAssetsPreserved: true, transientMetadataNotPersisted: true }, null, 2));
+  } finally { await studio.close(); }
+});
+
+test('image import is a separate revision; picker conflict and unknown writes require read reconciliation', { timeout: 180000 }, async () => {
+  const { file, dir } = await fixture('16:9'), browser = await launchBrowser(tools.chrome), page = await browser.newPage(), errors = [], requests = [];
+  let studio = await startStudio(file, 0);
+  const importedImage = join(dir, 'imported.png'), unknownImage = join(dir, 'unknown.png');
+  await runProcess(tools.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0xf08b31:s=64x64', '-frames:v', '1', '-threads', '1', importedImage]);
+  await runProcess(tools.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0xb531f0:s=64x64', '-frames:v', '1', '-threads', '1', unknownImage]);
+  page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { if (request.method() === 'POST') requests.push({ path: new URL(request.url()).pathname, selected: request.headers()['x-ams-selected-object'], body: request.postData() }); });
+  const settled = () => page.waitForFunction(() => document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest && !document.querySelector('#visual-x').disabled);
+  const open = async () => { await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); await settled(); };
+  const preview = async () => { await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled); };
+  const imageDraft = async id => { await page.click('#visual-add-image'); await page.waitForSelector('#visual-image-dialog[open]'); await page.select('#visual-image-asset', id); await page.click('#visual-image-add'); await settled(); };
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en')); await open();
+    const before = await readProject(file); await (await page.$('#import')).uploadFile(importedImage);
+    const importedID = `media-${hashBytes(await readFile(importedImage)).slice(0, 24)}`;
+    await page.waitForFunction(id => Boolean(document.querySelector(`[data-add-asset="${id}"]`)), {}, importedID); await settled();
+    const imported = await readProject(file), importedBytes = await readFile(file); assert.equal(imported.manifest.history.length, before.manifest.history.length + 1); assert.deepEqual(imported.manifest.scenes, before.manifest.scenes);
+    await imageDraft(importedID); await preview(); assert.deepEqual(await readFile(file), importedBytes);
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled();
+    assert.deepEqual(await readFile(file), importedBytes); assert.equal(hashBytes(await readFile(join(file, '..', imported.manifest.assets[importedID].path))), hashBytes(await readFile(importedImage)));
+    await studio.close(); studio = await startStudio(file, 0); await open();
+    await page.click('#visual-add-image'); await page.waitForSelector('#visual-image-dialog[open]'); assert.equal(await page.$eval(`#visual-image-asset option[value="${importedID}"]`, node => node.value), importedID);
+    const externalObjects = structuredClone(imported.manifest.scenes[1].objects); externalObjects[0].x += 8;
+    await cliEdit(file, { type: 'edit-scene', sceneId: 'objects', patch: { objects: externalObjects } }, dir); const external = await readProject(file);
+    await page.waitForFunction(() => document.querySelector('#visual-image-note').textContent.startsWith('Project changed'), { timeout: 10000 }); assert.equal(await page.$eval('#visual-image-add', node => node.disabled), true);
+    await page.evaluate(() => document.querySelector('#visual-image-add').dispatchEvent(new Event('click'))); assert.equal((await readProject(file)).etag, external.etag);
+    await page.click('#visual-image-cancel'); await page.click('#reload'); await settled();
+    await page.click('#visual-add-text'); await settled(); await preview();
+    const nextObjects = structuredClone(externalObjects); nextObjects[0].x += 8; await cliEdit(file, { type: 'edit-scene', sceneId: 'objects', patch: { objects: nextObjects } }, dir);
+    await page.waitForFunction(() => document.querySelector('#visual-status').textContent.includes('changed externally'), { timeout: 10000 }); assert.equal(await page.$eval('#save-scene', node => node.disabled), true); assert.equal(requests.filter(item => item.path === '/api/visual/apply').length, 0);
+    await page.click('#reload'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled();
+    await imageDraft(importedID); const createdID = await page.$eval('#visual-selection-name', node => node.textContent.split(' · ')[0]); await preview();
+    const cdp = await page.createCDPSession(); let applyReply, importReply;
+    await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/visual/apply', requestStage: 'Response' }] });
+    cdp.on('Fetch.requestPaused', async event => { try { const body = await cdp.send('Fetch.getResponseBody', { requestId: event.requestId }); const reply = JSON.parse(body.base64Encoded ? Buffer.from(body.body, 'base64').toString() : body.body); if (new URL(event.request.url).pathname === '/api/visual/apply') applyReply = reply; else importReply = reply; await cdp.send('Fetch.fulfillRequest', { requestId: event.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from('{unreadable').toString('base64') }); } catch (error) { errors.push(error.message); } });
+    const beforeApply = await readProject(file); await page.click('#save-scene'); await page.waitForFunction(() => document.querySelector('#visual-status').textContent.includes('outcome unknown'));
+    const accepted = await readProject(file); assert.equal(applyReply.committed, true); assert.equal(accepted.manifest.history.length, beforeApply.manifest.history.length + 1); assert.equal(accepted.manifest.scenes[1].objects.filter(object => object.id === createdID).length, 1);
+    assert.deepEqual(accepted.manifest.scenes[1].objects.filter(object => object.id !== createdID), nextObjects); assert.equal(await page.$eval('#visual-selection-name', node => node.textContent.split(' · ')[0]), createdID);
+    for (const kind of ['text', 'rect', 'ellipse', 'image']) { assert.equal(await page.$eval(`#visual-add-${kind}`, node => node.disabled), true); await page.evaluate(id => document.querySelector(id).dispatchEvent(new Event('click')), `#visual-add-${kind}`); }
+    await page.evaluate(() => document.querySelector('#save-scene').dispatchEvent(new Event('click'))); assert.equal(requests.filter(item => item.path === '/api/visual/apply').length, 1);
+    await (await page.$('#object-editor')).screenshot({ path: join(dir, 'created-unknown-apply.png') });
+    await cdp.send('Fetch.disable'); await page.click('#reload'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled(); assert.equal((await readProject(file)).etag, accepted.etag);
+    await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/import?*', requestStage: 'Response' }] });
+    await (await page.$('#import')).uploadFile(unknownImage); await page.waitForFunction(() => document.querySelector('#visual-status').textContent.startsWith('Import outcome unknown'));
+    const unknownImported = await readProject(file), unknownID = `media-${hashBytes(await readFile(unknownImage)).slice(0, 24)}`;
+    assert.equal(importReply.importedId, unknownID); assert.equal(unknownImported.manifest.history.length, accepted.manifest.history.length + 1); assert.deepEqual(unknownImported.manifest.scenes, accepted.manifest.scenes);
+    assert.equal(await page.$eval('#visual-add-image', node => node.disabled), true); assert.equal(requests.filter(item => item.path === '/api/import').length, 2); await (await page.$('#import')).uploadFile(unknownImage); assert.equal(requests.filter(item => item.path === '/api/import').length, 2);
+    await cdp.send('Fetch.disable'); await cdp.detach(); await page.click('#reload'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled();
+    assert.equal((await readProject(file)).etag, unknownImported.etag); assert.ok(await page.$(`[data-add-asset="${unknownID}"]`)); assert.deepEqual(errors, []);
+    await writeFile(join(dir, 'create-import-reconciliation.json'), JSON.stringify({ status: 'PASS', importRevisionDelta: 1, importCancelReopenPreservesSource: true, importPlusApplyRevisionDelta: 2, pickerExternalConflictBlocked: true, draftExternalConflictInvalidatesTicket: true, stableCreatedID: createdID, lostApplyReplyObservedCommitted: true, applyRequests: 1, unknownBlocksAllAdd: true, ordinaryApplyNeverResent: true, lostImportReplyObservedCommitted: true, importRequests: 2, unknownImportNeverResent: true, explicitReadReconciliation: true, importedSourceHash: hashBytes(await readFile(importedImage)), unknownSourceHash: hashBytes(await readFile(unknownImage)), errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
 test('pending native render preserves invalid style entries and blocks writes until correction or Cancel', { timeout: 90000 }, async () => {
   const { file, dir } = await fixture('16:9'), originalBytes = await readFile(file), before = await readProject(file);
   const browser = await launchBrowser(tools.chrome), page = await browser.newPage(), studio = await startStudio(file, 0), writes = [], errors = [];
