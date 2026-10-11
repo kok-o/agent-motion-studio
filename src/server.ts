@@ -11,6 +11,7 @@ import { normalizeError, StudioError } from './errors.js';
 import { previewScene } from './preview.js';
 import { GenerationService } from './generation.js';
 import type { GenerationProvider } from './generation-provider.js';
+import { VisualTickets, visualETag, assertVisualETag, validateVisualAction, visualSpec } from './visual-editor.js';
 
 async function body(request: IncomingMessage, limit: number) {
   if (Number(request.headers['content-length'] ?? 0) > limit) throw new Error('Request exceeds upload limit.');
@@ -18,7 +19,7 @@ async function body(request: IncomingMessage, limit: number) {
   for await (const chunk of request) { bytes += chunk.length; if (bytes > limit) throw new Error('Request exceeds upload limit.'); chunks.push(chunk); }
   return Buffer.concat(chunks);
 }
-const mime = (file: string) => ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.flac': 'audio/flac' }[extname(file).toLowerCase()] ?? 'application/octet-stream');
+const mime = (file: string) => ({ '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.woff2': 'font/woff2', '.ogg': 'audio/ogg', '.flac': 'audio/flac' }[extname(file).toLowerCase()] ?? 'application/octet-stream');
 
 async function sendFile(request: IncomingMessage, response: ServerResponse, file: string) {
   const info = await stat(file); let start = 0, end = info.size - 1, status = 200;
@@ -56,6 +57,8 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
   const previewRoot = await mkdtemp(join(tmpdir(), 'ams-preview-'));
   let previewBusy = false, previewWork: Promise<unknown> | undefined, exportWork: Promise<unknown> | undefined;
   const previews = new Map<string, string>();
+  const visualTickets = new VisualTickets();
+  let visualApplying = false;
   let origin = '';
   async function inside(path: string) {
     const resolved = await realpath(path), rel = relative(root, resolved);
@@ -88,7 +91,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
     try {
       if (request.headers.host !== new URL(origin).host || (request.headers.origin && request.headers.origin !== origin)) { send({ error: 'Origin/Host rejected' }, 403); return; }
       const url = new URL(request.url ?? '/', origin);
-      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/style.css': 'style.css' };
+      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/object-editor.js': 'object-editor.js', '/native-fonts.css': 'native-fonts.css', '/style.css': 'style.css' };
       if (publicFiles[url.pathname] && (request.method === 'GET' || request.method === 'HEAD')) { await sendFile(request, response, join(packageRoot, 'dist/studio', publicFiles[url.pathname])); return; }
       if (request.method === 'POST' && url.pathname === '/api/session') {
         if (request.headers.origin !== origin) { send({ error: 'Origin required' }, 403); return; }
@@ -99,6 +102,19 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       const cookie = /(?:^|;\s*)studio=([a-f0-9]+)/.exec(request.headers.cookie ?? '')?.[1] ?? '';
       if (!equal(cookie)) { send({ error: 'Open the session link printed by the local CLI.' }, 401); return; }
       if (request.method === 'POST' && request.headers.origin !== origin) { send({ error: 'Origin required' }, 403); return; }
+      // Fixed native renderer code and native fonts only. No HTML document or CSP exception.
+      if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname === '/visual/entry.js') { await sendFile(request, response, join(packageRoot, 'dist/renderer/entry.js')); return; }
+      const fontMatch = /^\/fonts\/((?:noto-sans-(?:latin|cyrillic|cyrillic-ext)-(?:400|700)|oswald-(?:latin|cyrillic|cyrillic-ext)-700)-normal\.woff2)$/.exec(url.pathname);
+      if ((request.method === 'GET' || request.method === 'HEAD') && fontMatch) { await sendFile(request, response, join(packageRoot, 'assets/fonts', fontMatch[1])); return; }
+      if (request.method === 'GET' && url.pathname === '/api/visual/state') {
+        const expected = visualETag(request.headers['if-match']), state = await readProject(file);
+        assertVisualETag(state.etag, expected);
+        if (state.manifest.schemaVersion !== 2 || !state.manifest.scenes.some(scene => scene.id === url.searchParams.get('scene') && scene.type === 'composition')) throw new StudioError('VISUAL_INPUT', 'visual', 'Select an existing composition scene.');
+        const spec = await resolvedProject(state.etag);
+        assertVisualETag((await readProject(file)).etag, expected);
+        send({ etag: expected, spec: visualSpec(spec) }); return;
+      }
+      if (request.method === 'POST' && visualApplying) { send({ error: { code: 'VISUAL_BUSY', message: 'Apply is running. Wait before editing.' } }, 409); return; }
       if (request.method === 'GET' && url.pathname === '/api/state') {
         const state = await readProject(file), spec = await resolvedProject(state.etag);
         send({ ...state, projectPath: file, projectName, metadata: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { width: asset.width, height: asset.height, durationSeconds: asset.durationSeconds, sourceFps: asset.sourceFps, bytes: asset.bytes, hash: asset.hash }])), exports: await exportsList(), job }); return;
@@ -135,9 +151,9 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
           return;
         }
       }
-      if ((request.method === 'GET' || request.method === 'HEAD') && url.pathname.startsWith('/media/')) {
-        const state = await readProject(file), spec = await resolvedProject(state.etag), asset = spec.assets[decodeURIComponent(url.pathname.slice(7))];
-        if (!asset) { send({ error: 'Media not found' }, 404); return; }
+      if ((request.method === 'GET' || request.method === 'HEAD') && (url.pathname.startsWith('/media/') || url.pathname.startsWith('/assets/'))) {
+        const state = await readProject(file), spec = await resolvedProject(state.etag), asset = spec.assets[decodeURIComponent(url.pathname.slice(url.pathname.startsWith('/media/') ? 7 : 8))];
+        if (!asset || (url.pathname.startsWith('/assets/') && asset.type !== 'image')) { send({ error: 'Media not found' }, 404); return; }
         await sendFile(request, response, await inside(asset.absolutePath)); return;
       }
       const outputMatch = /^\/exports\/([a-zA-Z0-9_-]+)\/output\.mp4$/.exec(url.pathname);
@@ -145,6 +161,46 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       const previewMatch = /^\/previews\/([a-f0-9-]+)\/output\.mp4$/.exec(url.pathname);
       if ((request.method === 'GET' || request.method === 'HEAD') && previewMatch && previews.has(previewMatch[1])) { await sendFile(request, response, previews.get(previewMatch[1])!); return; }
       if (request.method === 'POST' && (job.status === 'running' || previewBusy)) { send({ error: 'Render is running. Wait before editing.' }, 409); return; }
+      if (request.method === 'POST' && url.pathname === '/api/visual/preview') {
+        const expected = visualETag(request.headers['if-match']), state = await readProject(file);
+        assertVisualETag(state.etag, expected);
+        const action = validateVisualAction(state.manifest, JSON.parse((await body(request, 1024 * 1024)).toString()));
+        // Recheck busy after async body/state reads, before starting work.
+        if (previewBusy || visualApplying || job.status === 'running') throw new StudioError('VISUAL_BUSY', 'visual', 'Render is running.');
+        previewBusy = true;
+        const id = randomUUID(), output = join(previewRoot, id);
+        try {
+          const work = previewScene(file, action, expected, output); previewWork = work;
+          const result = await work;
+          previews.set(id, join(output, 'output.mp4'));
+          if (!result.stale) visualTickets.add(id, expected, action);
+          while (previews.size > 2) { const old = previews.keys().next().value!; previews.delete(old); await rm(join(previewRoot, old), { recursive: true, force: true }); }
+          send({ ...result, previewId: result.stale ? null : id, url: `/previews/${id}/output.mp4` });
+        } catch (error) { await rm(output, { recursive: true, force: true }); throw error; }
+        finally { previewBusy = false; previewWork = undefined; }
+        return;
+      }
+      if (request.method === 'POST' && url.pathname === '/api/visual/apply') {
+        const expected = visualETag(request.headers['if-match']);
+        const input = JSON.parse((await body(request, 1024 * 1024)).toString());
+        if (!input || Object.keys(input).some(key => !['previewId', 'action'].includes(key))) throw new StudioError('VISUAL_INPUT', 'visual', 'Expected previewId and exact action.');
+        const state = await readProject(file); assertVisualETag(state.etag, expected);
+        const action = validateVisualAction(state.manifest, input.action);
+        if (previewBusy || visualApplying || job.status === 'running') throw new StudioError('VISUAL_BUSY', 'visual', 'Render or Apply is running.');
+        visualTickets.consume(input.previewId, expected, action);
+        visualApplying = true;
+        try { send({ ...await editProject(file, action, expected), committed: true }); }
+        catch (error) {
+          if (error instanceof StudioError && error.code === 'INTERNAL_ERROR' && error.stage === 'project' && error.exitCode === 4 && error.message.startsWith('Manifest was committed but reading the result failed:')) {
+            send({ ...normalizeError(error), committed: true, reconcileRequired: true }, 503);
+            return;
+          }
+          if (error instanceof StudioError && ['PROJECT_CONFLICT', 'PROJECT_EDIT', 'PROJECT_BUSY', 'INVALID_MANIFEST'].includes(error.code)) throw error;
+          // Ordinary edits have no receipt/replay guarantee. An IO failure may follow publication.
+          send({ error: { code: 'VISUAL_COMMIT_OUTCOME_UNKNOWN', message: 'Apply outcome is unknown. Reread the project before any further mutation.' }, reconcileRequired: true }, 503);
+        } finally { visualApplying = false; }
+        return;
+      }
       if (request.method === 'POST' && url.pathname === '/api/preview') {
         const action = JSON.parse((await body(request, 1024 * 1024)).toString());
         if (previewBusy || job.status === 'running') { send({ error: 'Render is running. Wait before previewing.' }, 409); return; }

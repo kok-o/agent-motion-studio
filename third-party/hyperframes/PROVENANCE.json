@@ -1,0 +1,35 @@
+{
+  "upstream": "https://github.com/heygen-com/hyperframes",
+  "commit": "bb34e301ec3c5f7b9edad07932356bd02a9f7934",
+  "license": "Apache-2.0",
+  "adaptedFile": "studio/object-editor-geometry.js",
+  "changes": "Type annotations removed; constants inlined; imports removed; pure numeric and proportional center resize only. AMS-specific keyframe and picking helpers are separate exports.",
+  "mapping": [
+    {
+      "source": "packages/studio/src/components/editor/domEditResizeLocal.ts",
+      "sourceSHA256": "965edaa922f015fc3eabf5bcc0ba7e44304a75d745bc8f84220209e905852d10",
+      "symbols": [
+        "resolveCenterResizeScale",
+        "resolveCenterResizeSize"
+      ]
+    },
+    {
+      "source": "packages/studio/src/components/editor/propertyPanelHelpers.ts",
+      "sourceSHA256": "9de5bc4f3a0e3e8197ff8a26e3fd6769373380ef519a7985b938da1a67d0be86",
+      "symbols": [
+        "formatNumericValue",
+        "parseNumericToken",
+        "adjustNumericToken"
+      ]
+    },
+    {
+      "source": "packages/studio/src/utils/rounding.ts",
+      "sourceSHA256": "2a6d8393ff10c5641a74e8d6c80c1ad51e8691a7bab1eccda40700eccc918fb2",
+      "symbols": [
+        "roundToCenti"
+      ]
+    }
+  ],
+  "licenseSHA256": "4259155fb06f127687ee7b0a8a3682d45132db0f2da26cbc0b7a2d1e796436b8",
+  "adaptedSHA256": "e4a2e69866e29b8f7f94048a1e5f5419315cebbc28b1b67c9ffe4261b3fbf420"
+}

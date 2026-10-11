@@ -12,7 +12,7 @@ await build({ entryPoints: entries, outdir: 'dist', platform: 'node', format: 'e
 await build({ entryPoints: ['renderer/entry.ts'], outfile: 'dist/renderer/entry.js', platform: 'browser', format: 'iife', target: 'chrome120', bundle: true });
 await copyFile('renderer/index.html', 'dist/renderer/index.html');
 await mkdir('dist/studio', { recursive: true });
-for (const file of ['index.html', 'app.js', 'i18n.js', 'generation-ui.js', 'style.css']) await copyFile(`studio/${file}`, `dist/studio/${file}`);
+for (const file of ['index.html', 'app.js', 'i18n.js', 'generation-ui.js', 'style.css', 'native-fonts.css']) await copyFile(`studio/${file}`, `dist/studio/${file}`);
 for (const subset of ['latin', 'cyrillic', 'cyrillic-ext']) for (const weight of [400, 700]) {
   const file = `noto-sans-${subset}-${weight}-normal.woff2`;
   await copyFile(`node_modules/@fontsource/noto-sans/files/${file}`, `assets/fonts/${file}`);
@@ -23,3 +23,5 @@ for (const subset of ['latin', 'cyrillic', 'cyrillic-ext']) {
   await copyFile(`node_modules/@fontsource/oswald/files/${file}`, `assets/fonts/${file}`);
 }
 await copyFile('node_modules/@fontsource/oswald/LICENSE', 'assets/fonts/OFL-Oswald.txt');
+
+await build({ entryPoints: ['studio/object-editor.js'], outfile: 'dist/studio/object-editor.js', platform: 'browser', format: 'esm', target: 'chrome120', bundle: true, external: ['./i18n.js'] });

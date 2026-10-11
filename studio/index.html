@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Motion Studio</title><link rel="stylesheet" href="/style.css"></head>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Agent Motion Studio</title><link rel="stylesheet" href="/style.css"><link rel="stylesheet" href="/native-fonts.css"></head>
 <body>
 <header><div class="identity"><span class="mark">am</span><div><strong>Agent Motion Studio</strong><small>Локальная монтажная студия · прототип</small></div></div><div class="actions"><select id="language" aria-label="Language / Язык"><option value="ru">RU</option><option value="en">EN</option></select><button id="reload">Перечитать проект</button><button id="export" class="primary">Экспорт MP4 ↗</button></div></header>
 <main>
@@ -11,6 +11,14 @@
         <div class="screen"><video id="player" controls playsinline preload="metadata"></video><div id="empty-player"><span class="orbit">◯</span><h2>Посмотрите фильм в движении</h2><p>Выберите сцену и нажмите «Предпросмотр сцены».<br>Для просмотра всего фильма — «Экспорт MP4».</p></div></div>
         <div class="player-footer"><label>Экспорт <select id="exports" aria-label="Выбрать экспорт"></select></label><a id="download" hidden download="film.mp4">Скачать MP4 ↓</a></div>
       </div>
+      <section id="object-editor" class="panel object-editor" hidden aria-labelledby="visual-title">
+        <div class="panel-heading"><span id="visual-title">Объекты композиции</span><button id="visual-cancel">Отменить черновик / перечитать</button></div>
+        <div class="visual-controls"><label>Кадр сцены<input id="visual-frame" type="range" min="0" max="0" step="1" value="0"><output id="visual-frame-label">0</output></label><label>Режим геометрии<select id="visual-mode"><option value="base">Base · основа</option><option value="key">Keyframe · выбранный кадр</option></select></label></div>
+        <p id="visual-key-note" class="note" hidden>Меняется только геометрия этого keyframe. Остальные свойства и easing сохраняются.</p>
+        <div id="visual-stage-space"><div id="visual-stage-wrap"><canvas id="stage" aria-label="Native composition frame"></canvas><svg id="visual-overlay" aria-label="Выбор и геометрия объектов"></svg></div></div>
+        <div class="visual-inspector"><div><strong>Слои · верхний первым</strong><div id="visual-layers"></div></div><div><strong id="visual-selection-name"></strong><div class="visual-numbers"><label>X<input id="visual-x" type="number" step="any"></label><label>Y<input id="visual-y" type="number" step="any"></label><label>Ширина<input id="visual-width" type="number" min="1" step="any"></label><label>Высота<input id="visual-height" type="number" min="1" step="any"></label></div><label id="visual-text-field">Текст объекта<textarea id="visual-text" rows="2"></textarea></label></div></div>
+        <p id="visual-status" class="note" role="status" aria-live="polite"></p>
+      </section>
       <div class="story-heading"><div><h2>Раскадровка</h2><p>Выберите сцену, чтобы изменить её или вернуть предыдущий дубль.</p></div><button id="add-title">+ Титр</button></div>
       <div id="storyboard" class="storyboard"></div>
       <section id="generation-panel" class="panel generation" hidden aria-labelledby="generation-title">
@@ -77,5 +85,6 @@
 </main>
 <dialog id="conflict-dialog" aria-labelledby="conflict-title"><h2 id="conflict-title">Проект изменён извне</h2><p>Ваш черновик сохранён в этой вкладке. На диске остаётся внешняя версия. Выберите, как продолжить.</p><div id="conflict-details"></div><p id="conflict-note" class="note"></p><div class="conflict-actions"><button id="conflict-local" class="primary">Применить мои изменённые поля</button><button id="conflict-external">Принять внешнюю, отбросить черновик</button><button id="conflict-cancel">Вернуться к черновику</button></div></dialog>
 <dialog id="generation-conflict-dialog" aria-labelledby="generation-conflict-title"><h2 id="generation-conflict-title">Контекст candidate изменён извне</h2><p>Кандидат сохранён отдельно. Принятый проект не перезаписан. Сравните контекст и подтвердите новый точный preview.</p><div id="generation-conflict-details"></div><p id="generation-conflict-note" class="note"></p><div class="conflict-actions"><button id="generation-conflict-preview" class="primary">Проверить текущую версию и собрать новый preview</button><button id="generation-conflict-cancel">Вернуться к кандидату</button></div></dialog>
+<dialog id="visual-dialog" aria-labelledby="visual-dialog-title"><h2 id="visual-dialog-title">Черновик композиции</h2><p id="visual-dialog-note"></p><div class="conflict-actions"><button id="visual-dialog-apply" class="primary">Применить просмотренную правку</button><button id="visual-dialog-discard">Отбросить черновик</button><button id="visual-dialog-stay">Остаться в редакторе</button></div></dialog>
 <script src="/app.js" type="module"></script>
 </body></html>
