@@ -85,7 +85,22 @@ jobs:
         if: always()
         with:
           name: candidate-and-package-check
+          # Controlled release files only: retain manifest-listed .history proofs.
+          include-hidden-files: true
           path: |
             artifacts/release/
             !artifacts/release/**/staging/**
+            !artifacts/release/**/.studio/**
+            !artifacts/release/**/.cache/**
+            !artifacts/release/**/.git/**
+            !artifacts/release/**/node_modules/**
+            !artifacts/release/**/.agents/**
+            !artifacts/release/**/.claude/**
+            !artifacts/release/**/.session/**
+            !artifacts/release/**/.sessions/**
+            !artifacts/release/**/sessions/**
+            !artifacts/release/**/session.json
+            !artifacts/release/**/.env
+            !artifacts/release/**/.env.*
+            !artifacts/release/**/*.env
           retention-days: 7
