@@ -75,6 +75,7 @@ for (const aspect of ['16:9', '9:16']) test(`selected properties and layer order
     assert.equal(await page.$eval('#visual-color', node => node.value), ''); assert.equal(await page.$eval('#visual-align', node => node.value), '');
     const initialPixels = await pixels();
     await field(page, '#visual-color', 'red'); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#visual-color', node => node.disabled), false); assert.deepEqual(await readFile(file), originalBytes);
+    await field(page, '#visual-font-size', '-'); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true, 'an incomplete number is not an optional reset');
     await field(page, '#visual-font-size', 301); assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#visual-font-size', node => node.disabled), false);
     await field(page, '#visual-font-size', 300); await page.waitForFunction(() => document.querySelector('#visual-status').textContent.includes('TEXT_OVERFLOW')); assert.equal(await page.$eval('#visual-font-size', node => node.disabled), false); assert.deepEqual(await readFile(file), originalBytes);
     await textDraft(); await preview(); assert.deepEqual(await readFile(file), originalBytes); assert.deepEqual(await sourceHashes(), sourceBefore);

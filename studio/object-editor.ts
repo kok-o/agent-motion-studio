@@ -228,6 +228,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
   for (const [key, minimum, maximum] of [['fontSize', 18, 300], ['strokeWidth', 1, 30], ['radius', 0, 300]] as const) {
     const input = $(styleControls[key]);
     input.onchange = () => {
+      if (input.validity.badInput) { invalidStyle(input, 'Значение вне допустимого диапазона.'); return; }
       const value = input.value === '' ? undefined : Number(input.value);
       if (value !== undefined && (!Number.isFinite(value) || value < minimum || value > maximum || (key === 'fontSize' && !Number.isInteger(value)))) { invalidStyle(input, 'Значение вне допустимого диапазона.'); return; }
       input.setCustomValidity(''); mutateStyle(key, value);
