@@ -139,9 +139,9 @@ try {
   report.checks.objectEditor = await verifyInstalledObjectEditor(app, consumer, join(out, 'object-editor')); await save();
   const installedScenarios = await stageInstalledEditorScenarios(root, app, consumer);
   const scenarioLog = await run(['--test', '--test-concurrency=1', '--test-reporter=tap', installedScenarios], 'object-editor-scenarios');
-  for (const [label, count] of [['tests', 17], ['pass', 17], ['fail', 0], ['cancelled', 0], ['skipped', 0]]) assert.match(scenarioLog, new RegExp(`^# ${label} ${count}\\r?$`, 'm'), `Installed editor reporter must confirm ${label}=${count}`);
+  for (const [label, count] of [['tests', 22], ['pass', 22], ['fail', 0], ['cancelled', 0], ['skipped', 0]]) assert.match(scenarioLog, new RegExp(`^# ${label} ${count}\\r?$`, 'm'), `Installed editor reporter must confirm ${label}=${count}`);
   await collectInstalledEditorScenarios(consumer, join(out, 'object-editor-scenarios'));
-  report.checks.installedEditorScenarios = { status: 'PASS', scenarios: 17, aspects: ['16:9', '9:16'], nonFirstScene: true, selectedPropertiesAndLayers: true, selectedHeaderAndTicketNegatives: true, invalidStylePendingRender: true, createFourObjectTypes: true, createIntentTicketNegatives: true, importCancelConflictAndUnknownReconciliation: true, sourceCheckoutImports: 0, humanAcceptance: 'NOT RUN' }; await save();
+  report.checks.installedEditorScenarios = { status: 'PASS', scenarios: 22, aspects: ['16:9', '9:16'], nonFirstScene: true, selectedPropertiesAndLayers: true, selectedHeaderAndTicketNegatives: true, invalidStylePendingRender: true, createFourObjectTypes: true, createIntentTicketNegatives: true, importCancelConflictAndUnknownReconciliation: true, realCLINewCompositionEntry: true, automaticInitialSelection: true, compositionDraftContextChoices: true, compositionConflictAndLostReplyNoResend: true, compositionPostCommitStorageAndIOReconciliation: true, nativeSceneAndFrameLimits: true, sourceCheckoutImports: 0, humanAcceptance: 'NOT RUN' }; await save();
   if (latest?.userKit) {
     report.checks.firstUserKit = { status: 'running', evidence: 'first-user-kit/SELF_RUN.json' }; await save();
     let kitResult;

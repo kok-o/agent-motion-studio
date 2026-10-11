@@ -2,7 +2,7 @@
 
 ## Действующая итерация — готовый визуальный редактор, стили и удобный запуск, 11 октября 2026
 
-**Это единственный действующий порядок работ.** Владелец разрешил ведущему начать инженерную реализацию, выдавать задания исполнителю, независимо принимать результат и переходить к следующему шагу. E0, E1.1, первый E1.T и свойства/слои по #28/PR29 технически приняты; текущий срез — добавление объектов в существующую composition E1 по #30. Следующие этапы открываются ведущим последовательно по результатам. Продвижение — последним. Старые разделы ниже сохраняются как история, не как параллельный backlog. Версия пакета остаётся `0.1.0` experimental developer preview.
+**Это единственный действующий порядок работ.** Владелец разрешил ведущему начать инженерную реализацию, выдавать задания исполнителю, независимо принимать результат и переходить к следующему шагу. E0, E1.1, первый E1.T, свойства/слои #28/PR29 и добавление объектов #30/PR31 технически приняты. Текущий срез — вход в новую composition E1 по #32. Следующие этапы открываются ведущим последовательно по результатам. Продвижение — последним. Старые разделы ниже сохраняются как история, не как параллельный backlog. Версия пакета остаётся `0.1.0` experimental developer preview.
 
 ### Цель
 
@@ -66,9 +66,15 @@ Transport — optional selected-object header на двух visual POST, пре�
 
 ### E1 — добавление объекта в существующую composition, #30
 
-**Статус: IN PROGRESS / implementation candidate, [issue #30](https://github.com/kok-o/agent-motion-studio/issues/30), от принятого main `af2bce8`.** Studio добавляет text, rect, ellipse и image: один новый stable ID на memory draft, атомарный выбор, штатные свойства/geometry/layer до native Preview → explicit Apply. Accepted schema/renderer не меняются. Transient `X-AMS-Object-Intent: create` и selected ID связываются с точным action/ETag/ticket; удаление нового объекта оставляет исходный массив глубоко равным. Изображения только из accepted image assets, отдельный picker. Явный library import — отдельная revision с последующим свежим visual context; Cancel сохраняет источник. Unknown import/Apply требует чтения/reconciliation без автоматического повторного POST.
+**Статус: ACCEPT / MERGED / MAIN VERIFIED, [issue #30](https://github.com/kok-o/agent-motion-studio/issues/30), [PR #31](https://github.com/kok-o/agent-motion-studio/pull/31).** Принят `a814529`; фактический main `ca34469aeb78c3a9cf21859247aa565fa01dad13` имеет то же дерево. [Main CI38154809186](https://github.com/kok-o/agent-motion-studio/actions/runs/38154809186): required3/3 SUCCESS, integration66/66/package verification PASS; exact-head installed17 PASS. Studio добавляет text, rect, ellipse и image: один новый stable ID на memory draft, атомарный выбор, штатные свойства/geometry/layer до native Preview → explicit Apply. Accepted schema/renderer не меняются. Transient `X-AMS-Object-Intent: create` и selected ID связываются с точным action/ETag/ticket; удаление нового объекта оставляет исходный массив глубоко равным. Изображения только из accepted image assets, отдельный picker. Явный library import — отдельная revision с последующим свежим visual context; Cancel сохраняет источник. Unknown import/Apply требует чтения/reconciliation без автоматического повторного POST.
 
-Прежние13 installed UI scenarios/assertions сохраняются; новые проверки покрывают четыре типа/RU/EN/оба aspects/non-first scene, stable ID/соседей/sources/history, Preview/Cancel/Apply, restore/reopen, picker/draft CLI conflicts, lost replies, native96 limit и серверные negatives. Exact-head CI/installed evidence фиксируются в PR. E1 остаётся PARTIAL: создание composition/нового проекта — следующий отдельный срез; звук, human/pilot/model/paid/publication не входят в #30.
+Прежние13 installed UI scenarios/assertions сохраняются; новые проверки покрывают четыре типа/RU/EN/оба aspects/non-first scene, stable ID/соседей/sources/history, Preview/Cancel/Apply, restore/reopen, picker/draft CLI conflicts, lost replies, native96 limit и серверные negatives. Exact-head CI/installed evidence приняты в PR31; замороженные доказательства #30 сохранены. Human acceptance NOT RUN.
+
+### E1 — вход в новую composition, #32
+
+**Статус: IN PROGRESS / implementation candidate, [issue #32](https://github.com/kok-o/agent-motion-studio/issues/32), от принятого main `ca34469`.** Новый проект создаётся прежним CLI `new --dir`; в открытом Studio «+ Композиция» предлагает явно сохранить отдельную ревизию: 4 секунды и один нейтральный редактируемый text. Scene/object IDs создаются один раз на intent; после сохранения открывается Canvas с выбранным initial object. Дальнейший Add остаётся memory draft → Preview → Apply. Native12scenes/1800frames сохраняются без сокращения соседей. Текущий scalar/visual draft разрешается через Apply/Discard/Stay; внешний конфликт требует свежего чтения без rebase старого intent.
+
+Обычный add-scene использует существующий project API. Потерянный/нечитаемый ответ либо сбой интерфейса после commit удерживает исходные IDs/action/ETag, блокирует изменения и требует явного read reconciliation без повторного POST. Автоматические UUID объектов получают человекочитаемые UI captions; native IDs и пользовательские имена не меняются. Прежние17 installed сценариев сохраняются; новая QA и exact-head package/installed CI обязательны. Весь E1 остаётся PARTIAL; human/pilot/model/paid/publication NOT RUN. E2 открывается отдельным поручением ведущего.
 
 ### E2 — согласованный просмотр со звуком
 
@@ -108,7 +114,7 @@ Transport — optional selected-object header на двух visual POST, пре�
 
 ### Управление и общие gates
 
-- Ведущий владеет направлением, заданиями, независимой проверкой и решением о следующем срезе. kok-o выполняет свойства/слои по #28 после принятых E0/E1.1/E1.T; cleave173 не получает искусственную параллельную задачу. Ownership пересекающихся файлов согласуется до редактирования.
+- Ведущий владеет направлением, заданиями, независимой проверкой и решением о следующем срезе. kok-o выполняет вход в composition по #32 после принятых E0/E1.1/E1.T/#28/#30; cleave173 не получает искусственную параллельную задачу. Ownership пересекающихся файлов согласуется до редактирования.
 - Первый spike передаётся как runnable candidate/evidence, без автоматического PR/merge. Production changes: одна цель → отдельная ветка/PR → независимая техническая приёмка → exact-head required checks/актуальная база/закрытые discussions → обычный merge → обязательные checks нового main. Approve необязателен, checks и запрет admin bypass сохраняются.
 - Accepted project меняется только через project API. Preview/draft не пишут accepted state. Сохраняются источники, принятые takes, exports/ZIP, история, receipts, IDEA.md и посторонние изменения. Не ослаблять loopback/session/Origin/Host/path guards, timing/trim/crop, validation и v1/v2.
 - Обычные edit/import после неопределённого исхода не повторять вслепую; generated Accept восстанавливать по исходному intent/operation ID/receipt. HF file writer/retry не подключать к принятым AMS файлам.

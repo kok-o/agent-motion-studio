@@ -12,7 +12,9 @@ export async function stageInstalledEditorScenarios(root, app, consumer) {
   assert.equal(source.split("resolve('dist/cli.js')").length - 1, 1, 'Inventory the real CLI subprocess path before staging');
   const productImports = [...source.matchAll(/from '\.\.\/\.\.\/dist\/([^']+)'/g)];
   assert.equal(productImports.length, 7, 'Inventory installed product module imports');
-  const staged = source.replace(/from '\.\.\/\.\.\/dist\/([^']+)'/g, (_match, name) => `from ${JSON.stringify(new URL(name, installedPrefix).href)}`).replace("resolve('dist/cli.js')", JSON.stringify(installedCLI));
+  const staged = source.replace(/from '\.\.\/\.\.\/dist\/([^']+)'/g, (_match, name) => `from ${JSON.stringify(new URL(name, installedPrefix).href)}`).replace("resolve('dist/cli.js')", JSON.stringify(installedCLI)).replace("from '../../scripts/kit-studio-process.mjs'", "from './kit-studio-process.mjs'");
+  for (const helper of ['kit-studio-process.mjs', 'kit-ui-observer.mjs']) await cp(join(root, 'scripts', helper), join(consumer, helper));
+  assert.ok(!staged.includes('../../scripts/'));
   assert.ok(!staged.includes('../../dist/')); assert.ok(!staged.includes('studio/object-editor.ts')); assert.ok(!staged.includes("resolve('dist/cli.js')"));
   const file = join(consumer, 'object-editor-installed.test.mjs'); await writeFile(file, staged);
   return file;
@@ -31,7 +33,7 @@ export async function verifyInstalledObjectEditor(app, consumer, evidence) {
   const { loadManifest } = await installed('spec.js');
   const { openRenderer } = await installed('browser.js');
   const hash = bytes => createHash('sha256').update(bytes).digest('hex'), tools = findTools();
-  const outputs = ['dist/visual-editor.js', 'dist/studio/object-editor.js', 'dist/studio/native-fonts.css', 'third-party/hyperframes/LICENSE', 'third-party/hyperframes/PROVENANCE.json'];
+  const outputs = ['dist/visual-editor.js', 'dist/studio/object-editor.js', 'dist/studio/composition-entry.js', 'dist/studio/native-fonts.css', 'third-party/hyperframes/LICENSE', 'third-party/hyperframes/PROVENANCE.json'];
   const installedHashes = Object.fromEntries(await Promise.all(outputs.map(async name => [name, hash(await readFile(join(app, name)))])));
   const image = join(consumer, 'object-synthetic.png');
   await runProcess(tools.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x2c8899:s=64x64', '-frames:v', '1', '-threads', '1', image]);

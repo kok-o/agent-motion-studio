@@ -1,5 +1,9 @@
 name: Verify
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -27,7 +31,8 @@ jobs:
   media:
     name: Media and package (Linux)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # PR33 hit the 20-minute job budget after passing integration; E2 adds audio coverage.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
