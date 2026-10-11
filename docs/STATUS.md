@@ -1,6 +1,37 @@
 # Текущее состояние Agent Motion Studio
 
-## Current — план после аудита и исследования motion stack, 10 октября 2026
+## Current — редактор, стили и первый запуск, 11 октября 2026
+
+Владелец разрешил начать инженерную итерацию и поручил ведущему выдавать задачи, независимо принимать результаты и продолжать по [единственному плану](PLAN_V0.2_RU.md). Порядок: E0 перенос готового редактора → E1 визуальные правки → E2 звук → E3 художественные стили → E4 первый запуск → E5 человеческое использование → E6 продвижение последним. Это состояние работ, а не объявление готовности новых возможностей.
+
+### Принятая база
+
+- Remote main при начале итерации: `e8d33a5bc647ad85de70ad0bea75cf0ede62e989`; [PR #21](https://github.com/kok-o/agent-motion-studio/pull/21) MERGED. Его head `445e68ce582f51aeb6cd6ddce738fcd1734f8667` и merge имеют одинаковое дерево. Runtime/schema/dependencies PR #21 не менял.
+- [Main CI 38119064419](https://github.com/kok-o/agent-motion-studio/actions/runs/38119064419): 3/3 PASS, Linux integration 49/49, package verification PASS. Это сохранённый exact-SHA результат main, не новый локальный повтор и не доказательство будущего editor/style candidate.
+- [PR #20](https://github.com/kok-o/agent-motion-studio/pull/20) уже MERGED. Принятые H1/M7/M1 и P4 не становятся новыми заданиями. Контракты хранения/частичных действий/ошибок из исторической evidence ниже остаются применимыми в своём scope.
+- Recipe hold → zoom → hold и пять точных decoded frames 0/24/57/90/149 реализованы и независимо приняты. Synthetic технический пример не является художественной приёмкой продукта.
+- Прежний A/B дошёл до baseline/edit/restore/reopen с помощью оператора и ведущего. Собственные две просьбы человека и художественный winner не установлены; human suitability/demand остаются NOT VERIFIED. Typed Studio/SDK edits B и Claude Code model-session тем прогоном не доказаны. Старые seals/комплекты/ролики сохраняются.
+- По прямому решению владельца required Approve = 0. Остальные защиты main и независимая техническая приёмка сохраняются. Отсутствующий формальный Approve не объявляется полученным; admin bypass запрещён.
+
+### Начатое поручение и оставшаяся работа
+
+| Этап | Состояние | Граница доказательств |
+| --- | --- | --- |
+| E0: HF Studio reuse spike, [#22](https://github.com/kok-o/agent-motion-studio/issues/22) | IN PROGRESS / NOT VERIFIED; kok-o | Задание передано, исполнитель начал подготовку изолированного UI/API среза; runnable candidate и независимой приёмки пока нет |
+| E1: визуальный редактор | NOT RUN | Готовность UI HyperFrames по source/docs не доказывает совместимость с AMS JSON/Canvas |
+| E2: preview со звуком/дорожка видео | NOT RUN | File/procedural music и full export уже есть; scene preview silent, narration/captions его блокируют, native video audio muted |
+| E3: художественные стили | NOT RUN | Согласован принцип prompt + проверяемые правила + поддержанные приёмы; style packages ещё не реализованы |
+| E4: актуальный первый запуск | NOT RUN | Existing kit/doctor — историческая база; новый candidate/consumer ещё не проверен |
+| E5: самостоятельная человеческая работа | NOT RUN | Инженерный и assisted evidence не заполняют human protocol |
+| E6: продвижение | NOT RUN, последний этап | Публикация/релиз требуют отдельного разрешения |
+
+HF source кандидат E0: `bb34e301ec3c5f7b9edad07932356bd02a9f7934` (0.8.146). [Studio package](https://hyperframes.heygen.com/packages/studio) содержит React components/hooks и требует host state/callbacks/contexts; это не готовый адаптер AMS. SDK/Player опираются на HTML/DOM. В E0 JSON остаётся единственным accepted source, запись — через AMS API. Архитектурный GO/NO-GO пока не вынесен.
+
+Обычная изолированная подготовка зависимостей в новой папке разрешена в инженерном scope. Новые модельные сессии/пилоты, paid calls, внешние skills, личные настройки, публикации и uploads этим поручением не разрешены. В этой документационной правке runtime, пакеты и принятые проекты не меняются; media/model QA не повторяется. Локальный `npm run check:release` — PASS (233 files, 238 local links), `git diff --check` — PASS; эти проверки относятся к docs, не к будущему прототипу.
+
+## Исторический snapshot — план после аудита и исследования motion stack, 10 октября 2026
+
+Раздел ниже сохранён как evidence своей даты. Его PR20-open/Pilot-NOT-RUN не является актуальным статусом; действующая база и начатые задания находятся выше. Исторические PASS/RED/UNKNOWN не переносятся на новый candidate.
 
 Принятая база main перед этапом 1: `dbbe94c91255794393e9743621dffc46f471c183`, лицензионный PR #19 слит; application code — Apache-2.0. Пакет остаётся `0.1.0` experimental developer preview. Старые release/kit snapshots сохраняют свои исходные лицензии и stamps. Исправления этапа 1 и подготовка P4 находятся в открытом [PR #20](https://github.com/kok-o/agent-motion-studio/pull/20); merge и запуск пилота не выполнялись.
 
