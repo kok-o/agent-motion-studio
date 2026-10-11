@@ -1,8 +1,25 @@
 import assert from 'node:assert/strict';
-import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile, cp, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+
+/** Stage the existing behavioral suite; every product import points at the installed package. */
+export async function stageInstalledEditorScenarios(root, app, consumer) {
+  const source = await readFile(join(root, 'tests/integration/object-editor.test.mjs'), 'utf8');
+  const installedPrefix = pathToFileURL(join(app, 'dist')).href + '/';
+  const installedCLI = join(app, 'dist/cli.js'); assert.ok((await stat(installedCLI)).isFile());
+  assert.equal(source.split("resolve('dist/cli.js')").length - 1, 1, 'Inventory the real CLI subprocess path before staging');
+  const productImports = [...source.matchAll(/from '\.\.\/\.\.\/dist\/([^']+)'/g)];
+  assert.equal(productImports.length, 7, 'Inventory installed product module imports');
+  const staged = source.replace(/from '\.\.\/\.\.\/dist\/([^']+)'/g, (_match, name) => `from ${JSON.stringify(new URL(name, installedPrefix).href)}`).replace("resolve('dist/cli.js')", JSON.stringify(installedCLI));
+  assert.ok(!staged.includes('../../dist/')); assert.ok(!staged.includes('studio/object-editor.ts')); assert.ok(!staged.includes("resolve('dist/cli.js')"));
+  const file = join(consumer, 'object-editor-installed.test.mjs'); await writeFile(file, staged);
+  return file;
+}
+export async function collectInstalledEditorScenarios(consumer, evidence) {
+  await cp(join(consumer, 'artifacts/object-editor'), evidence, { recursive: true });
+}
 
 /** Run only installed code in a fresh consumer. No source checkout imports or model calls. */
 export async function verifyInstalledObjectEditor(app, consumer, evidence) {

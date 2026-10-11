@@ -102,9 +102,10 @@ The coffee-ritual video excerpts and still are adapted from Scott Schiller's Mor
 # HyperFrames pure editor helpers
 
 The proportional center resize and numeric token helpers in
-`studio/object-editor-geometry.js` are adapted from HyperFrames at commit
+`studio/object-editor-geometry.ts` are adapted from HyperFrames at commit
 `bb34e301ec3c5f7b9edad07932356bd02a9f7934`, licensed under Apache-2.0.
-Copyright 2026 HeyGen, Inc. Adapted for the AMS data/Canvas editor.
+Copyright 2026 HeyGen, Inc. Adapted for the AMS data/Canvas editor; the gradual
+TypeScript migration adds type-only contracts without changing helper math.
 No React, GSAP or HyperFrames rendering engine is included. Source symbols,
 upstream hashes and adaptation details are recorded in
 [provenance](third-party/hyperframes/PROVENANCE.json); retain the

@@ -2,6 +2,7 @@ import { build } from 'esbuild';
 import { mkdir, copyFile, readdir } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
 const require = createRequire(import.meta.url);
 const checked = spawnSync(process.execPath, [require.resolve('typescript/bin/tsc'), '--noEmit'], { stdio: 'inherit' });
 if (checked.status !== 0) process.exit(checked.status ?? 1);
@@ -24,4 +25,5 @@ for (const subset of ['latin', 'cyrillic', 'cyrillic-ext']) {
 }
 await copyFile('node_modules/@fontsource/oswald/LICENSE', 'assets/fonts/OFL-Oswald.txt');
 
-await build({ entryPoints: ['studio/object-editor.js'], outfile: 'dist/studio/object-editor.js', platform: 'browser', format: 'esm', target: 'chrome120', bundle: true, external: ['./i18n.js'] });
+const editor = await build({ entryPoints: ['studio/object-editor.ts'], outfile: 'dist/studio/object-editor.js', platform: 'browser', format: 'esm', target: 'chrome120', bundle: true, external: ['./i18n.js'], metafile: true });
+assert.deepEqual(Object.keys(editor.metafile.inputs).sort(), ['src/composition.ts', 'studio/object-editor-geometry.ts', 'studio/object-editor.ts'], 'The editor bundle must contain only browser code; contracts are type-only.');

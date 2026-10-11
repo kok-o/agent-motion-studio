@@ -141,4 +141,6 @@ npm run release:prepare
 
 `check` needs a Git checkout. Integration tests use real Chrome and FFmpeg and make no video-generation requests. `release:prepare` builds local source/runtime archives and checks their contents; it does not upload anything. Maintainers should follow the [release guide](docs/RELEASING.md), including installation verification.
 
+The object-editor sources are gradually typed with strict TypeScript; the plain HTML/CSS Studio still receives ordinary browser JavaScript. Other UI modules remain JavaScript and migrate through scoped changes. See [development setup](CONTRIBUTING.md#development-setup).
+
 Code: [Apache License 2.0](LICENSE). Original demo graphics, synthetic footage and separate procedural music: [MIT](examples/orbit-demo/LICENSE). Fonts: SIL OFL. Coffee footage derivatives, still and finished remix: CC BY-SA 2.0. Keep the [media credits](examples/coffee-ritual/CREDITS.md) when sharing an adaptation. [Third-party notices](THIRD_PARTY_NOTICES.md) · [Security](SECURITY.md).

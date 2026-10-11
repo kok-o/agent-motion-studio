@@ -15,6 +15,8 @@ npm run test:integration
 
 `check` builds TypeScript, runs unit tests and checks the public source files and local documentation links. It requires a Git checkout; when starting from the source ZIP, run `git init -b main` first. Integration tests use a real browser and FFmpeg; they run sequentially and need more time and RAM. No API key is needed.
 
+Studio is gradually moving to TypeScript. `studio/object-editor.ts`, `object-editor-geometry.ts` and their contracts are included in the strict `tsconfig.json` check. Native renderer signatures share the exact path-free browser snapshot; their implementation is checked with `satisfies`. Esbuild still emits `dist/studio/object-editor.js` at its existing URL, with no TS sources/dev dependencies needed by consumers. The build audits its browser imports. Geometry unit tests compile through the existing esbuild dependency. `app.js`, `generation-ui.js` and `i18n.js` remain JavaScript; the editor has a concrete host bridge and translator declaration, not a claim that those implementations are typechecked. Continue migration only in scoped tasks; do not disable strict or replace runtime validation with assertions.
+
 Make a personal copy of the example instead of editing the shared template:
 
 ```sh

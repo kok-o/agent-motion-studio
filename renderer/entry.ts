@@ -1,11 +1,12 @@
-import type { ResolvedSpec, ResolvedScene, TextLayout } from '../src/types.js';
+import type { ResolvedScene, TextLayout } from '../src/types.js';
+import type { NativeRenderSpec, NativeRenderer } from './types.js';
 import { drawKineticFrame, kineticLayouts } from './kinetic.js';
 import { drawComposition, validateCompositionLayout } from './composition.js';
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
 // Export reads back every frame. Keep one software raster path instead of
 // Chrome switching the canvas backend partway through an indexed render.
 const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
-let spec: ResolvedSpec;
+let spec: NativeRenderSpec;
 const images: Record<string, HTMLImageElement> = {};
 const captionLayouts = new Map<string, TextLayout>();
 const clamp = (value: number) => Math.min(1, Math.max(0, value));
@@ -137,7 +138,7 @@ function drawFrame(frameIndex: number) {
   }
   ctx.restore();
 }
-async function initialize(value: ResolvedSpec) {
+async function initialize(value: NativeRenderSpec) {
   spec = value; canvas.width = value.width; canvas.height = value.height;
   await Promise.all([document.fonts.load('700 120px StudioSans', 'АБВГД Казахстан Hello'), document.fonts.load('400 42px StudioSans', 'Русский English')]);
   await document.fonts.ready;
@@ -161,4 +162,4 @@ function renderSheet(indices: number[]) {
   indices.forEach((frame, index) => { drawFrame(frame); const x = index % cols * thumbWidth, y = Math.floor(index / cols) * (thumbHeight + labelHeight); target.drawImage(canvas, x, y, thumbWidth, thumbHeight); target.fillStyle = '#FFFFFF'; target.font = '16px StudioSans'; target.fillText(`frame ${frame} · ${(frame / 30).toFixed(2)}s`, x + 12, y + thumbHeight + 24); });
   return sheet.toDataURL('image/jpeg', 0.92);
 }
-(window as unknown as { studio: unknown }).studio = { initialize, renderFrame(frameIndex: number) { drawFrame(frameIndex); return canvas.toDataURL('image/png'); }, renderSheet };
+window.studio = { initialize, renderFrame(frameIndex: number) { drawFrame(frameIndex); return canvas.toDataURL('image/png'); }, renderSheet } satisfies NativeRenderer;

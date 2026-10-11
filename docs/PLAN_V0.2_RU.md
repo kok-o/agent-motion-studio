@@ -2,7 +2,7 @@
 
 ## Действующая итерация — готовый визуальный редактор, стили и удобный запуск, 11 октября 2026
 
-**Это единственный действующий порядок работ.** Владелец разрешил ведущему начать инженерную реализацию, выдавать задания исполнителю, независимо принимать результат и переходить к следующему шагу. E0 технически принят, текущий срез — E1.1; следующие этапы открываются ведущим последовательно по результатам. Продвижение — последним. Старые разделы ниже сохраняются как история, не как параллельный backlog. Версия пакета остаётся `0.1.0` experimental developer preview.
+**Это единственный действующий порядок работ.** Владелец разрешил ведущему начать инженерную реализацию, выдавать задания исполнителю, независимо принимать результат и переходить к следующему шагу. E0 и E1.1 технически приняты, текущий срез — E1.T; следующие этапы открываются ведущим последовательно по результатам. Продвижение — последним. Старые разделы ниже сохраняются как история, не как параллельный backlog. Версия пакета остаётся `0.1.0` experimental developer preview.
 
 ### Цель
 
@@ -38,9 +38,9 @@ Source pin кандидата HF: `bb34e301ec3c5f7b9edad07932356bd02a9f7934`. В
 
 ### E1 — удобные визуальные правки
 
-**Зависимость:** техническое решение E0 принято ведущим. **Статус E1: PARTIAL; E1.1 IN PROGRESS, [issue #24](https://github.com/kok-o/agent-motion-studio/issues/24).** База E1.1 — main `c4e85638152a77950356c8bd9f10eb5e50cebe76` после PR #23; прежний CI не переносится на candidate. Первый срез: existing-object selection/move/proportional resize/text/numeric geometry/keyframe, memory draft → exact native preview → server-bound Apply, conflicts/unknown/reopen. Создание объектов, цвет/font/layer authoring и человеческая приёмка остаются открыты. [Visual contract](COMPOSITION.md#studio-visual-edit-contract).
+**Зависимость:** техническое решение E0 принято ведущим. **Статус E1: PARTIAL; E1.1 независимо технически принят, [issue #24](https://github.com/kok-o/agent-motion-studio/issues/24), [PR #26](https://github.com/kok-o/agent-motion-studio/pull/26) MERGED.** Принятый main `de231ca4e7b145d969b52de50aa4dad1dac98d9f` имеет дерево candidate `2fc73f8`. [Main CI](https://github.com/kok-o/agent-motion-studio/actions/runs/38134893131): 3/3 PASS, integration58/58/package PASS. Первый срез: existing-object selection/move/proportional resize/text/numeric geometry/keyframe, memory draft → exact native preview → server-bound Apply, conflicts/unknown/reopen. Создание объектов, цвет/font/layer authoring и человеческая приёмка остаются открыты. [Visual contract](COMPOSITION.md#studio-visual-edit-contract).
 
-Implementation candidate реализован; собственные UI/API/media проверки и честная граница полного локального RED с последующим focused PASS записаны в [STATUS](STATUS.md). Независимое принятие frozen candidate, installed consumer и CI точного head учитываются отдельно; до них E1.1 не объявляется принятым.
+Собственные UI/API/media проверки и исторический локальный RED с последующим focused PASS сохранены в [STATUS](STATUS.md). Последующее независимое принятие ведущим и полный CI подтверждают E1.1 в указанном техническом scope; human/artistic PASS не объявляется.
 
 Перенести выбранную готовую основу и довести один полезный editor workflow: добавить текст/изображение/простую фигуру, выбрать объект на кадре и в списке слоёв, изменить текст/цвет/позицию/размер/слой, настроить поддержанные keyframes/момент появления. До принятия изменения можно отменить. Новые эффекты не появляются от одного наличия controls.
 
@@ -48,7 +48,7 @@ Implementation candidate реализован; собственные UI/API/med
 
 ### E1.T — постепенный перевод интерфейса на TypeScript
 
-**Порядок:** после merge текущего PR E1.1 по issue #24 и PASS обязательного CI получившегося main. **Статус: PLANNED / NOT RUN, [issue #25](https://github.com/kok-o/agent-motion-studio/issues/25).** Владелец отдельно разрешил постепенную типизацию; до приёмки текущего редактора runtime migration не начинается.
+**Порядок:** после merge E1.1 по issue #24 и PASS обязательного CI main; gate выполнен на `de231ca4e7b145d969b52de50aa4dad1dac98d9f`. **Статус: IN PROGRESS / implementation candidate, [issue #25](https://github.com/kok-o/agent-motion-studio/issues/25).** Владелец разрешил постепенную типизацию; ведущий открыл первый срез от этой принятой базы. Новая QA/consumer/CI учитываются отдельно и не наследуют GREEN базы.
 
 Первый отдельный PR переводит object-editor и geometry helpers, добавляет типы объектов/keyframes, native renderer API, visual request/response и состояний draft/preview/conflict/unknown. Использовать native domain types и точный безопасный browser DTO, не создавать расходящуюся копию схемы. Включить проверку TypeScript для реально перенесённых browser sources в обычный `npm run check`.
 
@@ -96,7 +96,7 @@ HTML/CSS и выдаваемый браузеру JavaScript сохраняют�
 
 ### Управление и общие gates
 
-- Ведущий владеет направлением, заданиями, независимой проверкой и решением о следующем срезе. kok-o выполняет E0; cleave173 не получает искусственную параллельную задачу. Ownership пересекающихся файлов согласуется до редактирования.
+- Ведущий владеет направлением, заданиями, независимой проверкой и решением о следующем срезе. kok-o выполняет текущий E1.T после принятых E0/E1.1; cleave173 не получает искусственную параллельную задачу. Ownership пересекающихся файлов согласуется до редактирования.
 - Первый spike передаётся как runnable candidate/evidence, без автоматического PR/merge. Production changes: одна цель → отдельная ветка/PR → независимая техническая приёмка → exact-head required checks/актуальная база/закрытые discussions → обычный merge → обязательные checks нового main. Approve необязателен, checks и запрет admin bypass сохраняются.
 - Accepted project меняется только через project API. Preview/draft не пишут accepted state. Сохраняются источники, принятые takes, exports/ZIP, история, receipts, IDEA.md и посторонние изменения. Не ослаблять loopback/session/Origin/Host/path guards, timing/trim/crop, validation и v1/v2.
 - Обычные edit/import после неопределённого исхода не повторять вслепую; generated Accept восстанавливать по исходному intent/operation ID/receipt. HF file writer/retry не подключать к принятым AMS файлам.

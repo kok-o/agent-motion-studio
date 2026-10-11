@@ -7,7 +7,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { verifyFirstUserKit } from './verify-first-user-kit.mjs';
 import { safeError } from './kit-ui-observer.mjs';
-import { verifyInstalledObjectEditor } from './object-editor-consumer.mjs';
+import { verifyInstalledObjectEditor, stageInstalledEditorScenarios, collectInstalledEditorScenarios } from './object-editor-consumer.mjs';
 
 async function main() {
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
@@ -137,6 +137,10 @@ try {
   assert.equal(controlledSubmissions, 2); assert.ok((await readFile(file)).equals(restoredBytes));
   report.checks.generation.recoveryCommands = { bindStore: true, resolveUnknown: true, oldUnknownRetained: true, acceptedProjectUnchanged: true, controlledSubmissionsTotal: controlledSubmissions, productionNetworkRequests: 0 };
   report.checks.objectEditor = await verifyInstalledObjectEditor(app, consumer, join(out, 'object-editor')); await save();
+  const installedScenarios = await stageInstalledEditorScenarios(root, app, consumer);
+  await run(['--test', '--test-concurrency=1', installedScenarios], 'object-editor-scenarios');
+  await collectInstalledEditorScenarios(consumer, join(out, 'object-editor-scenarios'));
+  report.checks.installedEditorScenarios = { status: 'PASS', scenarios: 9, aspects: ['16:9', '9:16'], nonFirstScene: true, sourceCheckoutImports: 0, humanAcceptance: 'NOT RUN' }; await save();
   if (latest?.userKit) {
     report.checks.firstUserKit = { status: 'running', evidence: 'first-user-kit/SELF_RUN.json' }; await save();
     let kitResult;

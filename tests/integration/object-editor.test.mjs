@@ -59,6 +59,21 @@ for (const aspect of ['16:9', '9:16']) test(`native object editor mouse/keyboard
     await page.$eval('#visual-stage-wrap', node => node.scrollIntoView({ block: 'center' }));
     const accepted = await readFile(file), before = await readProject(file);
     assert.equal(await page.$eval('#stage', node => node.width), aspect === '16:9' ? 1920 : 1080);
+    // Entire text/scalar/keyframe draft can be previewed and explicitly discarded.
+    await page.click('[data-object-id="title"]');
+    await field(page, '#visual-text', 'Cancel keyframe draft'); await field(page, '#duration', '1.1');
+    await page.select('#visual-mode', 'key'); await page.focus('#visual-frame'); await page.keyboard.press('Home');
+    for (let i = 0; i < 15; i++) await page.keyboard.press('ArrowRight');
+    await field(page, '#visual-x', 220); await previewDraft(page);
+    await page.waitForFunction(() => !document.querySelector('#save-scene').disabled, { timeout: 60000 });
+    assert.deepEqual(await readFile(file), accepted);
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await ready(page);
+    assert.deepEqual(await readFile(file), accepted);
+    assert.equal(await page.$eval('#visual-text', node => node.value), 'Original title');
+    assert.equal(await page.$eval('#visual-mode', node => node.value), 'base');
+    assert.equal(await page.$eval('#visual-frame', node => node.value), '0');
+    assert.deepEqual((await readProject(file)).manifest.history, before.manifest.history);
+    await page.$eval('#visual-stage-wrap', node => node.scrollIntoView({ block: 'center' }));
     // Overlap selects the topmost text, independent of layer list/storage order.
     await drag(page, await nativePoint(page, 250, 220), await nativePoint(page, 290, 240));
     assert.match(await page.$eval('#visual-selection-name', node => node.textContent), /^title /);

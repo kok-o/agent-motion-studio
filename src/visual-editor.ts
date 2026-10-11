@@ -2,9 +2,12 @@ import { isDeepStrictEqual } from 'node:util';
 import { hashBytes, validateManifest } from './spec.js';
 import { patchScene, type ProjectAction } from './project.js';
 import { StudioError } from './errors.js';
-import type { Manifest, ResolvedSpec } from './types.js';
+import type { Manifest, ResolvedSpec, ResolvedAsset } from './types.js';
 
 export type VisualAction = Extract<ProjectAction, { type: 'edit-scene' }>;
+export type BrowserVisualSpec = Omit<ResolvedSpec, 'projectDir' | 'history' | 'operationReceipts' | 'assets'> & {
+  assets: Record<string, Pick<ResolvedAsset, 'type' | 'width' | 'height'>>;
+};
 const geometry = ['x', 'y', 'width', 'height'];
 const fail = (message: string) => new StudioError('VISUAL_INPUT', 'visual', message);
 export function visualETag(value: unknown): string {
@@ -63,7 +66,7 @@ export class VisualTickets {
 }
 
 /** JSON response only; neither local paths, history nor executable source are sent to the renderer. */
-export function visualSpec(spec: ResolvedSpec) {
+export function visualSpec(spec: ResolvedSpec): BrowserVisualSpec {
   const { projectDir, history, operationReceipts, ...safe } = spec;
   return { ...safe, assets: Object.fromEntries(Object.entries(spec.assets).map(([id, asset]) => [id, { type: asset.type, width: asset.width, height: asset.height }])) };
 }

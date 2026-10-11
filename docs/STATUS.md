@@ -6,6 +6,8 @@
 
 ### Принятая база
 
+- E1.1 независимо технически принят ведущим; [PR #26](https://github.com/kok-o/agent-motion-studio/pull/26) MERGED, main `de231ca4e7b145d969b52de50aa4dad1dac98d9f` имеет дерево принятого `2fc73f8`. [Main CI38134893131](https://github.com/kok-o/agent-motion-studio/actions/runs/38134893131): SUCCESS3/3, integration58/58/package verification PASS. Это база E1.T, а не GREEN его candidate. Human/artistic приёмка остаётся NOT RUN.
+
 - Remote main при начале итерации: `e8d33a5bc647ad85de70ad0bea75cf0ede62e989`; [PR #21](https://github.com/kok-o/agent-motion-studio/pull/21) MERGED. Его head `445e68ce582f51aeb6cd6ddce738fcd1734f8667` и merge имеют одинаковое дерево. Runtime/schema/dependencies PR #21 не менял.
 - [Main CI 38119064419](https://github.com/kok-o/agent-motion-studio/actions/runs/38119064419): 3/3 PASS, Linux integration 49/49, package verification PASS. Это сохранённый exact-SHA результат main, не новый локальный повтор и не доказательство будущего editor/style candidate.
 - [PR #20](https://github.com/kok-o/agent-motion-studio/pull/20) уже MERGED. Принятые H1/M7/M1 и P4 не становятся новыми заданиями. Контракты хранения/частичных действий/ошибок из исторической evidence ниже остаются применимыми в своём scope.
@@ -18,8 +20,8 @@
 | Этап | Состояние | Граница доказательств |
 | --- | --- | --- |
 | E0: HF Studio reuse spike, [#22](https://github.com/kok-o/agent-motion-studio/issues/22) | GO / независимо технически принят `316dabbbbf5f8889a4d47584c3bd238e7ec863b4` | Выбран меньший pure resize/numeric reuse поверх native Canvas/project API; React engine не переносится |
-| E1: визуальный редактор | PARTIAL; E1.1 implementation candidate, [#24](https://github.com/kok-o/agent-motion-studio/issues/24), независимая приёмка ожидается | Existing-object editor на базе `c4e85638152a77950356c8bd9f10eb5e50cebe76`; собственные UI/API проверки ниже. Add/color/font/layer authoring и human acceptance открыты; CI нового head учитывается отдельно |
-| E1.T: постепенный TypeScript, [#25](https://github.com/kok-o/agent-motion-studio/issues/25) | PLANNED / NOT RUN | Первый отдельный slice object-editor/geometry + domain/browser/renderer/draft/preview/conflict/unknown types строго после merge E1.1 и PASS обязательного main CI; runtime migration сейчас не выполняется |
+| E1: визуальный редактор | PARTIAL; E1.1 независимо технически принят и merged, [#24](https://github.com/kok-o/agent-motion-studio/issues/24) | Existing-object editor принят на `de231ca`; add/color/font/layer authoring и human acceptance открыты |
+| E1.T: постепенный TypeScript, [#25](https://github.com/kok-o/agent-motion-studio/issues/25) | IN PROGRESS / implementation candidate | От принятого `de231ca`: object-editor/geometry → strict TS, точный browser/native/host contract; прочие UI modules остаются JS. Локальные editor9 PASS; full Windows55/58 RED и focused1/3 RED сохранены. Installed consumer NOT RUN из-за host commit pressure; full Linux integration и installed9 должны пройти на CI точного head до приёмки |
 | E2: preview со звуком/дорожка видео | NOT RUN | File/procedural music и full export уже есть; scene preview silent, narration/captions его блокируют, native video audio muted |
 | E3: художественные стили | NOT RUN | Согласован принцип prompt + проверяемые правила + поддержанные приёмы; style packages ещё не реализованы |
 | E4: актуальный первый запуск | NOT RUN | Existing kit/doctor — историческая база; новый candidate/consumer ещё не проверен |
