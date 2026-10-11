@@ -21,6 +21,8 @@ Each object may have up to 64 keyframes. `frame` is a local integer frame index,
 
 Paints are six-digit hex or `background`/`foreground`/`accent` from brand. Text supports bundled Latin/Cyrillic, explicit line breaks and word wrapping at a fixed font size. Layout rejects overflow rather than silently shrinking; inspect small details at delivery size. Each line occupies 1.25×fontSize. Character reveal keeps final line wrapping. For aligned table/code columns use separate text objects, not runs of spaces.
 
+For a complete 5-second image-motion example with poses, a final hold and exact decoded scene-preview frames, see the bundled [motion proof recipe](../skills/agent-motion-studio/references/motion-proof.md). It includes an initial setup action and an offline extraction helper, without changing the renderer.
+
 ## Ordinary project actions
 
 Create through `new`, immutable `import`, then `add-scene` (or initial `batch`). Read `state` and edit an existing object by copying its scene's array, changing the selected ID, and sending **the complete array** as `edit-scene.patch.objects`. ETag guards the complete scene against external edits. No special renderer or object action is needed. Keep action files outside accepted JSON.

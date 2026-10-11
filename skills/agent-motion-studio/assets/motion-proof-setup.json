@@ -1,0 +1,21 @@
+{
+  "type": "batch",
+  "actions": [
+    { "type": "remove-scene", "sceneId": "opening" },
+    {
+      "type": "add-scene",
+      "scene": {
+        "id": "motion-proof",
+        "type": "composition",
+        "durationFrames": 150,
+        "background": "#101820",
+        "objects": [
+          { "id": "panel", "type": "shape", "shape": "rect", "x": 280, "y": 200, "width": 1360, "height": 780, "color": "#26343F" },
+          { "id": "screen", "type": "image", "asset": "IMAGE_ASSET_ID", "x": 384, "y": 270, "width": 1152, "height": 648, "fit": "contain" },
+          { "id": "heading", "type": "text", "text": "Motion proof / technical fixture", "x": 280, "y": 80, "width": 1300, "height": 80, "fontSize": 56, "color": "#FFFFFF" },
+          { "id": "marker", "type": "shape", "shape": "rect", "x": 1700, "y": 80, "width": 40, "height": 40, "color": "#FEE715" }
+        ]
+      }
+    }
+  ]
+}
