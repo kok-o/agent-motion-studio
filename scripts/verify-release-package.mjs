@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { verifyFirstUserKit } from './verify-first-user-kit.mjs';
 import { safeError } from './kit-ui-observer.mjs';
+import { verifyInstalledObjectEditor } from './object-editor-consumer.mjs';
 
 async function main() {
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
@@ -135,6 +136,7 @@ try {
   assert.equal(acknowledged.status, 'submission_unknown'); assert.equal(acknowledged.submissions, 1); assert.equal(acknowledged.unknownResolution.kind, 'user_acknowledged');
   assert.equal(controlledSubmissions, 2); assert.ok((await readFile(file)).equals(restoredBytes));
   report.checks.generation.recoveryCommands = { bindStore: true, resolveUnknown: true, oldUnknownRetained: true, acceptedProjectUnchanged: true, controlledSubmissionsTotal: controlledSubmissions, productionNetworkRequests: 0 };
+  report.checks.objectEditor = await verifyInstalledObjectEditor(app, consumer, join(out, 'object-editor')); await save();
   if (latest?.userKit) {
     report.checks.firstUserKit = { status: 'running', evidence: 'first-user-kit/SELF_RUN.json' }; await save();
     let kitResult;

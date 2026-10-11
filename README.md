@@ -117,14 +117,14 @@ Default tests use a controlled provider and require no paid calls. This checkout
 
 ## Current limits
 
-The current checkout also supports [editable object compositions](docs/COMPOSITION.md): independently positioned/animated text, rect/ellipse graphics and local images. Agents author objects through normal scene actions; the browser opens, previews, shortens, restores and exports them. This is a data-driven extension, with fixed fonts/aspects and no realtime object editor.
+The current checkout also supports [editable object compositions](docs/COMPOSITION.md): independently positioned/animated text, rect/ellipse graphics and local images. Agents author objects through normal scene actions. In Studio, select an existing object on the native Canvas or in the layer list, drag/proportionally resize it, edit text/geometry and add a geometry keyframe. Preview, then explicitly Apply the exact edit. Drafts stay in memory until Apply or Cancel; scene/aspect/export transitions ask first. External edits require explicit rereading, and an unknown commit reply blocks further mutations. Fixed fonts/aspects remain; adding objects, color/font/layer authoring and a full timeline are outside this first slice.
 
 - Preview is silent and generated on demand. Viewing the entire film requires export.
 - Source-video audio is muted; use a file music track. Narration/captions require full export.
 - 1080p/30 fps, 16:9 or 9:16, SDR BT.709, hard cuts in v2. No HDR, realtime timeline or multitrack editor.
 - 12 scenes, 24 assets, 1–60 seconds; the intended workflow is 3–4 scenes / 15–30 seconds.
 - Imports read files into RAM: video ≤512 MiB, images ≤20 MiB, audio ≤100 MiB. Keep renders sequential.
-- History retains 100 snapshots. Sources/exports are not automatically pruned. Draft recovery belongs to the current browser tab; it is not a backup.
+- History retains 100 snapshots. Sources/exports are not automatically pruned. Legacy scalar draft recovery belongs to the current browser tab; it is not a backup. Composition object drafts live only in memory until explicitly applied or discarded.
 - The server is local and intended for one user. No built-in chat or studio billing. The first provider integration uses your own Replicate API account; local inference is not implemented.
 
 The code is free under Apache License 2.0. External generation services have their own costs and terms; selected prompts/references leave your computer only after an authorized submit. Tests establish technical behavior; they do not establish artistic quality or demand.

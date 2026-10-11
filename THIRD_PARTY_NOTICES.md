@@ -98,3 +98,14 @@ The ORBIT footage, image and WAV in `examples/orbit-sources` and imported copies
 ## DAILY RITUAL real footage
 
 The coffee-ritual video excerpts and still are adapted from Scott Schiller's Morning Espresso Routine, under CC BY-SA 2.0. See examples/coffee-ritual/CREDITS.md and provenance.json for the original Flickr URL, Commons copy, license URL, transformations and hashes. Keep this attribution when redistributing assets or films. These filmed sources are not covered by the code Apache License 2.0; the procedural score remains original MIT material.
+
+# HyperFrames pure editor helpers
+
+The proportional center resize and numeric token helpers in
+`studio/object-editor-geometry.js` are adapted from HyperFrames at commit
+`bb34e301ec3c5f7b9edad07932356bd02a9f7934`, licensed under Apache-2.0.
+Copyright 2026 HeyGen, Inc. Adapted for the AMS data/Canvas editor.
+No React, GSAP or HyperFrames rendering engine is included. Source symbols,
+upstream hashes and adaptation details are recorded in
+[provenance](third-party/hyperframes/PROVENANCE.json); retain the
+[upstream license](third-party/hyperframes/LICENSE) when redistributing.
