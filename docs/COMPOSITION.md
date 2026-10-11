@@ -25,6 +25,8 @@ For a complete 5-second image-motion example with poses, a final hold and exact 
 
 ## Ordinary project actions
 
+For native calm-product, kinetic-poster and editorial authoring, use [executable style packages](AUTHORING_STYLES.md). They compile ordinary actions for styled creation or a bounded restyle of one composition, with explicit groups/roles/locks and actual-font fit/bounds/hold/contrast checks. They do not change `video.style`, global palette/audio, copy or duration. Existing composition captions currently block restyle without being changed; ordinary object editing and scene preview remain available. File narration without captions and music are supported. Studio style tickets are separate from the single-object visual contract below.
+
 Create through `new`, immutable `import`, then `add-scene` (or initial `batch`). Read `state` and edit an existing object by copying its scene's array, changing the selected ID, and sending **the complete array** as `edit-scene.patch.objects`. ETag guards the complete scene against external edits. No special renderer or object action is needed. Keep action files outside accepted JSON.
 
 ```json

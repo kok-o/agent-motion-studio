@@ -1,0 +1,12 @@
+{
+  "fictionalTechnicalFixture": true,
+  "durationFrames": 240,
+  "aspects": ["16:9","9:16"],
+  "palette": {"background":"#10171C","foreground":"#F4F1E9","accent":"#D9EE86"},
+  "materials": {"product":["headline","body","media"],"proof":["headline","proof","body"],"explanation":["headline","body"]},
+  "copy": {
+    "en": {"short":["Local editor","42%","Keep sources and revise the selected scene."],"long":["An editable composition with preserved source materials","42%","The supplied material remains in the project. Review the exact scene preview, make a bounded revision, then restore the earlier take when you need it."]},
+    "ru": {"short":["Локальный редактор","42%","Сохраните исходники и измените выбранную сцену."],"long":["Редактируемая композиция с сохранением исходных материалов","42%","Исходный материал остаётся в проекте. Посмотрите точный предпросмотр сцены, внесите ограниченную правку и при необходимости верните предыдущий вариант монтажа."]}
+  },
+  "humanArtisticAcceptance": "NOT RUN"
+}

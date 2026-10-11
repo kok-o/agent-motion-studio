@@ -31,8 +31,8 @@ jobs:
   media:
     name: Media and package (Linux)
     runs-on: ubuntu-latest
-    # PR33 hit the 20-minute job budget after passing integration; E2 adds audio coverage.
-    timeout-minutes: 40
+    # Preserve the full suite/package assertions; E3 adds ~10 minutes of matrix/UI QA.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:

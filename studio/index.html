@@ -28,8 +28,9 @@
         </div>
         <p id="visual-status" class="note" role="status" aria-live="polite"></p>
       </section>
-      <div class="story-heading"><div><h2>Раскадровка</h2><p>Выберите сцену, чтобы изменить её или вернуть предыдущий дубль.</p></div><div class="conflict-actions"><button id="add-composition">+ Композиция</button><button id="add-title">+ Титр</button></div></div>
+      <div class="story-heading"><div><h2>Раскадровка</h2><p>Выберите сцену, чтобы изменить её или вернуть предыдущий дубль.</p></div><div class="conflict-actions"><button id="add-composition">+ Композиция</button><button id="style-create">+ Композиция со стилем</button><button id="style-restyle">Стиль выбранной композиции</button><button id="add-title">+ Титр</button></div></div>
       <p id="composition-entry-status" class="note" role="status" aria-live="polite"></p><button id="composition-reconcile" hidden>Перечитать проект</button>
+      <p id="style-status" class="note" role="status" aria-live="polite"></p><button id="style-reconcile" hidden>Перечитать проект</button>
       <div id="storyboard" class="storyboard"></div>
       <section id="generation-panel" class="panel generation" hidden aria-labelledby="generation-title">
         <div class="panel-heading"><span id="generation-title">Новый AI-дубль выбранной video scene</span><button id="generation-refresh">Перечитать задания</button></div>
@@ -63,13 +64,13 @@
             <div class="generation-actions"><button id="generation-accept" class="primary">Принять дубль</button><button id="generation-reject">Отклонить дубль</button></div>
           </div>
           <details><summary>Диагностика задания</summary><pre id="generation-diagnostics"></pre></details>
-          <p class="note">Студия и экспорт локальны. Облачная модель использует ваш тариф; открытие проекта не запускает новые запросы. Звук источника не входит в фильм. Остановка отслеживания не отменяет расходы.</p>
+          <p class="note">Студия и экспорт локальны. Облачная модель использует ваш тариф; открытие проекта не запускает новые запросы. Звук принятого видео включается отдельно. Остановка отслеживания не отменяет расходы.</p>
         </div>
       </section>
       <section class="panel library"><div class="panel-heading"><div>Материалы <span class="muted">· копии сохраняются в проекте</span></div><label class="import-button" for="import">+ Импорт файлов<input id="import" type="file" accept=".mp4,.png,.jpg,.jpeg,.wav,.mp3,.m4a,.aac,.ogg,.flac" multiple></label></div>
         <p class="muted">MP4, PNG/JPEG и аудио. Нажмите «В сцену» для добавления материала.</p><div id="library"></div>
         <div class="music-controls"><label>Музыка<select id="music"></select></label><label>Уровень, dB<input id="gain" type="number" min="-60" max="0" value="-12"></label><button id="save-music">Применить музыку</button></div>
-        <p class="note">Звук исходных видеоклипов отключён. В экспорт входит выбранная музыкальная дорожка.</p>
+        <p class="note">Музыка и файловая озвучка входят в локальный preview и экспорт. Звук исходного видео по умолчанию выключен и включается для каждой сцены отдельно.</p>
       </section>
       <details class="panel history"><summary>История монтажа</summary><div id="history"></div></details>
       <p id="project-path" class="path"></p>
@@ -100,5 +101,20 @@
 <dialog id="visual-image-dialog" aria-labelledby="visual-image-title"><h2 id="visual-image-title">Изображение из материалов проекта</h2><p>Выберите импортированное изображение. Новый объект остаётся черновиком до Preview и Apply.</p><label>Изображение<select id="visual-image-asset"></select></label><p id="visual-image-note" class="note" role="status"></p><div class="conflict-actions"><button id="visual-image-add" type="button">Добавить в композицию</button><button id="visual-image-cancel" type="button">Отмена</button></div></dialog>
 <dialog id="composition-dialog" aria-labelledby="composition-dialog-title"><h2 id="composition-dialog-title">Создать композицию</h2><p id="composition-dialog-note"></p><div class="conflict-actions"><button id="composition-confirm" class="primary">Создать и сохранить</button><button id="composition-dialog-reload" hidden>Перечитать проект</button><button id="composition-cancel">Отмена</button></div></dialog>
 <dialog id="composition-draft-dialog" aria-labelledby="composition-draft-title"><h2 id="composition-draft-title">Черновик текущей сцены</h2><p>Перед созданием композиции сохраните текущую сцену, отбросьте черновик или останьтесь в редакторе.</p><div class="conflict-actions"><button id="composition-draft-apply" class="primary">Сохранить текущую сцену</button><button id="composition-draft-discard">Отбросить черновик</button><button id="composition-draft-stay">Остаться в редакторе</button></div></dialog>
+<dialog id="style-dialog" aria-labelledby="style-dialog-title">
+  <h2 id="style-dialog-title">Стиль выбранной композиции</h2>
+  <label>Стиль<select id="style-choice"></select></label>
+  <label>Движение<select id="style-motion"><option value="standard">Обычное</option><option value="reduced">Уменьшенное</option></select></label>
+  <div id="style-restyle-options">
+    <fieldset><legend>Разрешённые группы изменений</legend><label class="consent"><input type="checkbox" data-style-group value="layout">Расположение и размеры блоков</label><label class="consent"><input type="checkbox" data-style-group value="typography">Типографика</label><label class="consent"><input type="checkbox" data-style-group value="motion">Движение</label></fieldset>
+    <label class="consent"><input id="style-replace-tracks" type="checkbox">Разрешить замену существующих дорожек движения</label>
+    <p class="note">По умолчанию существующие дорожки сохраняются. Защита полей имеет приоритет; конфликт требует явного изменения разрешений.</p>
+    <div id="style-roles"></div>
+  </div>
+  <p class="note">Restyle пока недоступен для композиций с captions. Обычные правки объектов и предпросмотр сцены доступны. Озвучка без captions и музыка поддерживаются.</p>
+  <p id="style-dialog-note" class="note" role="status" aria-live="polite"></p>
+  <video id="style-player" controls playsinline hidden></video><div id="style-audit" class="note"></div>
+  <div class="conflict-actions"><button id="style-preview">Предпросмотр стиля</button><button id="style-apply" class="primary">Применить стиль</button><button id="style-read" hidden>Перечитать проект</button><button id="style-cancel">Отмена</button></div>
+</dialog>
 <script src="/app.js" type="module"></script>
 </body></html>

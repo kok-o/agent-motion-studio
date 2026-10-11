@@ -1,0 +1,102 @@
+{
+  "source": "Leonxlnx/cinetic",
+  "commit": "bee5d7807205d5543472c38312507f9bf366cbbf",
+  "license": "MIT",
+  "licenseFile": "LICENSE",
+  "checkedSourceFiles": [
+    {
+      "repo": "Leonxlnx/cinetic",
+      "commit": "bee5d7807205d5543472c38312507f9bf366cbbf",
+      "path": "LICENSE",
+      "blob": "48a2f6640b81ff8eca9ce7f6a96337692713ef5b",
+      "sha256": "4575a543ab88dad12ccea7d97e563d0bce5b448b06072e65d3264497dad326df",
+      "bytes": 1065,
+      "url": "https://github.com/Leonxlnx/cinetic/blob/bee5d7807205d5543472c38312507f9bf366cbbf/LICENSE"
+    },
+    {
+      "repo": "Leonxlnx/cinetic",
+      "commit": "bee5d7807205d5543472c38312507f9bf366cbbf",
+      "path": "skills/cinetic/assets/library/techniques.json",
+      "blob": "37e7b9bd80539285dbd0e0a0af51f9b0c883155c",
+      "sha256": "d8d936571cfcbf884002130004f02845f514d6d2d36cfa5676114afc6fc0992b",
+      "bytes": 524625,
+      "url": "https://github.com/Leonxlnx/cinetic/blob/bee5d7807205d5543472c38312507f9bf366cbbf/skills/cinetic/assets/library/techniques.json"
+    },
+    {
+      "repo": "Leonxlnx/cinetic",
+      "commit": "bee5d7807205d5543472c38312507f9bf366cbbf",
+      "path": "skills/cinetic/references/craft-rules.md",
+      "blob": "315cef45cfb2bca81d20f8e18ff9349bae4e5d25",
+      "sha256": "39c5892aad2a1ab9629a4e45e4fdc15f08928ae6665ff9683b1c9e01573b03c4",
+      "bytes": 44861,
+      "url": "https://github.com/Leonxlnx/cinetic/blob/bee5d7807205d5543472c38312507f9bf366cbbf/skills/cinetic/references/craft-rules.md"
+    },
+    {
+      "repo": "Leonxlnx/cinetic",
+      "commit": "bee5d7807205d5543472c38312507f9bf366cbbf",
+      "path": "skills/cinetic/references/copy-and-type.md",
+      "blob": "50263f21c2259546712262a272dce7fcb5acfd5b",
+      "sha256": "5c01704062d6c4dc19eaeaa67e301d5ab073ac961123aa89076c5ebb2af2e2c2",
+      "bytes": 28488,
+      "url": "https://github.com/Leonxlnx/cinetic/blob/bee5d7807205d5543472c38312507f9bf366cbbf/skills/cinetic/references/copy-and-type.md"
+    },
+    {
+      "repo": "Leonxlnx/cinetic",
+      "commit": "bee5d7807205d5543472c38312507f9bf366cbbf",
+      "path": "skills/cinetic/references/motion-tokens.md",
+      "blob": "a8065ab2a45b70766575b873146a1db6e3390c33",
+      "sha256": "3b5ac6b7d09bfa4b39159062a8a9eeb90bb3e115268a9ea14ca694bf5c828e98",
+      "bytes": 22684,
+      "url": "https://github.com/Leonxlnx/cinetic/blob/bee5d7807205d5543472c38312507f9bf366cbbf/skills/cinetic/references/motion-tokens.md"
+    }
+  ],
+  "selectedRecords": [
+    "lc-negative-space-caption",
+    "lc-opposite-corner-relay",
+    "ty-inplace-light-up-beats",
+    "ty-typeon-timeboxed",
+    "ty-vertical-word-stack"
+  ],
+  "adaptations": [
+    {
+      "id": "lc-negative-space-caption",
+      "usedBy": [
+        "calm-product"
+      ],
+      "change": "Own separated 2D image/text regions; no camera or imported media."
+    },
+    {
+      "id": "lc-opposite-corner-relay",
+      "usedBy": [
+        "editorial"
+      ],
+      "change": "Own asymmetric grid and explicit role-based staggered arrival; original object storage order and copy retained."
+    },
+    {
+      "id": "ty-inplace-light-up-beats",
+      "usedBy": [
+        "calm-product",
+        "kinetic-poster",
+        "editorial"
+      ],
+      "change": "Static StudioSans400/700 role hierarchy and native opacity arrivals; no animated color, per-word spans, beat detector or weight600."
+    },
+    {
+      "id": "ty-typeon-timeboxed",
+      "usedBy": [
+        "kinetic-poster"
+      ],
+      "change": "Native reveal only for explicitly mapped proof up to22 characters, bounded own30fps defaults and required full reading hold; no caret or copy changes."
+    },
+    {
+      "id": "ty-vertical-word-stack",
+      "usedBy": [
+        "kinetic-poster"
+      ],
+      "change": "Own portrait slots for existing objects; no splitting/reordering existing text, spring, glyph scaling, mask or groups."
+    }
+  ],
+  "implementation": "Original native data/rules/compiler in styles and src/style-*.ts; original agent instructions. Full MIT notice retained. No source code blocks, full catalog, selector, upstream prompts, fonts, demo footage, scripts or hooks are distributed/executed.",
+  "upstreamEvidenceScoresImported": false,
+  "humanArtisticAcceptance": "NOT RUN"
+}

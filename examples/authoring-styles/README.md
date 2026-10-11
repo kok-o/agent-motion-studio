@@ -1,0 +1,9 @@
+# Reproducible style material
+
+These are fictional technical inputs, not films made for a client or human-rated examples. Use the exact supplied strings and the same palette (`#10171C`, `#F4F1E9`, `#D9EE86`) with all three styles in 16:9 and 9:16. The [case data](cases.json) distinguishes product/UI material, a numeric proof and explanatory copy, with short/long RU/EN variants. `42%` is a fictional fixture value, not a product claim.
+
+Create a **new** project with `new`; import your own permitted image for the product case, and use native `add-scene`/`batch` with one composition of 240 frames and explicit stable object IDs. Preserve an untouched neighbor. Map supplied text to headline/body and, for the numeric case, proof; map the imported image to media. The packages choose content-dependent boxes and fit the actual font. Follow [installed style compile → preview → ordinary edit](../../docs/AUTHORING_STYLES.md). Do not substitute the old coffee or demo MP4 for the new result.
+
+The repository integration scenario generates its own simple product drawing with local FFmpeg, applies/restores through native APIs, measures all 72 style/material/aspect/language/length combinations and saves control PNGs at frames 0/24/57/90/149 for six representative native compositions. Run `npm run build`, then `node --test tests/integration/style-matrix.test.mjs` from a source checkout to reproduce those technical artifacts. This is not required for ordinary installed use. Human/artistic evaluation stays **NOT RUN**.
+
+All fixture copy and the locally generated drawing are original project material; no upstream footage, fonts or prompts are copied here. Code/documentation retain the repository license; the generated drawing may be redistributed under the [original demo MIT notice](../orbit-demo/LICENSE).

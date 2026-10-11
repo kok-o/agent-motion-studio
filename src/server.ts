@@ -8,7 +8,8 @@ import { packageRoot, loadManifest, hashBytes } from './spec.js';
 import { readProject, importMedia, editProject, withProjectLock } from './project.js';
 import { render } from './engine.js';
 import { normalizeError, StudioError } from './errors.js';
-import { previewScene } from './preview.js';
+import { previewScene, previewStyleAction } from './preview.js';
+import { listStylePackages, compileStyleForProject, StyleTickets, assertStyleAction } from './styles.js';
 import { GenerationService } from './generation.js';
 import type { GenerationProvider } from './generation-provider.js';
 import { VisualTickets, visualETag, assertVisualETag, validateVisualAction, visualSpec, visualSelectedObject, visualObjectIntent } from './visual-editor.js';
@@ -58,6 +59,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
   let previewBusy = false, previewWork: Promise<unknown> | undefined, exportWork: Promise<unknown> | undefined;
   const previews = new Map<string, string>();
   const visualTickets = new VisualTickets();
+  const styleTickets = new StyleTickets();
   let visualApplying = false;
   let origin = '';
   async function inside(path: string) {
@@ -91,7 +93,7 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
     try {
       if (request.headers.host !== new URL(origin).host || (request.headers.origin && request.headers.origin !== origin)) { send({ error: 'Origin/Host rejected' }, 403); return; }
       const url = new URL(request.url ?? '/', origin);
-      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/object-editor.js': 'object-editor.js', '/composition-entry.js': 'composition-entry.js', '/source-audio.js': 'source-audio.js', '/native-fonts.css': 'native-fonts.css', '/style.css': 'style.css' };
+      const publicFiles: Record<string, string> = { '/': 'index.html', '/app.js': 'app.js', '/i18n.js': 'i18n.js', '/generation-ui.js': 'generation-ui.js', '/object-editor.js': 'object-editor.js', '/composition-entry.js': 'composition-entry.js', '/style-ui.js': 'style-ui.js', '/source-audio.js': 'source-audio.js', '/native-fonts.css': 'native-fonts.css', '/style.css': 'style.css' };
       if (publicFiles[url.pathname] && (request.method === 'GET' || request.method === 'HEAD')) { await sendFile(request, response, join(packageRoot, 'dist/studio', publicFiles[url.pathname])); return; }
       if (request.method === 'POST' && url.pathname === '/api/session') {
         if (request.headers.origin !== origin) { send({ error: 'Origin required' }, 403); return; }
@@ -161,6 +163,38 @@ export async function startStudio(manifestPath: string, port = 4173, options: { 
       const previewMatch = /^\/previews\/([a-f0-9-]+)\/output\.mp4$/.exec(url.pathname);
       if ((request.method === 'GET' || request.method === 'HEAD') && previewMatch && previews.has(previewMatch[1])) { await sendFile(request, response, previews.get(previewMatch[1])!); return; }
       if (request.method === 'POST' && (job.status === 'running' || previewBusy)) { send({ error: 'Render is running. Wait before editing.' }, 409); return; }
+      if (request.method === 'GET' && url.pathname === '/api/styles') { send({packages:await listStylePackages()}); return; }
+      if (request.method === 'POST' && url.pathname === '/api/styles/preview') {
+        const expected=visualETag(request.headers['if-match']),input=JSON.parse((await body(request,1024*1024)).toString());
+        if(!input||Object.keys(input).some(key=>key!=='request'))throw new StudioError('STYLE_INPUT','style','Expected one style request.',2);
+        if(previewBusy||visualApplying||job.status==='running')throw new StudioError('STYLE_BUSY','style','Render or Apply is running.',2);
+        styleTickets.clear();previewBusy=true;const id=randomUUID(),output=join(previewRoot,id);
+        try {
+          const work=(async()=>{const compiled=await compileStyleForProject(file,input.request,expected);const result=await previewStyleAction(file,compiled.action,expected,output);return {compiled,result};})();previewWork=work;
+          const {compiled,result}=await work;previews.set(id,join(output,'output.mp4'));
+          if(!result.stale)styleTickets.add(id,expected,compiled.request,compiled.action);
+          while(previews.size>2){const old=previews.keys().next().value!;previews.delete(old);await rm(join(previewRoot,old),{recursive:true,force:true});}
+          send({...result,request:compiled.request,action:compiled.action,audit:compiled.audit,previewId:result.stale?null:id,url:`/previews/${id}/output.mp4`});
+        }catch(error){await rm(output,{recursive:true,force:true});throw error;}
+        finally{previewBusy=false;previewWork=undefined;}
+        return;
+      }
+      if(request.method==='POST'&&url.pathname==='/api/styles/apply'){
+        const expected=visualETag(request.headers['if-match']),input=JSON.parse((await body(request,1024*1024)).toString());
+        if(!input||Object.keys(input).some(key=>!['previewId','request','action'].includes(key)))throw new StudioError('STYLE_INPUT','style','Expected exact previewId/request/action.',2);
+        if(previewBusy||visualApplying||job.status==='running')throw new StudioError('STYLE_BUSY','style','Render or Apply is running.',2);
+        visualApplying=true;
+        try{
+          const compiled=await compileStyleForProject(file,input.request,expected);assertStyleAction(input.action,compiled.action);styleTickets.consume(input.previewId,expected,compiled.request,compiled.action);
+          try{send({...await editProject(file,compiled.action,expected),committed:true});}
+          catch(error){
+            if(error instanceof StudioError&&error.code==='INTERNAL_ERROR'&&error.stage==='project'&&error.exitCode===4&&error.message.startsWith('Manifest was committed but reading the result failed:')){send({...normalizeError(error),committed:true,reconcileRequired:true},503);return;}
+            if(error instanceof StudioError&&['PROJECT_CONFLICT','PROJECT_EDIT','PROJECT_BUSY','INVALID_MANIFEST'].includes(error.code))throw error;
+            send({error:{code:'STYLE_COMMIT_OUTCOME_UNKNOWN',message:'Apply outcome is unknown. Explicitly reread; never resend this ordinary edit.'},reconcileRequired:true},503);
+          }
+        }finally{visualApplying=false;}
+        return;
+      }
       if (request.method === 'POST' && url.pathname === '/api/visual/preview') {
         const selectedId = visualSelectedObject(request.headers['x-ams-selected-object'], request.rawHeaders);
         const intent = visualObjectIntent(request.headers['x-ams-object-intent'], request.rawHeaders);

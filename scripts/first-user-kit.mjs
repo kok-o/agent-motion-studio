@@ -13,18 +13,46 @@ export function sourceStamp(root) {
   return { gitSha, dirty };
 }
 export const kitDocuments = {
-  'docs/USER_TRIAL_RU.md': 'START_HERE_RU.md',
+  'docs/CURRENT_KIT_START_HERE_RU.md': 'START_HERE_RU.md',
   'docs/USER_TRIAL_RESULTS_RU.md': 'RESULTS_BLANK_RU.md',
   'docs/GETTING_STARTED.md': 'GETTING_STARTED.md',
   'docs/AGENT_WORKFLOW_RU.md': 'AGENT_WORKFLOW_RU.md',
   'docs/STATUS.md': 'STATUS.md',
   'docs/COMPOSITION.md': 'COMPOSITION.md',
+  'docs/AUTHORING_STYLES.md': 'AUTHORING_STYLES.md',
   'skills/agent-motion-studio/references/brief-to-film.md': 'BRIEF_TO_FILM.md',
   'skills/agent-motion-studio/references/composition.md': 'OBJECT_COMPOSITION.md'
 };
 const payload = [...Object.values(kitDocuments), 'coffee-original.mp4', 'CREDITS.md', 'MEDIA_LICENSE.md', 'LICENSE', 'FONTS_OFL.txt'];
+// v1 and the accepted v2 entry prework predate the required style guide.
+const payloadFor = version => version < 3 ? payload.filter(name => name !== 'AUTHORING_STYLES.md') : payload;
+const kitName = ({ version, source }) => `agent-motion-studio-first-user-${version}-${source.gitSha.slice(0, 12)}${source.dirty ? '-dirty' : ''}`;
+const kitIdentity = manifest => [
+  '| Identity этого комплекта | Значение |',
+  '| --- | --- |',
+  `| ZIP (хеш проверяется снаружи) | \`${kitName(manifest)}.zip\` |`,
+  `| Package | \`${manifest.version}\` — experimental developer preview |`,
+  `| Source Git SHA | \`${manifest.source.gitSha}\` |`,
+  `| Source dirty | \`${manifest.source.dirty}\` |`,
+  `| Runtime | \`${manifest.runtime.file}\` |`,
+  `| Runtime SHA-256 | \`${manifest.runtime.sha256}\` |`
+].join('\n');
+export function renderKitStartHere(template, manifest) {
+  const values = {
+    KIT_IDENTITY: kitIdentity(manifest),
+    DIRTY_NOTICE: manifest.source.dirty ? '**Только локальная подготовка: исходники изменены относительно указанного SHA. Не выдавать за проверенный коммит.**\n' : '',
+    RUNTIME_FILE: manifest.runtime.file
+  };
+  for (const [key, value] of Object.entries(values)) {
+    const token = `{{${key}}}`;
+    assert.ok(template.includes(token), `START_HERE template is missing ${token}`);
+    template = template.replaceAll(token, value);
+  }
+  assert.doesNotMatch(template, /\{\{[A-Z0-9_]+\}\}/, 'Unresolved START_HERE placeholder');
+  return template;
+}
 export async function sealKit(directory, manifest) {
-  const names = [...payload, manifest.runtime.file];
+  const names = [...payloadFor(manifest.formatVersion), manifest.runtime.file];
   if (manifest.verification.status === 'self-run-passed') names.push('SELF_RUN.json');
   assert.deepEqual((await readdir(directory)).filter(name => !['KIT_MANIFEST.json', 'SHA256SUMS.txt'].includes(name)).sort(), names.sort(), 'Unexpected kit files');
   // The same source audit protects regular files, portable paths, links and secrets.
@@ -41,11 +69,12 @@ export async function sealKit(directory, manifest) {
 }
 export async function verifyKit(directory, { requireClean = true } = {}) {
   const manifest = JSON.parse(await readFile(join(directory, 'KIT_MANIFEST.json'), 'utf8'));
+  assert.ok([1, 2, 3].includes(manifest.formatVersion), 'Unsupported kit manifest format');
   assert.match(manifest.source.gitSha, /^[a-f0-9]{40}$/);
   assert.equal(typeof manifest.source.dirty, 'boolean');
   if (requireClean) assert.equal(manifest.source.dirty, false, 'A dirty kit is preparation only, not a verified commit');
   assert.equal(manifest.runtime.file, `agent-motion-studio-${manifest.version}.tgz`);
-  const names = [...payload, manifest.runtime.file, 'KIT_MANIFEST.json', 'SHA256SUMS.txt', ...(manifest.verification.status === 'self-run-passed' ? ['SELF_RUN.json'] : [])];
+  const names = [...payloadFor(manifest.formatVersion), manifest.runtime.file, 'KIT_MANIFEST.json', 'SHA256SUMS.txt', ...(manifest.verification.status === 'self-run-passed' ? ['SELF_RUN.json'] : [])];
   assert.deepEqual((await readdir(directory)).sort(), names.sort());
   assert.deepEqual(manifest.files.map(item => item.file).sort(), names.filter(name => !['KIT_MANIFEST.json', 'SHA256SUMS.txt'].includes(name)).sort());
   for (const item of manifest.files) {
@@ -60,11 +89,16 @@ export async function verifyKit(directory, { requireClean = true } = {}) {
   }
   assert.deepEqual(checksumNames.sort(), names.filter(name => name !== 'SHA256SUMS.txt').sort());
   assert.equal(manifest.runtime.sha256, manifest.files.find(item => item.file === manifest.runtime.file).sha256);
+  if (manifest.formatVersion >= 2) {
+    const startHere = await readFile(join(directory, 'START_HERE_RU.md'), 'utf8');
+    assert.ok(startHere.includes(kitIdentity(manifest)), 'START_HERE identity differs from KIT_MANIFEST.json');
+    assert.doesNotMatch(startHere, /\{\{[A-Z0-9_]+\}\}/, 'Unresolved START_HERE placeholder');
+  }
   await audit(names.filter(name => !name.endsWith('.tgz')), directory);
   return manifest;
 }
 export async function prepareUserKit({ root, out, staging, version, runtime, source }) {
-  const name = `agent-motion-studio-first-user-${version}-${source.gitSha.slice(0, 12)}${source.dirty ? '-dirty' : ''}`;
+  const name = kitName({ version, source });
   const directory = join(out, name), archive = join(out, `${name}.zip`);
   await mkdir(directory);
   for (const [from, to] of [
@@ -74,10 +108,13 @@ export async function prepareUserKit({ root, out, staging, version, runtime, sou
     [join(root, 'examples/coffee-ritual/LICENSE.md'), 'MEDIA_LICENSE.md'],
     [join(root, 'LICENSE'), 'LICENSE'], [join(root, 'assets/fonts/OFL.txt'), 'FONTS_OFL.txt']
   ]) await copyFile(from, join(directory, to));
-  // Reuse the existing instructions; essential documents are readable before npm install.
+  const manifest = { formatVersion: 3, version, source, preparedOn: { platform: platform(), arch: arch(), node: process.version }, runtime: { file: basename(runtime), sha256: sha256(await readFile(join(directory, basename(runtime)))) }, verification: { status: 'not-run', scope: 'Kit preparation only; independent human/model session NOT RUN' }, files: [] };
+  // Generate the current entry from this kit's identity, never the historical trial.
+  // Essential documents are readable before npm install.
   // Only additional source references require optional GitHub access.
   for (const [from, to] of Object.entries(kitDocuments)) {
-    const guide = (await readFile(join(root, from), 'utf8')).replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, label, href) => {
+    const template = await readFile(join(root, from), 'utf8');
+    const guide = (to === 'START_HERE_RU.md' ? renderKitStartHere(template, manifest) : template).replace(/\[([^\]]*)\]\(([^)\s]+)\)/g, (whole, label, href) => {
       if (/^(https?:|mailto:|#)/.test(href)) return whole;
       const [target, fragment] = href.split('#');
       const sourcePath = resolve(root, dirname(from), target);
@@ -86,10 +123,8 @@ export async function prepareUserKit({ root, out, staging, version, runtime, sou
       const path = new URL(href, `https://github.com/kok-o/agent-motion-studio/blob/${source.gitSha}/${from}`).href;
       return `[${label} (optional GitHub reference; access required)](${path})`;
     });
-    const stamp = to === 'START_HERE_RU.md' ? `Git SHA: \`${source.gitSha}\` · package ${version} · dirty: ${source.dirty}\n\n${source.dirty ? '**Только локальная подготовка: исходники изменены относительно этого SHA. Не выдавать за проверенный коммит.**\n\n' : ''}` : '';
-    await writeFile(join(directory, to), stamp + guide);
+    await writeFile(join(directory, to), guide);
   }
-  const manifest = { formatVersion: 1, version, source, preparedOn: { platform: platform(), arch: arch(), node: process.version }, runtime: { file: basename(runtime), sha256: sha256(await readFile(runtime)) }, verification: { status: 'not-run', scope: 'Kit preparation only; independent human/model session NOT RUN' }, files: [] };
   await sealKit(directory, manifest);
   await verifyKit(directory, { requireClean: false });
   zipDirectory(out, archive, name);

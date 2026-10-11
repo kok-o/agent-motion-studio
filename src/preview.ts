@@ -44,12 +44,27 @@ export async function previewGeneratedTake(file: string, draft: GeneratedTakeDra
 }
 
 export async function previewScene(file: string, action: Extract<ProjectAction, { type: 'edit-scene' }>, expectedEtag: string, output: string) {
+  return previewDraft(file, action, expectedEtag, output, false);
+}
+/** Narrow authoring-style entry; ordinary scene/visual contracts stay unchanged. */
+export async function previewStyleAction(file: string, action: Extract<ProjectAction, {type:'edit-scene'|'add-scene'}>, expectedEtag: string, output: string) {
+  if (action?.type === 'edit-scene' && (!action.patch || Object.keys(action.patch).some(key => key !== 'objects'))) throw new StudioError('STYLE_INPUT','style','Style preview changes only selected composition objects.',2);
+  return previewDraft(file, action, expectedEtag, output, true);
+}
+async function previewDraft(file: string, action: Extract<ProjectAction, {type:'edit-scene'|'add-scene'}>, expectedEtag: string, output: string, style: boolean) {
   const { manifest, etag } = await readProject(file);
   if (etag !== expectedEtag) throw new StudioError('PROJECT_CONFLICT', 'preview', 'Project changed elsewhere. Reload before previewing.', 2);
-  if (!action || action.type !== 'edit-scene' || Object.keys(action).some(key => !['type', 'sceneId', 'patch'].includes(key))) throw new Error('Expected a scene draft.');
-  const index = manifest.scenes.findIndex(scene => scene.id === action.sceneId);
-  if (index < 0) throw new Error('Scene does not exist.');
-  manifest.scenes[index] = patchScene(manifest.scenes[index], action.patch);
+  let index: number;
+  if (style && action?.type === 'add-scene') {
+    if (Object.keys(action).some(key => !['type','scene'].includes(key)) || action.scene?.type !== 'composition' || manifest.scenes.some(scene => scene.id === action.scene.id)) throw new StudioError('STYLE_INPUT','style','Expected one fresh compiled composition.',2);
+    index=manifest.scenes.length;manifest.scenes.push(structuredClone(action.scene));
+  } else {
+    if (!action || action.type !== 'edit-scene' || Object.keys(action).some(key => !['type', 'sceneId', 'patch'].includes(key))) throw new Error('Expected a scene draft.');
+    index = manifest.scenes.findIndex(scene => scene.id === action.sceneId);
+    if (index < 0) throw new Error('Scene does not exist.');
+    if (style && manifest.scenes[index].type !== 'composition') throw new StudioError('STYLE_INPUT','style','Select an object composition.',2);
+    manifest.scenes[index] = patchScene(manifest.scenes[index], action.patch);
+  }
   if (manifest.audio.narration.provider === 'edge' && manifest.scenes.some(scene => scene.narration)) throw new StudioError('ONLINE_PREVIEW_UNSUPPORTED', 'preview', 'Online Edge narration is not available in scene preview. Use offline file narration.', 2);
   const temporary = join(dirname(file), `.preview-${randomUUID()}.json`);
   const work = join(output, `.preview-work-${randomUUID()}`);

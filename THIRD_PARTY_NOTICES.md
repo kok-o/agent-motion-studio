@@ -1,6 +1,6 @@
 # Provenance and third-party notices
 
-The TypeScript engine, Canvas scenes, procedural score, sample copy, and synthetic demo images were written for this project. Production code does not import reference clones. Distributed third-party material consists of the fonts and attributed coffee footage derivatives described below; reference-project demo media and voice models are not included.
+The TypeScript engine, Canvas scenes, procedural score, sample copy, and synthetic demo images were written for this project. Production code does not import reference clones. Distributed third-party material includes the fonts, attributed coffee footage derivatives and small attributed authoring adaptations described below; reference-project demo media and voice models are not included.
 
 ## Application code
 
@@ -42,6 +42,12 @@ SOFTWARE.
 - `remotion-video-skill`, `claude-code-video-toolkit`, `MoneyPrinterTurbo`, and `cinematic-video-prompt-skill` were read for optional speech, asset organization, subtitle failure handling, and composition guidance. No code or media from these clones is included in the package.
 
 Research clones are not distributed in the source or runtime archives.
+
+## Executable authoring style references
+
+The three native authoring packages use a small adapted design subset from [Cinetic at the pinned commit](https://github.com/Leonxlnx/cinetic/tree/bee5d7807205d5543472c38312507f9bf366cbbf), MIT. The original native implementation uses separated image/text regions, asymmetric attention, static weight hierarchy, bounded short-proof reveal and portrait object stacks. The exact five technique IDs, checked paths/blob hashes/SHA-256 and substitutions are in [Cinetic provenance](third-party/cinetic/PROVENANCE.json); the full unmodified copyright/permission notice is retained in [Cinetic LICENSE](third-party/cinetic/LICENSE). No catalog/selector/renderer, scripts/hooks, upstream prompts, fonts or media are imported.
+
+The small material/brand/facts/human-review checklist is adapted in original wording from [product-film-skill at its pinned commit](https://github.com/Rieranthony/product-film-skill/tree/fe11efc429d5903e37274d0b294e1b95745b2881). Its exact checked source files and adaptation scope are in [product-film provenance](third-party/product-film-skill/PROVENANCE.json), with the full [MIT copyright and permission notice](third-party/product-film-skill/LICENSE). No mandatory story array, code, template/prompt text or media are distributed. These references do not validate artistic quality. Prompt Motion links are not treated as a general redistribution license.
 
 ## Distributed fonts
 

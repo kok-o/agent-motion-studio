@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { extractZip } from '../../scripts/zip-archive.mjs';
 import { tmpdir } from 'node:os';
-import { command, prepareUserKit, verifyKit, sourceStamp, recordKitSmoke, kitDocuments } from '../../scripts/first-user-kit.mjs';
+import { command, prepareUserKit, verifyKit, sourceStamp, recordKitSmoke, kitDocuments, sealKit } from '../../scripts/first-user-kit.mjs';
 
 async function removeFixture(root) {
   const target = resolve(root), within = relative(resolve(tmpdir()), target);
@@ -33,6 +33,7 @@ test('a kit binds the clean Git SHA, permits only delivered files and survives Z
   try {
     assert.equal(f.source.dirty, false);
     const kit = await f.create(), manifest = await verifyKit(kit.directory);
+    assert.equal(manifest.formatVersion, 3);
     assert.deepEqual(manifest.source, f.source); assert.equal(manifest.version, '0.1.0'); assert.equal(manifest.verification.status, 'not-run');
     const unpacked = join(f.root, 'unpacked'); await mkdir(unpacked);
     extractZip(kit.archive, unpacked);
@@ -57,6 +58,26 @@ test('a kit binds the clean Git SHA, permits only delivered files and survives Z
     assert.equal(blank.split('\n').filter(line => /^\|[^|]+\| \|$/.test(line)).length, 14);
     await writeFile(join(kit.directory, 'coffee-original.mp4'), 'tampered');
     await assert.rejects(verifyKit(kit.directory));
+  } finally { await removeFixture(f.root); }
+});
+
+test('unchanged legacy v1/v2 payloads remain valid while v3 requires the style guide', async () => {
+  const f = await fixture();
+  try {
+    const kit = await f.create(), current = await verifyKit(kit.directory);
+    await rm(join(kit.directory, 'AUTHORING_STYLES.md'));
+    await assert.rejects(verifyKit(kit.directory));
+    // Legacy documents had no local dependency on the later style guide.
+    for (const name of Object.values(kitDocuments).filter(name => name !== 'AUTHORING_STYLES.md')) {
+      const body = await readFile(join(kit.directory, name), 'utf8');
+      await writeFile(join(kit.directory, name), body.replaceAll('(AUTHORING_STYLES.md)', '(https://example.invalid/optional-style-guide)'));
+    }
+    for (const formatVersion of [1, 2]) {
+      await sealKit(kit.directory, { ...current, formatVersion });
+      const before = await readFile(join(kit.directory, 'KIT_MANIFEST.json'));
+      assert.equal((await verifyKit(kit.directory)).formatVersion, formatVersion);
+      assert.deepEqual(await readFile(join(kit.directory, 'KIT_MANIFEST.json')), before);
+    }
   } finally { await removeFixture(f.root); }
 });
 
