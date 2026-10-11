@@ -2,8 +2,8 @@
   "upstream": "https://github.com/heygen-com/hyperframes",
   "commit": "bb34e301ec3c5f7b9edad07932356bd02a9f7934",
   "license": "Apache-2.0",
-  "adaptedFile": "studio/object-editor-geometry.js",
-  "changes": "Type annotations removed; constants inlined; imports removed; pure numeric and proportional center resize only. AMS-specific keyframe and picking helpers are separate exports.",
+  "adaptedFile": "studio/object-editor-geometry.ts",
+  "changes": "Initial JS adaptation removed upstream types, inlined constants and removed imports; only pure numeric and proportional center resize were reused. E1.T adds AMS domain/geometry parameter and return types; helper math is unchanged. AMS-specific keyframe and picking helpers remain separate exports.",
   "mapping": [
     {
       "source": "packages/studio/src/components/editor/domEditResizeLocal.ts",
@@ -31,5 +31,5 @@
     }
   ],
   "licenseSHA256": "4259155fb06f127687ee7b0a8a3682d45132db0f2da26cbc0b7a2d1e796436b8",
-  "adaptedSHA256": "e4a2e69866e29b8f7f94048a1e5f5419315cebbc28b1b67c9ffe4261b3fbf420"
+  "adaptedSHA256": "1f8e0e1d533382fb823edc4c6947cafe9290dc07062d9c57c31f20ba7e77f877"
 }

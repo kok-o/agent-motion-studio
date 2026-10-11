@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { VisualTickets, visualETag, validateVisualAction, visualSpec } from '../../dist/visual-editor.js';
-import { geometryKey, containsPoint, resolveCenterResizeSize, adjustNumericToken } from '../../studio/object-editor-geometry.js';
+import { build } from 'esbuild';
+const compiled = await build({ entryPoints: ['studio/object-editor-geometry.ts'], bundle: true, write: false, platform: 'node', format: 'esm' });
+const { geometryKey, containsPoint, resolveCenterResizeSize, adjustNumericToken } = await import(`data:text/javascript;base64,${Buffer.from(compiled.outputFiles[0].text).toString('base64')}`);
 
 const object = { id: 'title', type: 'text', text: 'Title', x: 10, y: 20, width: 300, height: 80, rotation: 17, opacity: 0.7, reveal: 0.9, keyframes: [{ frame: 12, x: 70, opacity: 0.4, rotation: 22, reveal: 1, easing: 'outCubic' }] };
 const manifest = { schemaVersion: 2, id: 'comp', seed: 7, video: { aspectRatio: '16:9', fps: 30 }, brand: { theme: 'dark', background: '#10171C', foreground: '#F4F1E9', accent: '#D9EE86', font: 'builtin-sans' }, assets: {}, audio: { narration: { provider: 'none' }, music: { provider: 'none' } }, scenes: [{ id: 'shot', type: 'composition', durationFrames: 30, objects: [object, { ...object, id: 'neighbour' }] }] };

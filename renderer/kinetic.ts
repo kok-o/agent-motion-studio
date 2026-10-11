@@ -1,4 +1,5 @@
-import type { ResolvedSpec, ResolvedScene, TextLayout } from '../src/types.js';
+import type { ResolvedScene, TextLayout } from '../src/types.js';
+import type { NativeRenderSpec } from './types.js';
 
 // Original Canvas recipes. Positions, reveals, camera moves and transitions are
 // functions of the requested frame, including when frames are rendered out of order.
@@ -34,7 +35,7 @@ function fit(ctx: CanvasRenderingContext2D, text: string, box: Box, maximum: num
   throw new Error(`TEXT_OVERFLOW: kinetic heading needs shorter copy: "${text.slice(0, 80)}"`);
 }
 
-export function kineticLayouts(ctx: CanvasRenderingContext2D, spec: ResolvedSpec) {
+export function kineticLayouts(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec) {
   const { width: w, height: h } = spec, portrait = w < h;
   const margin = w * (spec.video.safeArea ?? (portrait ? 0.08 : 0.075));
   for (const scene of spec.scenes) {
@@ -70,7 +71,7 @@ function star(ctx: CanvasRenderingContext2D, x: number, y: number, radius: numbe
   ctx.restore();
 }
 
-function dotField(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, local: number, color: string) {
+function dotField(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec, local: number, color: string) {
   const { width: w, height: h } = spec, portrait = w < h, seconds = local / 30;
   ctx.save(); ctx.fillStyle = color;
   for (let row = 0; row < 20; row++) for (let col = 0; col < 34; col++) {
@@ -111,7 +112,7 @@ function type(ctx: CanvasRenderingContext2D, layout: TextLayout, local: number, 
   });
 }
 
-function hud(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: ResolvedScene, frame: number, color: string) {
+function hud(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec, scene: ResolvedScene, frame: number, color: string) {
   const { width: w, height: h } = spec, portrait = w < h;
   const margin = w * (spec.video.safeArea ?? (portrait ? 0.08 : 0.075));
   const index = spec.scenes.indexOf(scene);
@@ -134,13 +135,13 @@ function hud(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: ResolvedS
   ctx.restore();
 }
 
-function productBox(spec: ResolvedSpec, scene: ResolvedScene): Box {
+function productBox(spec: NativeRenderSpec, scene: ResolvedScene): Box {
   const { width: w, height: h } = spec;
   return w < h ? { x: w * 0.065, y: h * 0.38, w: w * 0.87, h: h * (scene.resolvedCaptions?.length ? 0.40 : 0.43) }
     : { x: w * 0.48, y: h * 0.18, w: w * 0.47, h: h * (scene.resolvedCaptions?.length ? 0.57 : 0.62) };
 }
 
-function product(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: ResolvedScene, images: Record<string, HTMLImageElement>, local: number) {
+function product(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec, scene: ResolvedScene, images: Record<string, HTMLImageElement>, local: number) {
   const { width: w, height: h } = spec, portrait = w < h;
   type(ctx, scene.captionLayout!, local, spec.brand.foreground, spec.brand.accent, undefined, scene.durationFrames);
   const image = images[scene.asset!], area = productBox(spec, scene);
@@ -195,7 +196,7 @@ function product(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: Resol
   ctx.restore();
 }
 
-function shot(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: ResolvedScene, images: Record<string, HTMLImageElement>, frame: number) {
+function shot(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec, scene: ResolvedScene, images: Record<string, HTMLImageElement>, frame: number) {
   const { width: w, height: h } = spec, local = frame - scene.startFrame, portrait = w < h;
   const cta = scene.type === 'cta';
   const bg = cta ? spec.brand.accent : spec.brand.background, fg = cta ? onAccent(bg) : spec.brand.foreground;
@@ -230,7 +231,7 @@ function shot(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: Resolved
   hud(ctx, spec, scene, frame, fg); ctx.restore();
 }
 
-export function drawKineticFrame(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, images: Record<string, HTMLImageElement>, frame: number) {
+export function drawKineticFrame(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec, images: Record<string, HTMLImageElement>, frame: number) {
   const index = spec.scenes.findIndex(scene => frame >= scene.startFrame && frame < scene.endFrame);
   const scene = spec.scenes[index], local = frame - scene.startFrame;
   const length = Math.min(16, Math.floor(scene.durationFrames / 3));

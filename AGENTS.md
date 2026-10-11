@@ -6,7 +6,7 @@ For development, `docs/PLAN_V0.2_RU.md` is the single current execution plan and
 
 - `src/project.ts` owns accepted edits, history and immutable source imports. Use these APIs instead of bypassing validation or writing accepted projects directly.
 - `src/preview.ts` and `src/pipeline.ts` share scene encoding. Preview must not save a draft. Preserve frame timing, trim, crop and v1/v2 compatibility.
-- `studio/` is plain HTML/CSS/JavaScript. Do not add a UI framework for incidental changes.
+- `studio/` stays plain HTML/CSS with gradually typed TypeScript sources and remaining JavaScript modules. Object editor/geometry and their browser contracts are strict-checked; esbuild emits ordinary browser JS at the existing URLs. Keep Node/server dependencies type-only at browser boundaries. Do not add a UI framework or turn gradual migration into a full rewrite.
 - The server stays on loopback. Preserve session, Origin/Host and asset-path checks. Never expose credentials or session URLs in reports.
 - Keep source files and accepted takes when replacing or restoring a scene. Test external-edit conflicts through the real UI when changing this behavior.
 - Run `npm run check` for normal changes; `npm run test:integration` for renderer, project, server or studio changes. Run media tests sequentially. Optional online speech and Windows console tests are separate.

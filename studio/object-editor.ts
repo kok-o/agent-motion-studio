@@ -1,12 +1,44 @@
-import { sampleObject } from '../src/composition.ts';
+import { sampleObject } from '../src/composition.js';
+import type { Scene } from '../src/types.js';
+import type { EditorHost, EditorController, EditorModel, Gesture, ContextChoice, ProjectState, ObjectPatch, Point, NativeSnapshot, VisualAction } from './object-editor-types.js';
 import { resolveCenterResizeSize, adjustNumericToken, containsPoint, geometryKey, formatNumericValue } from './object-editor-geometry.js';
 import { t } from './i18n.js';
 
-const $ = id => document.getElementById(id);
-const geometry = ['x', 'y', 'width', 'height'];
-const clone = value => structuredClone(value);
+type InputId = 'visual-x' | 'visual-y' | 'visual-width' | 'visual-height' | 'visual-frame' | 'duration';
+type ButtonId = 'save-scene' | 'preview-scene' | 'visual-cancel' | 'reload' | 'visual-dialog-apply' | 'visual-dialog-discard' | 'visual-dialog-stay';
+type PlainId = 'visual-status' | 'object-editor' | 'visual-text-field' | 'visual-key-note' | 'visual-stage-wrap' | 'visual-stage-space' | 'visual-selection-name' | 'visual-frame-label' | 'visual-layers' | 'preview-status' | 'visual-dialog-note';
+function required<T extends Element>(id: string, constructor: { new(): T }): T {
+  const node = document.getElementById(id);
+  if (!(node instanceof constructor)) throw new Error(`Missing editor element: ${id}`);
+  return node;
+}
+function $(id: InputId): HTMLInputElement;
+function $(id: ButtonId): HTMLButtonElement;
+function $(id: 'visual-mode'): HTMLSelectElement;
+function $(id: 'visual-text'): HTMLTextAreaElement;
+function $(id: 'scene-preview'): HTMLVideoElement;
+function $(id: 'stage'): HTMLCanvasElement;
+function $(id: 'visual-overlay'): SVGSVGElement;
+function $(id: 'visual-dialog'): HTMLDialogElement;
+function $(id: PlainId): HTMLElement;
+function $(id: string): HTMLElement | SVGSVGElement {
+  if (['visual-x', 'visual-y', 'visual-width', 'visual-height', 'visual-frame', 'duration'].includes(id)) return required(id, HTMLInputElement);
+  if (['save-scene', 'preview-scene', 'visual-cancel', 'reload', 'visual-dialog-apply', 'visual-dialog-discard', 'visual-dialog-stay'].includes(id)) return required(id, HTMLButtonElement);
+  if (id === 'visual-mode') return required(id, HTMLSelectElement);
+  if (id === 'visual-text') return required(id, HTMLTextAreaElement);
+  if (id === 'scene-preview') return required(id, HTMLVideoElement);
+  if (id === 'stage') return required(id, HTMLCanvasElement);
+  if (id === 'visual-overlay') return required(id, SVGSVGElement);
+  if (id === 'visual-dialog') return required(id, HTMLDialogElement);
+  return required(id, HTMLElement);
+}
+type FormControl = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | HTMLButtonElement;
+const errorInfo = (cause: unknown): Error & { code?: unknown; committed?: unknown; details?: unknown } => cause instanceof Error ? cause : new Error(String(cause));
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const geometry = ['x', 'y', 'width', 'height'] as const;
+const clone = <T>(value: T): T => structuredClone(value);
 const svgNS = 'http://www.w3.org/2000/svg';
-let rendererLoading;
+let rendererLoading: Promise<void> | undefined;
 function loadRenderer() {
   return rendererLoading ??= new Promise((resolve, reject) => {
     const script = document.createElement('script'); script.src = '/visual/entry.js';
@@ -16,12 +48,12 @@ function loadRenderer() {
 }
 
 /** One memory draft; native rendering and accepted edits stay behind their existing APIs. */
-export function initObjectEditor(host) {
-  let model, preferredId, epoch = 0, renderQueue = Promise.resolve(), gesture, choosing = false;
-  const active = () => model && host.getScene()?.id === model.sceneId && host.getScene()?.type === 'composition';
-  const selected = () => model?.objects.find(object => object.id === model.selectedId);
-  const blocked = () => !active() || host.isBusy() || model.unknown;
-  const status = message => { $('visual-status').textContent = t(message); };
+export function initObjectEditor(host: EditorHost): EditorController {
+  let model: EditorModel | undefined, preferredId: string | undefined, epoch = 0, renderQueue = Promise.resolve(), gesture: Gesture | undefined, choosing = false;
+  const active = (candidate = model): candidate is EditorModel => Boolean(candidate && host.getScene()?.id === candidate.sceneId && host.getScene()?.type === 'composition');
+  const selected = () => { const current = model; return current?.objects.find(object => object.id === current.selectedId); };
+  const blocked = () => !active(model) || host.isBusy() || model.unknown;
+  const status = (message: string) => { $('visual-status').textContent = t(message); };
   function invalidate() {
     if (!model) return;
     model.ticket = undefined;
@@ -29,21 +61,22 @@ export function initObjectEditor(host) {
     constraints();
   }
   function markDirty() {
+    if (!model) return;
     host.changed(); invalidate();
     status(model.stale ? 'Проект изменён извне. Черновик сохранён; явно перечитайте проект.' : 'Черновик в памяти. Preview, затем явный Apply.');
   }
-  function externalChanged(etag) {
-    if (!active() || etag === model.etag) return;
+  function externalChanged(etag: string) {
+    if (!active(model) || etag === model.etag) return;
     // A pointerdown owns this old base even before its first movement. Never
     // let a clean-looking held gesture acquire another model's fresh ETag.
     if (gesture?.model === model) host.setDirty(true);
     model.stale = true; invalidate();
-    status(model.unknown ? model.reconciliationMessage : 'Проект изменён извне. Черновик сохранён; явно перечитайте проект.');
+    status(model.unknown ? model.reconciliationMessage ?? '' : 'Проект изменён извне. Черновик сохранён; явно перечитайте проект.');
   }
   function constraints() {
-    if (!active()) return;
+    if (!active(model)) return;
     const unavailable = host.isBusy() || !model.loaded || model.unknown || Boolean(gesture);
-    for (const node of $('object-editor').querySelectorAll('input,textarea,select,button')) node.disabled = unavailable;
+    for (const node of $('object-editor').querySelectorAll<FormControl>('input,textarea,select,button')) node.disabled = unavailable;
     $('save-scene').disabled = unavailable || !model.ready || model.stale || !model.ticket || !host.isDirty();
     $('preview-scene').disabled = unavailable || !model.ready || model.stale;
     $('visual-cancel').disabled = host.isBusy();
@@ -53,13 +86,13 @@ export function initObjectEditor(host) {
     $('duration').disabled = host.isBusy() || model.unknown || Boolean(gesture);
     if (model.unknown) {
       // A generic unlock/poll cannot reenable mutations after an unreadable commit reply.
-      document.querySelectorAll('button,input,textarea,select').forEach(node => { node.disabled = true; });
+      document.querySelectorAll<FormControl>('button,input,textarea,select').forEach(node => { node.disabled = true; });
       $('reload').disabled = host.isBusy(); $('visual-cancel').disabled = host.isBusy();
       if (choosing && $('visual-dialog').open && !host.isBusy()) { $('visual-dialog-discard').disabled = false; $('visual-dialog-stay').disabled = false; }
     }
   }
   function layout() {
-    if (!active() || !model.spec) return;
+    if (!active(model) || !model.spec) return;
     const { width, height } = model.spec, available = $('visual-stage-space').clientWidth;
     const scale = Math.min(available / width, 540 / height);
     const wrap = $('visual-stage-wrap'); wrap.style.width = `${width * scale}px`; wrap.style.height = `${height * scale}px`;
@@ -68,7 +101,7 @@ export function initObjectEditor(host) {
   new ResizeObserver(layout).observe($('visual-stage-space'));
   function overlay() {
     const svg = $('visual-overlay'); svg.replaceChildren();
-    if (!active() || !model.spec) return;
+    if (!active(model) || !model.spec) return;
     svg.setAttribute('viewBox', `0 0 ${model.spec.width} ${model.spec.height}`);
     const object = selected(); if (!object) return;
     const s = sampleObject(object, model.frame), group = document.createElementNS(svgNS, 'g');
@@ -79,33 +112,35 @@ export function initObjectEditor(host) {
     const scale = $('visual-stage-wrap').getBoundingClientRect().width / model.spec.width;
     for (const [index, [x, y]] of [[s.x, s.y], [s.x + s.width, s.y], [s.x + s.width, s.y + s.height], [s.x, s.y + s.height]].entries()) {
       const handle = document.createElementNS(svgNS, 'circle');
-      handle.setAttribute('cx', x); handle.setAttribute('cy', y); handle.setAttribute('r', 6 / Math.max(scale, 0.01));
+      handle.setAttribute('cx', String(x)); handle.setAttribute('cy', String(y)); handle.setAttribute('r', String(6 / Math.max(scale, 0.01)));
       handle.dataset.resize = String(index); handle.classList.add('visual-handle'); group.append(handle);
     }
     svg.append(group);
   }
   function fields() {
+    if (!model) return;
     const object = selected(); if (!object) return;
     const state = $('visual-mode').value === 'key' ? sampleObject(object, model.frame) : object;
     for (const key of geometry) $(`visual-${key}`).value = formatNumericValue(state[key]);
     $('visual-text').value = object.text ?? '';
     $('visual-selection-name').textContent = `${object.id} · ${object.type}`;
     const duration = host.getPatch().durationFrames;
-    $('visual-frame').max = Number.isFinite(duration) ? Math.max(0, duration - 1) : 0;
-    $('visual-frame').value = model.frame;
+    $('visual-frame').max = String(Number.isFinite(duration) ? Math.max(0, duration - 1) : 0);
+    $('visual-frame').value = String(model.frame);
     $('visual-frame-label').textContent = `${model.frame} / ${$('visual-frame').max}`;
-    document.querySelectorAll('[data-object-id]').forEach(node => node.setAttribute('aria-pressed', String(node.dataset.objectId === model.selectedId)));
+    document.querySelectorAll<HTMLElement>('[data-object-id]').forEach(node => node.setAttribute('aria-pressed', String(node.dataset.objectId === model?.selectedId)));
     constraints(); overlay();
   }
   function render() {
-    if (!active() || !model.spec) return;
+    if (!active(model) || !model.spec) return;
     const generation = ++epoch, identity = model;
     model.ready = false; constraints();
     $('stage').dataset.renderRequest = String(generation);
     // initialize and frame share mutable renderer state: serialize, skip obsolete requests.
     renderQueue = renderQueue.catch(() => {}).then(async () => {
-      if (model !== identity || generation !== epoch) return;
-      const spec = clone(model.spec), scene = spec.scenes.find(item => item.id === model.sceneId);
+      if (model !== identity || generation !== epoch || !model.spec) return;
+      const spec = clone(model.spec), scene = spec.scenes.find(item => item.id === identity.sceneId);
+      if (!scene) throw new Error('Native scene unavailable');
       const duration = host.getPatch().durationFrames;
       if (!Number.isInteger(duration) || duration < 1 || duration > 1800) { model.ready = false; constraints(); return; }
       scene.objects = clone(model.objects); scene.durationFrames = duration;
@@ -115,6 +150,7 @@ export function initObjectEditor(host) {
       await loadRenderer();
       if (model !== identity || generation !== epoch) return;
       model.loaded = true;
+      if (!window.studio) throw new Error('Native renderer unavailable');
       await window.studio.initialize(spec);
       if (model !== identity || generation !== epoch) return;
       window.studio.renderFrame(scene.startFrame + model.frame);
@@ -122,19 +158,21 @@ export function initObjectEditor(host) {
       $('stage').dataset.localFrame = String(model.frame);
       $('stage').dataset.globalFrame = String(scene.startFrame + model.frame);
       model.ready = true; constraints();
-    }).catch(error => { if (model === identity && generation === epoch) { model.ready = false; status(error.message); constraints(); } });
+    }).catch((cause: unknown) => { if (model === identity && generation === epoch) { model.ready = false; status(errorInfo(cause).message); constraints(); } });
   }
   function layers() {
+    if (!model) return;
     $('visual-layers').replaceChildren(...[...model.objects].reverse().map(object => {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.objectId = object.id;
       button.textContent = `${object.id} · ${object.type}`; button.onclick = () => void chooseObject(object.id); return button;
     }));
   }
-  function sync(scene, state) {
+  function sync(scene: Scene, state: ProjectState) {
     $('object-editor').hidden = scene.type !== 'composition';
     $('save-scene').textContent = t(scene.type === 'composition' ? 'Применить просмотренную правку' : 'Сохранить сцену');
     if (scene.type !== 'composition') { epoch++; model = undefined; $('save-scene').disabled = host.isBusy(); $('preview-scene').disabled = host.isBusy(); return; }
-    if (active() && model.etag === state.etag && host.isDirty()) { fields(); return; }
+    if (active(model) && model.etag === state.etag && host.isDirty()) { fields(); return; }
+    if (!scene.objects) throw new Error('Composition objects unavailable');
     const priorId = model?.selectedId ?? preferredId;
     model = { sceneId: scene.id, etag: state.etag, objects: clone(scene.objects), selectedId: scene.objects.some(o => o.id === priorId) ? priorId : scene.objects.at(-1)?.id, frame: 0, ready: false, loaded: false, stale: false, unknown: false };
     const identity = model; epoch++; $('visual-mode').value = 'base'; layers(); fields();
@@ -143,54 +181,56 @@ export function initObjectEditor(host) {
       if (model !== identity) return;
       if (result.etag !== model.etag) throw new Error('Stale renderer context');
       model.spec = result.spec; layout(); render();
-    }).catch(error => { if (model === identity) { if (error.code === 'PROJECT_CONFLICT') externalChanged('changed'); else status(error.message); } });
+    }).catch((cause: unknown) => { const error = errorInfo(cause); if (model === identity) { if (error.code === 'PROJECT_CONFLICT') externalChanged('changed'); else status(error.message); } });
   }
-  function mutate(patch) {
-    if (blocked() || !selected()) return;
+  function mutate(patch: ObjectPatch) {
     const object = selected();
+    if (blocked() || !model || !object) return;
     const revised = $('visual-mode').value === 'key' ? geometryKey(object, model.frame, patch) : { ...object, ...patch };
     model.objects = model.objects.map(item => item.id === object.id ? revised : item);
     markDirty(); fields(); render();
   }
   for (const key of geometry) {
     const input = $(`visual-${key}`);
-    input.onchange = () => {
+    const change = () => {
       const value = Number(input.value);
       if (!input.value || !Number.isFinite(value) || (['width', 'height'].includes(key) && value < 1)) { fields(); return; }
       mutate({ [key]: value });
     };
+    input.onchange = change;
     input.onkeydown = event => {
       if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
       event.preventDefault(); const value = adjustNumericToken(input.value, event.key === 'ArrowUp' ? 1 : -1, event);
-      if (value !== null) { input.value = value; input.onchange(); }
+      if (value !== null) { input.value = value; change(); }
     };
   }
   $('visual-text').oninput = () => {
-    if (blocked() || selected()?.type !== 'text') return;
+    if (blocked() || !model || selected()?.type !== 'text') return;
     const id = model.selectedId;
     model.objects = model.objects.map(object => object.id === id ? { ...object, text: $('visual-text').value } : object);
     markDirty(); render();
   };
   $('visual-frame').oninput = () => {
-    if (blocked()) return;
+    if (blocked() || !model) return;
     model.frame = Math.max(0, Math.min(Number($('visual-frame').max), Math.round(Number($('visual-frame').value))));
     invalidate(); fields(); render();
   };
   $('visual-mode').onchange = () => { if (!blocked()) { invalidate(); fields(); render(); } };
-  const point = event => {
+  const point = (event: PointerEvent, spec: NativeSnapshot): Point => {
     const rect = $('visual-stage-wrap').getBoundingClientRect();
-    return { x: (event.clientX - rect.left) * model.spec.width / rect.width, y: (event.clientY - rect.top) * model.spec.height / rect.height };
+    return { x: (event.clientX - rect.left) * spec.width / rect.width, y: (event.clientY - rect.top) * spec.height / rect.height };
   };
-  async function chooseObject(id) {
-    if (blocked() || model.selectedId === id) return;
+  async function chooseObject(id: string) {
+    if (blocked() || !model || model.selectedId === id) return;
     if (host.isDirty() && !await resolveContext()) return;
-    if (!active() || !model.objects.some(item => item.id === id)) return;
+    if (!active(model) || !model.objects.some(item => item.id === id)) return;
     model.selectedId = id; invalidate(); fields();
   }
   $('visual-overlay').onpointerdown = event => {
-    if (blocked() || !model.ready || event.button !== 0) return;
-    const p = point(event), resizing = event.target.dataset.resize !== undefined;
-    const hit = resizing ? selected() : [...model.objects].reverse().find(object => { const s = sampleObject(object, model.frame); return s.opacity > 0 && (object.type !== 'text' || s.reveal > 0) && containsPoint(s, p); });
+    if (blocked() || !model?.spec || !model.ready || event.button !== 0) return;
+    const p = point(event, model.spec), resizing = event.target instanceof SVGElement && event.target.dataset.resize !== undefined;
+    const frame = model.frame;
+    const hit = resizing ? selected() : [...model.objects].reverse().find(object => { const s = sampleObject(object, frame); return s.opacity > 0 && (object.type !== 'text' || s.reveal > 0) && containsPoint(s, p); });
     if (!hit) return;
     if (model.selectedId !== hit.id) {
       if (host.isDirty()) { void chooseObject(hit.id); return; }
@@ -203,16 +243,16 @@ export function initObjectEditor(host) {
     invalidate(); event.preventDefault(); $('visual-overlay').setPointerCapture(event.pointerId);
   };
   $('visual-overlay').onpointermove = event => {
-    if (!gesture || blocked()) return;
+    if (!gesture || blocked() || !model?.spec) return;
     if (gesture.model !== model || gesture.etag !== model.etag || gesture.objectId !== model.selectedId || gesture.frame !== model.frame || gesture.mode !== $('visual-mode').value) { endGesture(true); return; }
-    const p = point(event), g = gesture, s = g.state;
+    const p = point(event, model.spec), g = gesture, s = g.state;
     if (g.resizing) {
       const center = { x: s.x + s.width / 2, y: s.y + s.height / 2 };
       const size = resolveCenterResizeSize({ baseWidth: s.width, baseHeight: s.height, pointer: p, pointerStart: g.start, centerStart: center });
       mutate({ x: center.x - size.width / 2, y: center.y - size.height / 2, ...size });
     } else mutate({ x: s.x + p.x - g.start.x, y: s.y + p.y - g.start.y });
   };
-  function endGesture(cancel) {
+  function endGesture(cancel: boolean) {
     if (!gesture) return;
     const priorGesture = gesture, pointerId = gesture.pointerId; gesture = undefined;
     if (cancel && model === priorGesture.model && model.etag === priorGesture.etag) { model.objects = priorGesture.objects; host.setDirty(priorGesture.dirty || model.stale || priorGesture.scalarJSON !== JSON.stringify(host.getPatch())); invalidate(); fields(); render(); }
@@ -223,37 +263,38 @@ export function initObjectEditor(host) {
   $('visual-overlay').onpointercancel = () => endGesture(true);
   window.addEventListener('keydown', event => { if (event.key === 'Escape' && gesture) { event.preventDefault(); endGesture(true); } });
   function scalarChanged() {
-    if (!active()) return;
+    if (!active(model)) return;
     const duration = host.getPatch().durationFrames;
     invalidate(); model.frame = Number.isFinite(duration) ? Math.min(model.frame, Math.max(0, duration - 1)) : 0; fields(); render();
   }
   async function preview() {
-    if (!active() || gesture || model.stale || model.unknown) return;
+    if (!active(model) || gesture || model.stale || model.unknown) return;
     invalidate();
-    const identity = model, frozen = { baseETag: model.etag, action: { type: 'edit-scene', sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
+    const identity = model, frozen: { baseETag: string; action: VisualAction } = { baseETag: model.etag, action: { type: 'edit-scene', sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
     const actionJSON = JSON.stringify(frozen.action);
     try {
       const result = await host.api('/api/visual/preview', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': frozen.baseETag }, body: actionJSON });
       if (model !== identity) return;
       if (result.stale || !result.previewId || result.projectHash !== model.etag) { externalChanged('changed'); return; }
-      model.ticket = { actionJSON, baseETag: frozen.baseETag, previewId: result.previewId };
+      model.ticket = { actionJSON, action: frozen.action, baseETag: frozen.baseETag, previewId: result.previewId };
       $('scene-preview').src = result.url; $('scene-preview').hidden = false;
       $('preview-status').textContent = t('Preview готов. Посмотрите его и явно примените эту правку.');
       status('Preview готов. Посмотрите его и явно примените эту правку.');
-    } catch (error) { if (error.code === 'PROJECT_CONFLICT') externalChanged('changed'); else host.notice(error.message, true); }
+    } catch (cause) { const error = errorInfo(cause); if (error.code === 'PROJECT_CONFLICT') externalChanged('changed'); else host.notice(error.message, true); }
   }
   async function apply() {
-    if (!active() || gesture || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
+    if (!active(model) || gesture || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
     const ticket = model.ticket; model.ticket = undefined;
     try {
-      const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag }, body: JSON.stringify({ previewId: ticket.previewId, action: JSON.parse(ticket.actionJSON) }) });
-      const before = host.getManifest(), action = JSON.parse(ticket.actionJSON), expectedScenes = before.scenes.map(scene => scene.id === action.sceneId ? { ...scene, ...action.patch } : scene);
+      const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag }, body: `{"previewId":${JSON.stringify(ticket.previewId)},"action":${ticket.actionJSON}}` });
+      const before = host.getManifest(), action = ticket.action, expectedScenes = before.scenes.map(scene => scene.id === action.sceneId ? { ...scene, ...action.patch } : scene);
       if (result?.committed !== true || !/^[a-f0-9]{64}$/.test(result.etag ?? '') || result.etag === ticket.baseETag || typeof result.manifest?.revision !== 'string' || result.manifest.revision === before.revision || !Array.isArray(result.manifest.history)) throw new Error('Unreadable commit response');
-      if (JSON.stringify(result.manifest.scenes) !== JSON.stringify(expectedScenes) || ['id', 'seed', 'schemaVersion', 'video', 'brand', 'audio', 'assets', 'operationReceipts'].some(key => JSON.stringify(result.manifest[key]) !== JSON.stringify(before[key]))) throw new Error('Commit response does not match the previewed edit');
+      if (JSON.stringify(result.manifest.scenes) !== JSON.stringify(expectedScenes) || (['id', 'seed', 'schemaVersion', 'video', 'brand', 'audio', 'assets', 'operationReceipts'] as const).some(key => JSON.stringify(result.manifest[key]) !== JSON.stringify(before[key]))) throw new Error('Commit response does not match the previewed edit');
       host.accepted(result); host.notice(t('Просмотренная правка принята. История и исходники сохранены.')); return true;
-    } catch (error) {
+    } catch (cause) {
+      const error = errorInfo(cause);
       if (error.code === 'PROJECT_CONFLICT') externalChanged('changed');
-      else if (error.committed === true && error.code === 'INTERNAL_ERROR' && error.details?.stage === 'project') {
+      else if (error.committed === true && error.code === 'INTERNAL_ERROR' && isRecord(error.details) && error.details.stage === 'project') {
         model.unknown = true;
         model.reconciliationMessage = `${t('Правка принята, но чтение результата не удалось. Не повторяйте её; явно перечитайте проект.')} ${error.message}`;
         status(model.reconciliationMessage);
@@ -263,7 +304,7 @@ export function initObjectEditor(host) {
       constraints(); return false;
     }
   }
-  function choice(reopen = false) {
+  function choice(reopen = false): Promise<ContextChoice> {
     if (choosing) return Promise.resolve('stay');
     choosing = true;
     const dialog = $('visual-dialog');
@@ -273,14 +314,14 @@ export function initObjectEditor(host) {
     $('visual-dialog-discard').disabled = false; $('visual-dialog-stay').disabled = false;
     dialog.showModal();
     return new Promise(resolve => {
-      const finish = value => { choosing = false; dialog.close(); resolve(value); };
+      const finish = (value: ContextChoice) => { choosing = false; dialog.close(); resolve(value); };
       $('visual-dialog-apply').onclick = () => finish('apply'); $('visual-dialog-discard').onclick = () => finish('discard'); $('visual-dialog-stay').onclick = () => finish('stay');
       dialog.oncancel = event => { event.preventDefault(); finish('stay'); };
     });
   }
   async function resolveContext() {
     if (gesture) endGesture(true);
-    if (!active() || (!host.isDirty() && !model.unknown && !model.stale)) return true;
+    if (!active(model) || (!host.isDirty() && !model.unknown && !model.stale)) return true;
     const answer = await choice(model.stale || model.unknown);
     if (answer === 'apply') { await host.task(apply); return !host.isDirty(); }
     if (answer === 'discard') {
@@ -290,11 +331,11 @@ export function initObjectEditor(host) {
     return false;
   }
   async function reopen() {
-    if (!active()) return false;
+    if (!active(model)) return false;
     if (!host.isDirty() && !model.unknown) { await host.task(host.reopen); return true; }
     if (await choice(true) === 'discard') await host.task(host.reopen);
     return true;
   }
   $('visual-cancel').onclick = () => void reopen();
-  return { active, sync, constraints, externalChanged, scalarChanged, preview, apply, resolveContext, reopen, invalidate, hasGesture: () => Boolean(gesture), reset: () => { endGesture(false); epoch++; preferredId = model?.selectedId; model = undefined; }, isUnknown: () => active() && model.unknown };
+  return { active, sync, constraints, externalChanged, scalarChanged, preview, apply, resolveContext, reopen, invalidate, hasGesture: () => Boolean(gesture), reset: () => { endGesture(false); epoch++; preferredId = model?.selectedId; model = undefined; }, isUnknown: () => active(model) && model.unknown };
 }

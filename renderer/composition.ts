@@ -1,7 +1,8 @@
-import type { CompositionObject, ResolvedScene, ResolvedSpec } from '../src/types.js';
+import type { CompositionObject, ResolvedScene } from '../src/types.js';
+import type { NativeRenderSpec } from './types.js';
 import { sampleObject } from '../src/composition.js';
 
-function color(value: string | undefined, spec: ResolvedSpec) {
+function color(value: string | undefined, spec: NativeRenderSpec) {
   return value && ['foreground', 'background', 'accent'].includes(value) ? spec.brand[value as 'foreground' | 'background' | 'accent'] : value ?? spec.brand.foreground;
 }
 function lines(ctx: CanvasRenderingContext2D, object: CompositionObject, width: number, height: number) {
@@ -29,7 +30,7 @@ export function validateCompositionLayout(ctx: CanvasRenderingContext2D, scene: 
     lines(ctx, object, width, height);
   }
 }
-export function drawComposition(ctx: CanvasRenderingContext2D, spec: ResolvedSpec, scene: ResolvedScene, images: Record<string, HTMLImageElement>, frame: number) {
+export function drawComposition(ctx: CanvasRenderingContext2D, spec: NativeRenderSpec, scene: ResolvedScene, images: Record<string, HTMLImageElement>, frame: number) {
   ctx.globalAlpha = 1; ctx.fillStyle = color(scene.background ?? 'background', spec); ctx.fillRect(0, 0, spec.width, spec.height);
   for (const object of scene.objects!) {
     const state = sampleObject(object, frame);
