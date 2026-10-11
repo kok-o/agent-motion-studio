@@ -7,8 +7,8 @@ import { StudioError } from './errors.js';
 
 function fail(message:string,code='STYLE_READABILITY'):never{throw new StudioError(code,'style',message,2);}
 interface Bounds {left:number;top:number;right:number;bottom:number}
-function bounds(state:ObjectState):Bounds{
-  const theta=state.rotation*Math.PI/180,c=Math.abs(Math.cos(theta)),s=Math.abs(Math.sin(theta)),width=c*state.width+s*state.height,height=s*state.width+c*state.height;
+function bounds(state:ObjectState,padding=0):Bounds{
+  const theta=state.rotation*Math.PI/180,c=Math.abs(Math.cos(theta)),s=Math.abs(Math.sin(theta)),width=c*(state.width+2*padding)+s*(state.height+2*padding),height=s*(state.width+2*padding)+c*(state.height+2*padding);
   const cx=state.x+state.width/2,cy=state.y+state.height/2;return {left:cx-width/2,top:cy-height/2,right:cx+width/2,bottom:cy+height/2};
 }
 const overlaps=(a:Bounds,b:Bounds)=>Math.min(a.right,b.right)-Math.max(a.left,b.left)>.01&&Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>.01;
@@ -41,8 +41,8 @@ export function auditStyle(manifest:Manifest,draft:StyleDraft,pack:StylePackage,
     if((item.fontSize??48)<pack.typography.minimum)fail(`Object ${item.id}: ${item.fontSize??48}px is below this style's ${pack.typography.minimum}px floor. Allow typography or revise locks.`, 'STYLE_LOCK_CONFLICT');
   }
   for(let frame=0;frame<scene.durationFrames;frame++){
-    const sampled=objects.map(item=>({item,state:sampleObject(item,frame),box:bounds(sampleObject(item,frame))}));
-    for(const {item,state,box}of sampled){if(state.opacity>.001&&!contains(safe,box))fail(`Object ${item.id} leaves the safe area at frame${frame}. Allow layout/motion or revise the relevant locks.`, 'STYLE_BOUNDS');}
+    const sampled=objects.map(item=>{const state=sampleObject(item,frame);return {item,state,box:bounds(state),paint:bounds(state,item.type==='shape'&&item.stroke?(item.strokeWidth??2)/2:0)};});
+    for(const {item,state,paint}of sampled){if(state.opacity>.001&&!contains(safe,paint))fail(`Object ${item.id} leaves the safe area at frame${frame}. Allow layout/motion or revise the relevant locks.`, 'STYLE_BOUNDS');}
     for(const item of text){
       const index=objects.indexOf(item),current=sampled[index],record=records.get(item.id)!;
       const readable=current.state.opacity>=.95&&current.state.reveal>=.999;
@@ -51,13 +51,19 @@ export function auditStyle(manifest:Manifest,draft:StyleDraft,pack:StylePackage,
       if(!readable)continue;
       let backdrop=background,known=true;
       for(const [otherIndex,other]of sampled.entries()){
-        if(otherIndex===index||other.state.opacity<=.001||!overlaps(current.box,other.box))continue;
+        if(otherIndex===index||other.state.opacity<=.001||!overlaps(current.box,other.paint))continue;
         if(other.item.type==='text'&&other.state.opacity>=.95&&other.state.reveal>=.999)fail(`Text ${item.id} overlaps ${other.item.id} at frame${frame}. Allow layout or revise locks.`, 'STYLE_OVERLAP');
         if(other.item.type==='image') {
           if(otherIndex>index)fail(`Image ${other.item.id} paints over text ${item.id} at frame${frame}; object order is preserved. Revise layout/locks explicitly.`, 'STYLE_OCCLUSION');
           known=false;warnings.add(`Contrast for ${item.id} against background image ${other.item.id} is UNKNOWN; inspect the preview.`);continue;
         }
-        if(other.item.type!=='shape'||!other.item.color)continue;
+        if(other.item.type!=='shape'||(!other.item.color&&!other.item.stroke))continue;
+        // A rotated stroke expands beyond its nominal box. Conservatively refuse
+        // a later intersecting paint region; do not infer an empty hollow interior.
+        if(other.item.stroke){
+          if(otherIndex>index)fail(`Stroke ${other.item.id} may paint over text ${item.id} at frame${frame}; conservative painted bounds intersect. Use ordinary editing or explicitly revise layout/locks.`, 'STYLE_OCCLUSION');
+          known=false;warnings.add(`Painted stroke backdrop for ${item.id}: contrast UNKNOWN; inspect the preview.`);continue;
+        }
         if(otherIndex>index)fail(`Shape ${other.item.id} paints over text ${item.id} at frame${frame}; object order is preserved. Change locks/layout explicitly.`, 'STYLE_OCCLUSION');
         if(other.item.shape==='rect'&&(other.item.radius??0)===0&&other.state.rotation===0&&contains(other.box,current.box))backdrop=blend(rgb(color(manifest,other.item.color)),backdrop,other.state.opacity);
         else {known=false;warnings.add(`Partial/rounded shape backdrop for ${item.id}: contrast UNKNOWN; inspect the preview.`);}

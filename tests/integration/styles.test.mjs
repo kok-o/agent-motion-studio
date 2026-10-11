@@ -32,6 +32,41 @@ test('style audit rejects an actual opaque image above text, preserves backgroun
   bytes=await readFile(file);const compiled=await compileStyleForProject(file,request);assert.equal(compiled.audit.status,'PASS_WITH_WARNINGS');assert.equal(compiled.audit.text[0].contrast,'UNKNOWN');assert.ok((await readFile(file)).equals(bytes));
   const crlf='Exact first line\r\nТочная вторая строка';await editProject(file,{type:'edit-scene',sceneId:'shot',patch:{objects:[{...text,text:crlf,width:900,height:300}]}});
   const crlfRequest={...request,roles:{text:'headline'}};const crlfResult=await compileStyleForProject(file,crlfRequest);assert.equal(crlfResult.action.patch.objects[0].text,crlf);
+  // Real supported stroke-only shapes; compare independently decoded native pixels.
+  const strokeText={...text,text:'MMMMM',fontSize:84,weight:700,align:'right'};
+  await editProject(file,{type:'edit-scene',sceneId:'shot',patch:{objects:[strokeText]}});
+  await pixels('stroke-control');const controlRGB=await readFile(join(root,'stroke-control.rgb'));
+  const strokeBase={id:'stroke',type:'shape',shape:'rect',x:300,y:328,width:600,height:2,stroke:'#FF0000',strokeWidth:30};
+  const strokeRequest={...request,roles:{text:'headline',stroke:'accent'},protected:{text:['align']}};
+  const strokeReports=[];
+  for(const [label,shape]of [
+    ['rect-later',strokeBase],['ellipse-later',{...strokeBase,shape:'ellipse'}],
+    ['rotated-rect-later',{...strokeBase,rotation:17}],
+    ['paint-expansion-later',{...strokeBase,x:905,y:300,width:20,height:200}]
+  ]){
+    await editProject(file,{type:'edit-scene',sceneId:'shot',patch:{objects:[strokeText,shape]}});
+    const native=await pixels(label),paintRGB=await readFile(join(root,`${label}.rgb`));let overwritten=0;
+    for(let offset=0;offset<controlRGB.length;offset+=3)if(controlRGB[offset]>230&&controlRGB[offset+1]>220&&controlRGB[offset+2]>210&&paintRGB[offset]>200&&paintRGB[offset+1]<30&&paintRGB[offset+2]<30)overwritten++;
+    assert.ok(overwritten>20,`${label}: actual stroke replaces native foreground pixels`);
+    bytes=await readFile(file);await assert.rejects(compileStyleForProject(file,strokeRequest),error=>error.code==='STYLE_OCCLUSION');assert.deepEqual(await readFile(file),bytes);
+    strokeReports.push({label,shape,overwrittenForegroundPixels:overwritten,native,code:'STYLE_OCCLUSION',acceptedBytesUnchanged:true});
+  }
+  // Both an unrotated border and a rotated painted border exceed the safe area,
+  // although their geometric bounds remain inside. No duration/copy change.
+  for(const [label,shape]of [
+    ['paint-safe-bound',{...strokeBase,x:174,y:700,width:100,height:40}],
+    ['rotated-paint-safe-bound',{...strokeBase,x:168.22640687119285,y:750,width:100,height:20,rotation:45}]
+  ]){
+    await editProject(file,{type:'edit-scene',sceneId:'shot',patch:{objects:[strokeText,shape]}});
+    bytes=await readFile(file);await assert.rejects(compileStyleForProject(file,strokeRequest),error=>error.code==='STYLE_BOUNDS');assert.deepEqual(await readFile(file),bytes);
+    strokeReports.push({label,shape,code:'STYLE_BOUNDS',acceptedBytesUnchanged:true});
+  }
+  await editProject(file,{type:'edit-scene',sceneId:'shot',patch:{objects:[strokeBase,strokeText]}});
+  await pixels('stroke-earlier');const earlierRGB=await readFile(join(root,'stroke-earlier.rgb'));let retainedForeground=0;
+  for(let offset=0;offset<controlRGB.length;offset+=3)if(controlRGB[offset]>230&&controlRGB[offset+1]>220&&controlRGB[offset+2]>210&&earlierRGB[offset]>230&&earlierRGB[offset+1]>220&&earlierRGB[offset+2]>210)retainedForeground++;
+  assert.ok(retainedForeground>200);bytes=await readFile(file);const earlierStyle=await compileStyleForProject(file,strokeRequest);assert.equal(earlierStyle.audit.text[0].contrast,'UNKNOWN');assert.deepEqual(await readFile(file),bytes);
+  strokeReports.push({label:'stroke-earlier',contrast:'UNKNOWN',retainedForegroundPixels:retainedForeground,acceptedBytesUnchanged:true});
+  await writeFile(join(root,'stroke-proof.json'),JSON.stringify({strokeReports,humanArtisticAcceptance:'NOT RUN'},null,2)+'\n');
   const voice=join(root,'voice.wav');await runProcess(tools.ffmpeg,['-y','-v','error','-f','lavfi','-i','anullsrc=r=48000:cl=stereo','-t','1',voice]);const narration=await importMedia(file,'voice.wav',await readFile(voice));
   // Controlled NEW fixtures only: the native editor intentionally has no action
   // for switching narration providers. Never rewrite the accepted lifecycle film.
