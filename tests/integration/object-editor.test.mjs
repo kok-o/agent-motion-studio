@@ -51,6 +51,47 @@ async function nativePoint(page, x, y) {
 }
 async function drag(page, from, to) { await page.mouse.move(from.x, from.y); await page.mouse.down(); await page.mouse.move(to.x, to.y, { steps: 5 }); await page.mouse.up(); }
 
+test('pending native render preserves invalid style entries and blocks writes until correction or Cancel', { timeout: 90000 }, async () => {
+  const { file, dir } = await fixture('16:9'), originalBytes = await readFile(file), before = await readProject(file);
+  const browser = await launchBrowser(tools.chrome), page = await browser.newPage(), studio = await startStudio(file, 0), writes = [], errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { const path = new URL(request.url()).pathname; if (['/api/visual/preview', '/api/visual/apply'].includes(path)) writes.push({ path, body: request.postData() }); });
+  const rendered = () => page.waitForFunction(() => document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest);
+  const blocked = async () => {
+    assert.equal(await page.$eval('#preview-scene', node => node.disabled), true); assert.equal(await page.$eval('#save-scene', node => node.disabled), true);
+    await page.evaluate(() => { document.querySelector('#preview-scene').dispatchEvent(new Event('click')); });
+    await page.waitForFunction(() => !document.querySelector('#visual-font-size').disabled);
+    await page.evaluate(() => { document.querySelector('#save-scene').dispatchEvent(new Event('click')); });
+    await page.waitForFunction(() => !document.querySelector('#visual-font-size').disabled);
+  };
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en'));
+    await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); await page.click('[data-object-id="title"]'); await rendered();
+    await page.evaluate(() => {
+      const native = window.studio.initialize.bind(window.studio), probe = window.invalidStyleProbe = { entered: false, finished: false };
+      let first = true;
+      window.studio.initialize = async (...args) => { if (first) { first = false; probe.entered = true; await new Promise(resolve => { probe.release = resolve; }); } const result = await native(...args); probe.finished = true; return result; };
+    });
+    await field(page, '#visual-color', '#123456'); await page.waitForFunction(() => window.invalidStyleProbe.entered);
+    await field(page, '#visual-font-size', 301); assert.notEqual(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked();
+    await page.evaluate(() => window.invalidStyleProbe.release()); await page.waitForFunction(() => window.invalidStyleProbe.finished); await page.evaluate(() => new Promise(requestAnimationFrame));
+    assert.equal(await page.$eval('#visual-font-size', node => node.value), '301'); assert.notEqual(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked(); assert.equal(writes.length, 0);
+    await page.select('#visual-weight', '700'); await field(page, '#visual-x', 170); await rendered();
+    assert.equal(await page.$eval('#visual-font-size', node => node.value), '301'); assert.notEqual(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked(); assert.equal(writes.length, 0);
+    await field(page, '#visual-color', 'red'); await field(page, '#visual-font-size', 40); await rendered();
+    assert.equal(await page.$eval('#visual-color', node => node.value), 'red'); assert.notEqual(await page.$eval('#visual-color', node => node.validationMessage), ''); assert.equal(await page.$eval('#visual-font-size', node => node.validationMessage), ''); await blocked(); assert.equal(writes.length, 0);
+    await field(page, '#visual-color', '#d834aa'); await rendered(); await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled);
+    assert.equal(writes.length, 1); const outgoing = JSON.parse(writes[0].body).patch.objects.find(object => object.id === 'title');
+    assert.deepEqual([outgoing.color, outgoing.fontSize, outgoing.weight, outgoing.x], ['#d834aa', 40, 700, 170]); assert.deepEqual(await readFile(file), originalBytes);
+    await field(page, '#visual-font-size', 301); await blocked(); assert.equal(writes.length, 1, 'an invalid field consumes no Apply request even after a successful preview');
+    await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await ready(page); await rendered();
+    assert.equal(await page.$eval('#visual-font-size', node => node.value), '32'); assert.equal(await page.$eval('#visual-font-size', node => node.validationMessage), ''); assert.equal(await page.$eval('#visual-color', node => node.value), ''); assert.equal(await page.$eval('#preview-scene', node => node.disabled), false);
+    assert.deepEqual(await readFile(file), originalBytes); assert.deepEqual((await readProject(file)).manifest.history, before.manifest.history); assert.deepEqual(errors, []);
+    await (await page.$('#object-editor')).screenshot({ path: join(dir, 'invalid-style-cancel.png') });
+    await writeFile(join(dir, 'invalid-style-pending.json'), JSON.stringify({ status: 'PASS', actualBrowserDeferredNativeInitialize: true, staleRenderCannotUnlock: true, programmaticPreviewApplyBlocked: true, unrelatedStyleAndGeometryPreserveInvalidEntry: true, correctingOneErrorPreservesAnother: true, explicitCorrectionPreviewMatchesFields: true, existingTicketInvalidated: true, cancelRestoresInputsAndAcceptedBytes: true, acceptedHistoryUnchanged: true, previewRequests: 1, applyRequests: 0, errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
 for (const aspect of ['16:9', '9:16']) test(`selected properties and layer order use native draft/preview/apply/restore ${aspect}`, { timeout: 180000 }, async () => {
   const { file, dir } = await propertiesFixture(aspect), before = await readProject(file), originalBytes = await readFile(file), originalObjects = before.manifest.scenes[1].objects;
   const sourceHashes = async () => Object.fromEntries(await Promise.all(Object.entries((await readProject(file)).manifest.assets).map(async ([id, asset]) => [id, hashBytes(await readFile(join(file, '..', asset.path)))])));

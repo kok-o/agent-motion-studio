@@ -55,6 +55,7 @@ function loadRenderer() {
 /** One memory draft; native rendering and accepted edits stay behind their existing APIs. */
 export function initObjectEditor(host: EditorHost): EditorController {
   let model: EditorModel | undefined, preferredId: string | undefined, epoch = 0, renderQueue = Promise.resolve(), gesture: Gesture | undefined, choosing = false;
+  const invalidStyles = new Map<StyleKey, string>();
   const active = (candidate = model): candidate is EditorModel => Boolean(candidate && host.getScene()?.id === candidate.sceneId && host.getScene()?.type === 'composition');
   const selected = () => { const current = model; return current?.objects.find(object => object.id === current.selectedId); };
   const blocked = () => !active(model) || host.isBusy() || model.unknown;
@@ -68,7 +69,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
   function markDirty() {
     if (!model) return;
     host.changed(); invalidate();
-    status(model.stale ? 'Проект изменён извне. Черновик сохранён; явно перечитайте проект.' : 'Черновик в памяти. Preview, затем явный Apply.');
+    status(model.stale ? 'Проект изменён извне. Черновик сохранён; явно перечитайте проект.' : invalidStyles.values().next().value ?? 'Черновик в памяти. Preview, затем явный Apply.');
   }
   function externalChanged(etag: string) {
     if (!active(model) || etag === model.etag) return;
@@ -82,8 +83,8 @@ export function initObjectEditor(host: EditorHost): EditorController {
     if (!active(model)) return;
     const unavailable = host.isBusy() || !model.loaded || model.unknown || Boolean(gesture);
     for (const node of $('object-editor').querySelectorAll<FormControl>('input,textarea,select,button')) node.disabled = unavailable;
-    $('save-scene').disabled = unavailable || !model.ready || model.stale || !model.ticket || !host.isDirty();
-    $('preview-scene').disabled = unavailable || !model.ready || model.stale;
+    $('save-scene').disabled = unavailable || !model.ready || invalidStyles.size > 0 || model.stale || !model.ticket || !host.isDirty();
+    $('preview-scene').disabled = unavailable || !model.ready || invalidStyles.size > 0 || model.stale;
     $('visual-cancel').disabled = host.isBusy();
     $('visual-text-field').hidden = selected()?.type !== 'text';
     const object = selected(), keyMode = $('visual-mode').value === 'key';
@@ -138,7 +139,12 @@ export function initObjectEditor(host: EditorHost): EditorController {
     const state = $('visual-mode').value === 'key' ? sampleObject(object, model.frame) : object;
     for (const key of geometry) $(`visual-${key}`).value = formatNumericValue(state[key]);
     $('visual-text').value = object.text ?? '';
-    for (const key of styleKeys) { const control = $(styleControls[key]); control.value = String(object[key] ?? ''); control.setCustomValidity(''); }
+    for (const key of styleKeys) {
+      // Keep an unresolved raw entry, including native number badInput, until
+      // this field is explicitly corrected or the whole draft is discarded.
+      if (invalidStyles.has(key)) continue;
+      const control = $(styleControls[key]); control.value = String(object[key] ?? ''); control.setCustomValidity('');
+    }
     $('visual-selection-name').textContent = `${object.id} · ${object.type}`;
     const duration = host.getPatch().durationFrames;
     $('visual-frame').max = String(Number.isFinite(duration) ? Math.max(0, duration - 1) : 0);
@@ -173,7 +179,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
       $('stage').dataset.rendered = String(generation);
       $('stage').dataset.localFrame = String(model.frame);
       $('stage').dataset.globalFrame = String(scene.startFrame + model.frame);
-      model.ready = true; constraints();
+      model.ready = invalidStyles.size === 0; constraints();
     }).catch((cause: unknown) => { if (model === identity && generation === epoch) { model.ready = false; status(errorInfo(cause).message); constraints(); } });
   }
   function layers() {
@@ -190,6 +196,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     if (active(model) && model.etag === state.etag && host.isDirty()) { fields(); return; }
     if (!scene.objects) throw new Error('Composition objects unavailable');
     const priorId = model?.selectedId ?? preferredId;
+    invalidStyles.clear();
     model = { sceneId: scene.id, etag: state.etag, objects: clone(scene.objects), selectedId: scene.objects.some(o => o.id === priorId) ? priorId : scene.objects.at(-1)?.id, frame: 0, ready: false, loaded: false, stale: false, unknown: false };
     const identity = model; epoch++; $('visual-mode').value = 'base'; layers(); fields();
     status('Выберите объект. Base меняет основу, keyframe — геометрию на кадре.');
@@ -209,29 +216,31 @@ export function initObjectEditor(host: EditorHost): EditorController {
   function mutateStyle<K extends StyleKey>(key: K, value: CompositionObject[K] | undefined) {
     const object = selected();
     if (blocked() || !model || !object || $('visual-mode').value === 'key') return;
+    invalidStyles.delete(key); $(styleControls[key]).setCustomValidity('');
     const revised = clone(object);
     if (value === undefined) delete revised[key]; else revised[key] = value;
     model.objects = model.objects.map(item => item.id === object.id ? revised : item);
     markDirty(); fields(); render();
   }
-  function invalidStyle(input: HTMLInputElement, message: string) {
+  function invalidStyle(key: StyleKey, input: HTMLInputElement, message: string) {
     if (!model || blocked()) return;
-    input.setCustomValidity(t(message)); markDirty(); model.ready = false; status(message); constraints();
+    invalidStyles.set(key, message); epoch++;
+    input.setCustomValidity(t(message)); model.ready = false; markDirty(); status(message); constraints();
   }
   for (const key of ['color', 'stroke'] as const) {
     const input = $(styleControls[key]);
     input.onchange = () => {
-      if (input.value && !/^(background|foreground|accent|#[0-9a-fA-F]{6})$/.test(input.value)) { invalidStyle(input, 'Цвет: background, foreground, accent или #RRGGBB.'); return; }
-      input.setCustomValidity(''); mutateStyle(key, input.value || undefined);
+      if (input.value && !/^(background|foreground|accent|#[0-9a-fA-F]{6})$/.test(input.value)) { invalidStyle(key, input, 'Цвет: background, foreground, accent или #RRGGBB.'); return; }
+      mutateStyle(key, input.value || undefined);
     };
   }
   for (const [key, minimum, maximum] of [['fontSize', 18, 300], ['strokeWidth', 1, 30], ['radius', 0, 300]] as const) {
     const input = $(styleControls[key]);
     input.onchange = () => {
-      if (input.validity.badInput) { invalidStyle(input, 'Значение вне допустимого диапазона.'); return; }
+      if (input.validity.badInput) { invalidStyle(key, input, 'Значение вне допустимого диапазона.'); return; }
       const value = input.value === '' ? undefined : Number(input.value);
-      if (value !== undefined && (!Number.isFinite(value) || value < minimum || value > maximum || (key === 'fontSize' && !Number.isInteger(value)))) { invalidStyle(input, 'Значение вне допустимого диапазона.'); return; }
-      input.setCustomValidity(''); mutateStyle(key, value);
+      if (value !== undefined && (!Number.isFinite(value) || value < minimum || value > maximum || (key === 'fontSize' && !Number.isInteger(value)))) { invalidStyle(key, input, 'Значение вне допустимого диапазона.'); return; }
+      mutateStyle(key, value);
     };
   }
   $('visual-weight').onchange = () => { const value = $('visual-weight').value; if (value === '' || value === '400' || value === '700') mutateStyle('weight', value === '' ? undefined : value === '400' ? 400 : 700); };
@@ -322,14 +331,15 @@ export function initObjectEditor(host: EditorHost): EditorController {
     invalidate(); model.frame = Number.isFinite(duration) ? Math.min(model.frame, Math.max(0, duration - 1)) : 0; fields(); render();
   }
   async function preview() {
-    if (!active(model) || gesture || model.stale || model.unknown) return;
+    if (!active(model) || !model.ready || invalidStyles.size > 0 || gesture || model.stale || model.unknown) return;
     invalidate();
+    const previewEpoch = epoch;
     const selectedId = model.selectedId; if (!selectedId) return;
     const identity = model, frozen: { selectedId: string; baseETag: string; action: VisualAction } = { selectedId, baseETag: model.etag, action: { type: 'edit-scene', sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
     const actionJSON = JSON.stringify(frozen.action);
     try {
       const result = await host.api('/api/visual/preview', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': frozen.baseETag, 'X-AMS-Selected-Object': frozen.selectedId }, body: actionJSON });
-      if (model !== identity) return;
+      if (model !== identity || epoch !== previewEpoch || invalidStyles.size > 0 || !model.ready) return;
       if (result.stale || !result.previewId || result.projectHash !== model.etag) { externalChanged('changed'); return; }
       model.ticket = { actionJSON, action: frozen.action, selectedId: frozen.selectedId, baseETag: frozen.baseETag, previewId: result.previewId };
       $('scene-preview').src = result.url; $('scene-preview').hidden = false;
@@ -338,7 +348,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     } catch (cause) { const error = errorInfo(cause); if (error.code === 'PROJECT_CONFLICT') externalChanged('changed'); else host.notice(error.message, true); }
   }
   async function apply() {
-    if (!active(model) || gesture || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
+    if (!active(model) || !model.ready || invalidStyles.size > 0 || gesture || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
     const ticket = model.ticket; model.ticket = undefined;
     try {
       const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag, 'X-AMS-Selected-Object': ticket.selectedId }, body: `{"previewId":${JSON.stringify(ticket.previewId)},"action":${ticket.actionJSON}}` });
@@ -365,7 +375,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     const dialog = $('visual-dialog');
     $('visual-dialog-note').textContent = t(reopen ? 'Перечитать принятую версию с диска и отбросить этот черновик?' : 'Есть черновик. Примените просмотренную правку, отмените черновик или останьтесь.');
     $('visual-dialog-apply').hidden = reopen;
-    $('visual-dialog-apply').disabled = !model?.ticket || model.stale || model.unknown;
+    $('visual-dialog-apply').disabled = !model?.ticket || !model.ready || invalidStyles.size > 0 || model.stale || model.unknown;
     $('visual-dialog-discard').disabled = false; $('visual-dialog-stay').disabled = false;
     dialog.showModal();
     return new Promise(resolve => {
