@@ -2,7 +2,7 @@
 
 ## Действующая итерация — готовый визуальный редактор, стили и удобный запуск, 11 октября 2026
 
-**Это единственный действующий порядок работ.** Владелец разрешил ведущему начать инженерную реализацию, выдавать задания исполнителю, независимо принимать результат и переходить к следующему шагу. E0 и E1.1 технически приняты, текущий срез — E1.T; следующие этапы открываются ведущим последовательно по результатам. Продвижение — последним. Старые разделы ниже сохраняются как история, не как параллельный backlog. Версия пакета остаётся `0.1.0` experimental developer preview.
+**Это единственный действующий порядок работ.** Владелец разрешил ведущему начать инженерную реализацию, выдавать задания исполнителю, независимо принимать результат и переходить к следующему шагу. E0, E1.1 и первый E1.T технически приняты; текущий срез — свойства и слои существующего объекта E1 по #28. Следующие этапы открываются ведущим последовательно по результатам. Продвижение — последним. Старые разделы ниже сохраняются как история, не как параллельный backlog. Версия пакета остаётся `0.1.0` experimental developer preview.
 
 ### Цель
 
@@ -48,7 +48,7 @@ Source pin кандидата HF: `bb34e301ec3c5f7b9edad07932356bd02a9f7934`. В
 
 ### E1.T — постепенный перевод интерфейса на TypeScript
 
-**Порядок:** после merge E1.1 по issue #24 и PASS обязательного CI main; gate выполнен на `de231ca4e7b145d969b52de50aa4dad1dac98d9f`. **Статус: IN PROGRESS / implementation candidate, [issue #25](https://github.com/kok-o/agent-motion-studio/issues/25).** Владелец разрешил постепенную типизацию; ведущий открыл первый срез от этой принятой базы. Новая QA/consumer/CI учитываются отдельно и не наследуют GREEN базы.
+**Статус первого среза: ACCEPT / MERGED / MAIN VERIFIED, [issue #25](https://github.com/kok-o/agent-motion-studio/issues/25), [PR #27](https://github.com/kok-o/agent-motion-studio/pull/27).** Ведущий независимо принял candidate `d17ef7e` и фактический installed consumer9/9; main `b4e3608aa5b84a3f9beec4d0d7c8b2dd19dfbef4` имеет то же дерево. [Main CI38139247520](https://github.com/kok-o/agent-motion-studio/actions/runs/38139247520): required3/3 SUCCESS, integration58/58/package PASS. Локальные Windows RED и installed NOT RUN сохранены как отдельные исторические результаты; CI не переписывает их. Это база следующего среза, не его GREEN.
 
 Первый отдельный PR переводит object-editor и geometry helpers, добавляет типы объектов/keyframes, native renderer API, visual request/response и состояний draft/preview/conflict/unknown. Использовать native domain types и точный безопасный browser DTO, не создавать расходящуюся копию схемы. Включить проверку TypeScript для реально перенесённых browser sources в обычный `npm run check`.
 
@@ -57,6 +57,12 @@ HTML/CSS и выдаваемый браузеру JavaScript сохраняют�
 Остальные модули Studio переходят небольшими отдельными PR по мере работы с ними. Полная перепись интерфейса не является условием следующей продуктовой функции. После первого принятого среза продолжить оставшееся object authoring E1, затем звук E2 и стили E3 в действующем порядке.
 
 **Приёмка:** migrated sources реально включены в typecheck; build/package/installed consumer используют собранные browser modules без source checkout; сохранены публичные URL/import paths и поведение mouse/keyboard, draft/preview/accept/cancel/conflict/unknown/restore/reopen. Native guards, timing, source/history и v1/v2 compatibility не меняются. Независимая проверка exact candidate, required CI и CI main обязательны; художественная и human usability приёмка учитываются отдельно.
+
+### E1 — свойства и слои существующего объекта, #28
+
+**Статус: IN PROGRESS / implementation candidate, [issue #28](https://github.com/kok-o/agent-motion-studio/issues/28), от принятого `b4e3608`.** Text: color/fontSize/weight400|700/align; shape: fill/stroke/strokeWidth/rect radius; image: прежняя geometry и слой. Меняется только выбранный stable ID; соседи и их относительный порядок сохраняются. Optional reset удаляет поле, defaults соседей не материализуются; style статичен, geometry keys и независимые tracks сохраняются.
+
+Transport — optional selected-object header на двух visual POST, прежние bodies; headerless requests сохраняют legacy whitelist. Ticket связывает selectedId|null, exact action и ETag; metadata не попадает в accepted проект. Memory draft → native preview → explicit Apply одной revision; cancel/conflict/unknown/no-resend/restore/reopen и native guards обязательны. [Точный контракт](COMPOSITION.md#studio-visual-edit-contract). Требуются собственные strict/unit, реальный UI в обоих aspects/non-first scene, installed consumer и полный CI точного head. Художественная/human приёмка NOT RUN; весь E1 PARTIAL. Создание объектов и звук открываются только следующим поручением ведущего.
 
 ### E2 — согласованный просмотр со звуком
 
@@ -96,7 +102,7 @@ HTML/CSS и выдаваемый браузеру JavaScript сохраняют�
 
 ### Управление и общие gates
 
-- Ведущий владеет направлением, заданиями, независимой проверкой и решением о следующем срезе. kok-o выполняет текущий E1.T после принятых E0/E1.1; cleave173 не получает искусственную параллельную задачу. Ownership пересекающихся файлов согласуется до редактирования.
+- Ведущий владеет направлением, заданиями, независимой проверкой и решением о следующем срезе. kok-o выполняет свойства/слои по #28 после принятых E0/E1.1/E1.T; cleave173 не получает искусственную параллельную задачу. Ownership пересекающихся файлов согласуется до редактирования.
 - Первый spike передаётся как runnable candidate/evidence, без автоматического PR/merge. Production changes: одна цель → отдельная ветка/PR → независимая техническая приёмка → exact-head required checks/актуальная база/закрытые discussions → обычный merge → обязательные checks нового main. Approve необязателен, checks и запрет admin bypass сохраняются.
 - Accepted project меняется только через project API. Preview/draft не пишут accepted state. Сохраняются источники, принятые takes, exports/ZIP, история, receipts, IDEA.md и посторонние изменения. Не ослаблять loopback/session/Origin/Host/path guards, timing/trim/crop, validation и v1/v2.
 - Обычные edit/import после неопределённого исхода не повторять вслепую; generated Accept восстанавливать по исходному intent/operation ID/receipt. HF file writer/retry не подключать к принятым AMS файлам.

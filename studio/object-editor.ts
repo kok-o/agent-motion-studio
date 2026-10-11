@@ -1,12 +1,16 @@
 import { sampleObject } from '../src/composition.js';
-import type { Scene } from '../src/types.js';
+import type { CompositionObject, Scene } from '../src/types.js';
 import type { EditorHost, EditorController, EditorModel, Gesture, ContextChoice, ProjectState, ObjectPatch, Point, NativeSnapshot, VisualAction } from './object-editor-types.js';
 import { resolveCenterResizeSize, adjustNumericToken, containsPoint, geometryKey, formatNumericValue } from './object-editor-geometry.js';
 import { t } from './i18n.js';
 
-type InputId = 'visual-x' | 'visual-y' | 'visual-width' | 'visual-height' | 'visual-frame' | 'duration';
-type ButtonId = 'save-scene' | 'preview-scene' | 'visual-cancel' | 'reload' | 'visual-dialog-apply' | 'visual-dialog-discard' | 'visual-dialog-stay';
-type PlainId = 'visual-status' | 'object-editor' | 'visual-text-field' | 'visual-key-note' | 'visual-stage-wrap' | 'visual-stage-space' | 'visual-selection-name' | 'visual-frame-label' | 'visual-layers' | 'preview-status' | 'visual-dialog-note';
+type InputId = 'visual-x' | 'visual-y' | 'visual-width' | 'visual-height' | 'visual-frame' | 'duration' | 'visual-color' | 'visual-font-size' | 'visual-stroke' | 'visual-stroke-width' | 'visual-radius';
+type SelectId = 'visual-mode' | 'visual-weight' | 'visual-align';
+type ButtonId = 'save-scene' | 'preview-scene' | 'visual-cancel' | 'reload' | 'visual-dialog-apply' | 'visual-dialog-discard' | 'visual-dialog-stay' | 'visual-layer-up' | 'visual-layer-down';
+type PlainId = 'visual-status' | 'object-editor' | 'visual-text-field' | 'visual-key-note' | 'visual-stage-wrap' | 'visual-stage-space' | 'visual-selection-name' | 'visual-frame-label' | 'visual-layers' | 'preview-status' | 'visual-dialog-note' | 'visual-style-fields' | 'visual-color-field' | 'visual-text-style' | 'visual-shape-style' | 'visual-radius-field';
+const styleKeys = ['color', 'fontSize', 'weight', 'align', 'stroke', 'strokeWidth', 'radius'] as const;
+type StyleKey = typeof styleKeys[number];
+const styleControls = { color: 'visual-color', fontSize: 'visual-font-size', weight: 'visual-weight', align: 'visual-align', stroke: 'visual-stroke', strokeWidth: 'visual-stroke-width', radius: 'visual-radius' } as const;
 function required<T extends Element>(id: string, constructor: { new(): T }): T {
   const node = document.getElementById(id);
   if (!(node instanceof constructor)) throw new Error(`Missing editor element: ${id}`);
@@ -14,7 +18,8 @@ function required<T extends Element>(id: string, constructor: { new(): T }): T {
 }
 function $(id: InputId): HTMLInputElement;
 function $(id: ButtonId): HTMLButtonElement;
-function $(id: 'visual-mode'): HTMLSelectElement;
+function $(id: SelectId): HTMLSelectElement;
+function $(id: InputId | SelectId): HTMLInputElement | HTMLSelectElement;
 function $(id: 'visual-text'): HTMLTextAreaElement;
 function $(id: 'scene-preview'): HTMLVideoElement;
 function $(id: 'stage'): HTMLCanvasElement;
@@ -22,9 +27,9 @@ function $(id: 'visual-overlay'): SVGSVGElement;
 function $(id: 'visual-dialog'): HTMLDialogElement;
 function $(id: PlainId): HTMLElement;
 function $(id: string): HTMLElement | SVGSVGElement {
-  if (['visual-x', 'visual-y', 'visual-width', 'visual-height', 'visual-frame', 'duration'].includes(id)) return required(id, HTMLInputElement);
-  if (['save-scene', 'preview-scene', 'visual-cancel', 'reload', 'visual-dialog-apply', 'visual-dialog-discard', 'visual-dialog-stay'].includes(id)) return required(id, HTMLButtonElement);
-  if (id === 'visual-mode') return required(id, HTMLSelectElement);
+  if (['visual-x', 'visual-y', 'visual-width', 'visual-height', 'visual-frame', 'duration', 'visual-color', 'visual-font-size', 'visual-stroke', 'visual-stroke-width', 'visual-radius'].includes(id)) return required(id, HTMLInputElement);
+  if (['save-scene', 'preview-scene', 'visual-cancel', 'reload', 'visual-dialog-apply', 'visual-dialog-discard', 'visual-dialog-stay', 'visual-layer-up', 'visual-layer-down'].includes(id)) return required(id, HTMLButtonElement);
+  if (['visual-mode', 'visual-weight', 'visual-align'].includes(id)) return required(id, HTMLSelectElement);
   if (id === 'visual-text') return required(id, HTMLTextAreaElement);
   if (id === 'scene-preview') return required(id, HTMLVideoElement);
   if (id === 'stage') return required(id, HTMLCanvasElement);
@@ -81,6 +86,16 @@ export function initObjectEditor(host: EditorHost): EditorController {
     $('preview-scene').disabled = unavailable || !model.ready || model.stale;
     $('visual-cancel').disabled = host.isBusy();
     $('visual-text-field').hidden = selected()?.type !== 'text';
+    const object = selected(), keyMode = $('visual-mode').value === 'key';
+    $('visual-style-fields').hidden = object?.type === 'image';
+    $('visual-color-field').hidden = object?.type === 'image';
+    $('visual-text-style').hidden = object?.type !== 'text';
+    $('visual-shape-style').hidden = object?.type !== 'shape';
+    $('visual-radius-field').hidden = object?.shape !== 'rect';
+    for (const key of styleKeys) $(styleControls[key]).disabled = unavailable || keyMode;
+    const index = model.objects.findIndex(item => item.id === model?.selectedId);
+    $('visual-layer-up').disabled = unavailable || keyMode || index < 0 || index === model.objects.length - 1;
+    $('visual-layer-down').disabled = unavailable || keyMode || index <= 0;
     $('visual-key-note').hidden = $('visual-mode').value !== 'key';
     $('visual-stage-wrap').setAttribute('aria-busy', String(unavailable));
     $('duration').disabled = host.isBusy() || model.unknown || Boolean(gesture);
@@ -123,6 +138,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     const state = $('visual-mode').value === 'key' ? sampleObject(object, model.frame) : object;
     for (const key of geometry) $(`visual-${key}`).value = formatNumericValue(state[key]);
     $('visual-text').value = object.text ?? '';
+    for (const key of styleKeys) { const control = $(styleControls[key]); control.value = String(object[key] ?? ''); control.setCustomValidity(''); }
     $('visual-selection-name').textContent = `${object.id} · ${object.type}`;
     const duration = host.getPatch().durationFrames;
     $('visual-frame').max = String(Number.isFinite(duration) ? Math.max(0, duration - 1) : 0);
@@ -190,6 +206,43 @@ export function initObjectEditor(host: EditorHost): EditorController {
     model.objects = model.objects.map(item => item.id === object.id ? revised : item);
     markDirty(); fields(); render();
   }
+  function mutateStyle<K extends StyleKey>(key: K, value: CompositionObject[K] | undefined) {
+    const object = selected();
+    if (blocked() || !model || !object || $('visual-mode').value === 'key') return;
+    const revised = clone(object);
+    if (value === undefined) delete revised[key]; else revised[key] = value;
+    model.objects = model.objects.map(item => item.id === object.id ? revised : item);
+    markDirty(); fields(); render();
+  }
+  function invalidStyle(input: HTMLInputElement, message: string) {
+    if (!model || blocked()) return;
+    input.setCustomValidity(t(message)); markDirty(); model.ready = false; status(message); constraints();
+  }
+  for (const key of ['color', 'stroke'] as const) {
+    const input = $(styleControls[key]);
+    input.onchange = () => {
+      if (input.value && !/^(background|foreground|accent|#[0-9a-fA-F]{6})$/.test(input.value)) { invalidStyle(input, 'Цвет: background, foreground, accent или #RRGGBB.'); return; }
+      input.setCustomValidity(''); mutateStyle(key, input.value || undefined);
+    };
+  }
+  for (const [key, minimum, maximum] of [['fontSize', 18, 300], ['strokeWidth', 1, 30], ['radius', 0, 300]] as const) {
+    const input = $(styleControls[key]);
+    input.onchange = () => {
+      const value = input.value === '' ? undefined : Number(input.value);
+      if (value !== undefined && (!Number.isFinite(value) || value < minimum || value > maximum || (key === 'fontSize' && !Number.isInteger(value)))) { invalidStyle(input, 'Значение вне допустимого диапазона.'); return; }
+      input.setCustomValidity(''); mutateStyle(key, value);
+    };
+  }
+  $('visual-weight').onchange = () => { const value = $('visual-weight').value; if (value === '' || value === '400' || value === '700') mutateStyle('weight', value === '' ? undefined : value === '400' ? 400 : 700); };
+  $('visual-align').onchange = () => { const value = $('visual-align').value; if (value === '' || value === 'left' || value === 'center' || value === 'right') mutateStyle('align', value || undefined); };
+  function moveLayer(direction: 1 | -1) {
+    if (blocked() || !model || $('visual-mode').value === 'key') return;
+    const index = model.objects.findIndex(object => object.id === model?.selectedId), target = index + direction;
+    if (index < 0 || target < 0 || target >= model.objects.length) return;
+    const objects = [...model.objects], [object] = objects.splice(index, 1); objects.splice(target, 0, object);
+    model.objects = objects; markDirty(); layers(); fields(); render();
+  }
+  $('visual-layer-up').onclick = () => moveLayer(1); $('visual-layer-down').onclick = () => moveLayer(-1);
   for (const key of geometry) {
     const input = $(`visual-${key}`);
     const change = () => {
@@ -270,13 +323,14 @@ export function initObjectEditor(host: EditorHost): EditorController {
   async function preview() {
     if (!active(model) || gesture || model.stale || model.unknown) return;
     invalidate();
-    const identity = model, frozen: { baseETag: string; action: VisualAction } = { baseETag: model.etag, action: { type: 'edit-scene', sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
+    const selectedId = model.selectedId; if (!selectedId) return;
+    const identity = model, frozen: { selectedId: string; baseETag: string; action: VisualAction } = { selectedId, baseETag: model.etag, action: { type: 'edit-scene', sceneId: model.sceneId, patch: { ...host.validatePatch(), objects: clone(model.objects) } } };
     const actionJSON = JSON.stringify(frozen.action);
     try {
-      const result = await host.api('/api/visual/preview', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': frozen.baseETag }, body: actionJSON });
+      const result = await host.api('/api/visual/preview', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': frozen.baseETag, 'X-AMS-Selected-Object': frozen.selectedId }, body: actionJSON });
       if (model !== identity) return;
       if (result.stale || !result.previewId || result.projectHash !== model.etag) { externalChanged('changed'); return; }
-      model.ticket = { actionJSON, action: frozen.action, baseETag: frozen.baseETag, previewId: result.previewId };
+      model.ticket = { actionJSON, action: frozen.action, selectedId: frozen.selectedId, baseETag: frozen.baseETag, previewId: result.previewId };
       $('scene-preview').src = result.url; $('scene-preview').hidden = false;
       $('preview-status').textContent = t('Preview готов. Посмотрите его и явно примените эту правку.');
       status('Preview готов. Посмотрите его и явно примените эту правку.');
@@ -286,7 +340,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     if (!active(model) || gesture || model.stale || model.unknown || !model.ticket || !host.isDirty()) return false;
     const ticket = model.ticket; model.ticket = undefined;
     try {
-      const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag }, body: `{"previewId":${JSON.stringify(ticket.previewId)},"action":${ticket.actionJSON}}` });
+      const result = await host.api('/api/visual/apply', { method: 'POST', headers: { 'Content-Type': 'application/json', 'If-Match': ticket.baseETag, 'X-AMS-Selected-Object': ticket.selectedId }, body: `{"previewId":${JSON.stringify(ticket.previewId)},"action":${ticket.actionJSON}}` });
       const before = host.getManifest(), action = ticket.action, expectedScenes = before.scenes.map(scene => scene.id === action.sceneId ? { ...scene, ...action.patch } : scene);
       if (result?.committed !== true || !/^[a-f0-9]{64}$/.test(result.etag ?? '') || result.etag === ticket.baseETag || typeof result.manifest?.revision !== 'string' || result.manifest.revision === before.revision || !Array.isArray(result.manifest.history)) throw new Error('Unreadable commit response');
       if (JSON.stringify(result.manifest.scenes) !== JSON.stringify(expectedScenes) || (['id', 'seed', 'schemaVersion', 'video', 'brand', 'audio', 'assets', 'operationReceipts'] as const).some(key => JSON.stringify(result.manifest[key]) !== JSON.stringify(before[key]))) throw new Error('Commit response does not match the previewed edit');

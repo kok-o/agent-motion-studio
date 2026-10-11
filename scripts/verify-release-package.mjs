@@ -138,9 +138,10 @@ try {
   report.checks.generation.recoveryCommands = { bindStore: true, resolveUnknown: true, oldUnknownRetained: true, acceptedProjectUnchanged: true, controlledSubmissionsTotal: controlledSubmissions, productionNetworkRequests: 0 };
   report.checks.objectEditor = await verifyInstalledObjectEditor(app, consumer, join(out, 'object-editor')); await save();
   const installedScenarios = await stageInstalledEditorScenarios(root, app, consumer);
-  await run(['--test', '--test-concurrency=1', installedScenarios], 'object-editor-scenarios');
+  const scenarioLog = await run(['--test', '--test-concurrency=1', '--test-reporter=tap', installedScenarios], 'object-editor-scenarios');
+  for (const [label, count] of [['tests', 12], ['pass', 12], ['fail', 0], ['cancelled', 0], ['skipped', 0]]) assert.match(scenarioLog, new RegExp(`^# ${label} ${count}\\r?$`, 'm'), `Installed editor reporter must confirm ${label}=${count}`);
   await collectInstalledEditorScenarios(consumer, join(out, 'object-editor-scenarios'));
-  report.checks.installedEditorScenarios = { status: 'PASS', scenarios: 9, aspects: ['16:9', '9:16'], nonFirstScene: true, sourceCheckoutImports: 0, humanAcceptance: 'NOT RUN' }; await save();
+  report.checks.installedEditorScenarios = { status: 'PASS', scenarios: 12, aspects: ['16:9', '9:16'], nonFirstScene: true, selectedPropertiesAndLayers: true, selectedHeaderAndTicketNegatives: true, sourceCheckoutImports: 0, humanAcceptance: 'NOT RUN' }; await save();
   if (latest?.userKit) {
     report.checks.firstUserKit = { status: 'running', evidence: 'first-user-kit/SELF_RUN.json' }; await save();
     let kitResult;

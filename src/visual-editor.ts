@@ -2,7 +2,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { hashBytes, validateManifest } from './spec.js';
 import { patchScene, type ProjectAction } from './project.js';
 import { StudioError } from './errors.js';
-import type { Manifest, ResolvedSpec, ResolvedAsset } from './types.js';
+import type { CompositionObject, Manifest, ResolvedSpec, ResolvedAsset } from './types.js';
 
 export type VisualAction = Extract<ProjectAction, { type: 'edit-scene' }>;
 export type BrowserVisualSpec = Omit<ResolvedSpec, 'projectDir' | 'history' | 'operationReceipts' | 'assets'> & {
@@ -17,8 +17,29 @@ export function visualETag(value: unknown): string {
 export function assertVisualETag(actual: string, expected: string) {
   if (actual !== expected) throw new StudioError('PROJECT_CONFLICT', 'visual', 'Project changed. Keep the draft or explicitly reread; do not resubmit it.');
 }
-/** Existing-object geometry/text only. Neighbours, identity, order and other tracks are immutable here. */
-export function validateVisualAction(manifest: Manifest, input: unknown): VisualAction {
+/** Optional transport metadata, never a project/action field. Reject duplicate raw headers too. */
+export function visualSelectedObject(value: unknown, rawHeaders: readonly string[] = []): string | null {
+  if (rawHeaders.filter((_, index) => index % 2 === 0 && rawHeaders[index].toLowerCase() === 'x-ams-selected-object').length > 1) throw fail('Send one selected object header.');
+  if (value === undefined) return null;
+  if (typeof value !== 'string' || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(value)) throw fail('Expected a nonempty native selected object ID.');
+  return value;
+}
+const omitted = (object: object, keys: string[]) => Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
+function validateObjectChange(before: CompositionObject, after: CompositionObject, properties: string[]) {
+  if (!isDeepStrictEqual(omitted(before, [...geometry, 'keyframes', ...properties]), omitted(after, [...geometry, 'keyframes', ...properties]))) throw fail('Only supported properties and geometry of the selected object may change.');
+  if (after.keyframes !== undefined && !Array.isArray(after.keyframes)) throw fail('Expected native keyframes.');
+  const prior = before.keyframes ?? [], next = after.keyframes ?? [];
+  if (next.length < prior.length || next.length > prior.length + 1) throw fail('Preserve existing keyframes.');
+  for (const key of prior) {
+    const revised = next.find(item => item.frame === key.frame);
+    if (!revised || !isDeepStrictEqual(omitted(key, geometry), omitted(revised, geometry))) throw fail('Preserve keyframe timing, easing and non-geometry properties.');
+  }
+  for (const key of next.filter(item => !prior.some(old => old.frame === item.frame))) {
+    if (Object.keys(key).some(name => !['frame', ...geometry].includes(name))) throw fail('New keys contain geometry only.');
+  }
+}
+/** Headerless requests retain the legacy geometry/text contract. Selection enables scoped properties/order. */
+export function validateVisualAction(manifest: Manifest, input: unknown, selectedId: string | null = null): VisualAction {
   const action = input as VisualAction;
   if (!action || action.type !== 'edit-scene' || Object.keys(action).some(key => !['type', 'sceneId', 'patch'].includes(key))) throw fail('Expected a composition scene edit.');
   const scene = manifest.scenes.find(item => item.id === action.sceneId);
@@ -26,22 +47,24 @@ export function validateVisualAction(manifest: Manifest, input: unknown): Visual
   if (!action.patch || Object.keys(action.patch).some(key => !['objects', 'durationFrames'].includes(key)) || !Array.isArray(action.patch.objects)) throw fail('Expected existing objects and optional durationFrames.');
   const objects = action.patch.objects;
   if (objects.length !== scene.objects!.length) throw fail('Adding/removing objects is not supported by this editor.');
-  let changed = 0;
-  for (let index = 0; index < objects.length; index++) {
-    const before = scene.objects![index], after = objects[index];
-    if (!after || before.id !== after.id || before.type !== after.type) throw fail('Object identity and storage order must remain unchanged.');
-    if (isDeepStrictEqual(before, after)) continue;
-    if (++changed > 1) throw fail('Apply one selected object at a time.');
-    const omitted = (object: object, keys: string[]) => Object.fromEntries(Object.entries(object).filter(([key]) => !keys.includes(key)));
-    if (!isDeepStrictEqual(omitted(before, [...geometry, 'keyframes', ...(before.type === 'text' ? ['text'] : [])]), omitted(after, [...geometry, 'keyframes', ...(before.type === 'text' ? ['text'] : [])]))) throw fail('Only text and geometry may change.');
-    const prior = before.keyframes ?? [], next = after.keyframes ?? [];
-    if (next.length < prior.length || next.length > prior.length + 1) throw fail('Preserve existing keyframes.');
-    for (const key of prior) {
-      const revised = next.find(item => item.frame === key.frame);
-      if (!revised || !isDeepStrictEqual(omitted(key, geometry), omitted(revised, geometry))) throw fail('Preserve keyframe timing, easing and non-geometry properties.');
-    }
-    for (const key of next.filter(item => !prior.some(old => old.frame === item.frame))) {
-      if (Object.keys(key).some(name => !['frame', ...geometry].includes(name))) throw fail('New keys contain geometry only.');
+  if (selectedId !== null) {
+    visualSelectedObject(selectedId);
+    const before = scene.objects!.find(object => object.id === selectedId);
+    if (!before) throw fail('Selected object is not in this scene.');
+    const ids = objects.map(object => object?.id);
+    if (new Set(ids).size !== ids.length || scene.objects!.some(object => !ids.includes(object.id))) throw fail('Preserve the unique set of object IDs.');
+    if (!isDeepStrictEqual(scene.objects!.filter(object => object.id !== selectedId), objects.filter(object => object.id !== selectedId))) throw fail('Preserve every neighbour and their relative order.');
+    const after = objects.find(object => object.id === selectedId)!;
+    const properties = before.type === 'text' ? ['text', 'color', 'fontSize', 'weight', 'align'] : before.type === 'shape' ? ['color', 'stroke', 'strokeWidth', ...(before.shape === 'rect' ? ['radius'] : [])] : [];
+    validateObjectChange(before, after, properties);
+  } else {
+    let changed = 0;
+    for (let index = 0; index < objects.length; index++) {
+      const before = scene.objects![index], after = objects[index];
+      if (!after || before.id !== after.id || before.type !== after.type) throw fail('Object identity and storage order must remain unchanged.');
+      if (isDeepStrictEqual(before, after)) continue;
+      if (++changed > 1) throw fail('Apply one selected object at a time.');
+      validateObjectChange(before, after, before.type === 'text' ? ['text'] : []);
     }
   }
   const next = structuredClone(manifest);
@@ -53,14 +76,14 @@ export function visualActionHash(action: VisualAction) { return hashBytes(Buffer
 
 /** Session-local tickets. No replay promise for ordinary edits: consumed before attempting publication. */
 export class VisualTickets {
-  private tickets = new Map<string, { etag: string; hash: string }>();
-  add(id: string, etag: string, action: VisualAction) {
-    this.tickets.set(id, { etag, hash: visualActionHash(action) });
+  private tickets = new Map<string, { etag: string; hash: string; selectedId: string | null }>();
+  add(id: string, etag: string, action: VisualAction, selectedId: string | null = null) {
+    this.tickets.set(id, { etag, hash: visualActionHash(action), selectedId });
     while (this.tickets.size > 2) this.tickets.delete(this.tickets.keys().next().value!);
   }
-  consume(id: unknown, etag: string, action: VisualAction) {
+  consume(id: unknown, etag: string, action: VisualAction, selectedId: string | null = null) {
     const ticket = typeof id === 'string' ? this.tickets.get(id) : undefined;
-    if (!ticket || ticket.etag !== etag || ticket.hash !== visualActionHash(action)) throw new StudioError('VISUAL_PREVIEW_REQUIRED', 'visual', 'Render a new preview of this exact action before applying.');
+    if (!ticket || ticket.etag !== etag || ticket.selectedId !== selectedId || ticket.hash !== visualActionHash(action)) throw new StudioError('VISUAL_PREVIEW_REQUIRED', 'visual', 'Render a new preview of this exact action and selection before applying.');
     this.tickets.clear();
   }
 }
