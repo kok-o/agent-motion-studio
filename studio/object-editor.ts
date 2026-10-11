@@ -3,6 +3,7 @@ import type { CompositionObject, Scene } from '../src/types.js';
 import type { EditorHost, EditorController, EditorModel, Gesture, ContextChoice, ProjectState, ObjectPatch, Point, NativeSnapshot, VisualAction } from './object-editor-types.js';
 import { resolveCenterResizeSize, adjustNumericToken, containsPoint, geometryKey, formatNumericValue } from './object-editor-geometry.js';
 import { t } from './i18n.js';
+import { objectCaption } from './object-caption.js';
 
 type InputId = 'visual-x' | 'visual-y' | 'visual-width' | 'visual-height' | 'visual-frame' | 'duration' | 'visual-color' | 'visual-font-size' | 'visual-stroke' | 'visual-stroke-width' | 'visual-radius';
 type SelectId = 'visual-mode' | 'visual-weight' | 'visual-align' | 'visual-image-asset';
@@ -153,7 +154,8 @@ export function initObjectEditor(host: EditorHost): EditorController {
       if (invalidStyles.has(key)) continue;
       const control = $(styleControls[key]); control.value = String(object[key] ?? ''); control.setCustomValidity('');
     }
-    $('visual-selection-name').textContent = `${object.id} · ${object.type}`;
+    $('visual-selection-name').textContent = objectCaption(object, host.getManifest().assets, t);
+    $('visual-selection-name').dataset.objectId = object.id;
     const duration = host.getPatch().durationFrames;
     $('visual-frame').max = String(Number.isFinite(duration) ? Math.max(0, duration - 1) : 0);
     $('visual-frame').value = String(model.frame);
@@ -194,7 +196,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     if (!model) return;
     $('visual-layers').replaceChildren(...[...model.objects].reverse().map(object => {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.objectId = object.id;
-      button.textContent = `${object.id} · ${object.type}`; button.onclick = () => void chooseObject(object.id); return button;
+      button.textContent = objectCaption(object, host.getManifest().assets, t); button.onclick = () => void chooseObject(object.id); return button;
     }));
   }
   const acceptedImage = (id: string) => /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(id) && host.getManifest().assets[id]?.type === 'image';
@@ -327,7 +329,7 @@ export function initObjectEditor(host: EditorHost): EditorController {
     if (blocked() || !model || selected()?.type !== 'text') return;
     const id = model.selectedId;
     model.objects = model.objects.map(object => object.id === id ? { ...object, text: $('visual-text').value } : object);
-    markDirty(); render();
+    markDirty(); layers(); const object = selected(); if (object) $('visual-selection-name').textContent = objectCaption(object, host.getManifest().assets, t); render();
   };
   $('visual-frame').oninput = () => {
     if (blocked() || !model) return;

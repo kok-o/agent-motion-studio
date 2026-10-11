@@ -13,10 +13,12 @@ import { render } from '../../dist/engine.js';
 import { request as httpRequest } from 'node:http';
 import filesystem from 'node:fs/promises';
 import { syncBuiltinESMExports } from 'node:module';
+import { openKitStudio } from '../../scripts/kit-studio-process.mjs';
 
 const root = resolve('artifacts/object-editor', randomUUID());
 await mkdir(root, { recursive: true });
 const tools = findTools();
+const cli = resolve('dist/cli.js');
 async function propertiesFixture(aspect) {
   const result = await fixture(aspect), state = await readProject(result.file), objects = structuredClone(state.manifest.scenes[1].objects);
   objects[2].x = 250; objects[2].y = 190;
@@ -51,6 +53,179 @@ async function nativePoint(page, x, y) {
 }
 async function drag(page, from, to) { await page.mouse.move(from.x, from.y); await page.mouse.down(); await page.mouse.move(to.x, to.y, { steps: 5 }); await page.mouse.up(); }
 
+async function entryFixture(aspect) {
+  const dir = join(root, `entry-${aspect.replace(':', '-')}-${randomUUID()}`); await mkdir(dir);
+  const reply = await runProcess(process.execPath, [cli, 'new', '--dir', join(dir, 'film'), '--aspect', aspect, '--title', 'Neutral entry fixture', '--json']);
+  const file = JSON.parse(reply.stdout).project; assert.equal(resolve(file), resolve(dir, 'film/project.json')); assert.equal((await readProject(file)).manifest.schemaVersion, 2);
+  return { dir, file };
+}
+const settledEntry = page => page.waitForFunction(() => !document.querySelector('#object-editor').hidden && !document.querySelector('#visual-x').disabled && document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest);
+async function entryIntent(page) {
+  await page.click('#add-composition'); await page.waitForSelector('#composition-dialog[open]');
+  return page.$eval('#composition-dialog', node => ({ sceneId: node.dataset.sceneId, objectId: node.dataset.objectId }));
+}
+async function acceptEntry(page, intent) {
+  await page.click('#composition-confirm'); await page.waitForFunction(id => document.querySelector('.scene-card.selected')?.dataset.sceneId === id, {}, intent.sceneId); await settledEntry(page);
+}
+
+for (const aspect of ['16:9', '9:16']) test(`new CLI to Studio composition entry and object draft without JSON ${aspect}`, { timeout: 120000 }, async () => {
+  const { dir, file } = await entryFixture(aspect), language = aspect === '16:9' ? 'ru' : 'en', processReport = {}, browser = await launchBrowser(tools.chrome), page = await browser.newPage(), errors = [], requests = [];
+  let studio = await openKitStudio({ cli, workspace: dir, file, report: processReport, label: 'entry' });
+  page.on('pageerror', error => errors.push(error.message)); page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/edit') requests.push(JSON.parse(request.postData())); });
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(value => localStorage.setItem('ams-language', value), language);
+    await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.waitForFunction(() => !document.querySelector('#add-composition').disabled);
+    assert.equal(await page.$eval('#add-composition', node => node.textContent), language === 'ru' ? '+ Композиция' : '+ Composition');
+    const image = join(dir, 'own-entry-image.png'); await runProcess(tools.ffmpeg, ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=0x345678:s=64x64', '-frames:v', '1', '-threads', '1', image]);
+    const imported = page.waitForResponse(response => new URL(response.url()).pathname === '/api/import'); await (await page.$('#import')).uploadFile(image); await imported;
+    await page.waitForFunction(() => document.querySelector('#library').textContent.includes('own-entry-image.png') && !document.querySelector('#add-composition').disabled);
+    const before = await readProject(file), bytes = await readFile(file), asset = Object.keys(before.manifest.assets)[0], sourceHash = hashBytes(await readFile(join(file, '..', before.manifest.assets[asset].path)));
+    const cancelled = await entryIntent(page); assert.deepEqual(await readFile(file), bytes); await page.click('#composition-cancel'); assert.deepEqual(await readFile(file), bytes); assert.equal(requests.length, 0);
+    const intent = await entryIntent(page); assert.notEqual(intent.sceneId, cancelled.sceneId); assert.notEqual(intent.objectId, cancelled.objectId); await acceptEntry(page, intent);
+    const created = await readProject(file), createdBytes = await readFile(file), scene = created.manifest.scenes.at(-1);
+    assert.equal(created.manifest.history.length, before.manifest.history.length + 1); assert.deepEqual(created.manifest.scenes.slice(0, -1), before.manifest.scenes); assert.deepEqual(created.manifest.assets, before.manifest.assets);
+    for (const key of ['brand', 'audio', 'video', 'operationReceipts']) assert.deepEqual(created.manifest[key], before.manifest[key]);
+    assert.equal(scene.id, intent.sceneId); assert.equal(scene.durationFrames, 120); assert.equal(scene.objects.length, 1); assert.equal(scene.objects[0].id, intent.objectId); assert.equal(scene.objects[0].text, language === 'ru' ? 'Новый текст' : 'New text');
+    assert.equal(requests.length, 1); assert.equal(requests[0].type, 'add-scene'); assert.equal(await page.$eval('#visual-selection-name', node => node.dataset.objectId), intent.objectId);
+    assert.equal(await page.$eval('.scene-card.selected strong', node => node.textContent), language === 'ru' ? 'Композиция 2' : 'Composition 2');
+    await (await page.$('#object-editor')).screenshot({ path: join(dir, 'entry-created.png') });
+    const drafted = [];
+    if (aspect === '16:9') for (const kind of ['text', 'rect', 'ellipse', 'image']) {
+      await page.click(`#visual-add-${kind}`);
+      if (kind === 'image') { await page.waitForSelector('#visual-image-dialog[open]'); await page.select('#visual-image-asset', asset); await page.click('#visual-image-add'); }
+      await settledEntry(page); const caption = await page.$eval('#visual-selection-name', node => ({ id: node.dataset.objectId, text: node.textContent }));
+      assert.match(caption.id, /^object-[a-f0-9-]{36}$/); assert.equal(caption.text.includes(caption.id), false); assert.match(caption.text, /Текст|Прямоугольник|Эллипс|Изображение/);
+      assert.equal(await page.$eval(`[data-object-id="${caption.id}"]`, node => node.getAttribute('aria-pressed')), 'true');
+      await (await page.$('#object-editor')).screenshot({ path: join(dir, `entry-draft-${kind}.png`) }); drafted.push(kind);
+      await page.click('#visual-cancel'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settledEntry(page);
+      assert.deepEqual(await readFile(file), createdBytes); assert.equal((await readProject(file)).etag, created.etag);
+    }
+    await page.click('#visual-add-text'); await settledEntry(page); const addedID = await page.$eval('#visual-selection-name', node => node.dataset.objectId);
+    await field(page, '#visual-text', 'Editable after entry'); await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled); await page.click('#save-scene');
+    await page.waitForFunction(() => document.querySelector('#draft-status').textContent === 'Все изменения сохранены' || document.querySelector('#draft-status').textContent === 'All changes saved'); await settledEntry(page);
+    const applied = await readProject(file); assert.equal(applied.manifest.history.length, created.manifest.history.length + 1); assert.equal(applied.manifest.scenes.at(-1).objects.find(object => object.id === addedID).text, 'Editable after entry');
+    assert.deepEqual(applied.manifest.scenes.slice(0, -1), before.manifest.scenes); assert.equal(hashBytes(await readFile(join(file, '..', applied.manifest.assets[asset].path))), sourceHash);
+    await (await page.$('#object-editor')).screenshot({ path: join(dir, 'entry-applied.png') });
+    const revisionIndex = applied.manifest.history.findIndex(revision => revision.id === before.manifest.revision); assert.ok(revisionIndex >= 0);
+    await page.click('details.history > summary'); await page.waitForSelector('details.history[open]');
+    const historySelector = `#history .history-row:nth-child(${applied.manifest.history.length - revisionIndex}) button`;
+    await page.$eval(historySelector, node => node.scrollIntoView({ block: 'center' }));
+    await page.waitForFunction(selector => !document.querySelector(selector).disabled, {}, historySelector); await page.click(historySelector);
+    await page.waitForFunction(() => document.querySelectorAll('.scene-card').length === 1).catch(async error => { await writeFile(join(dir, 'restore-failure.json'), JSON.stringify(await page.evaluate(() => ({ probe: globalThis.entryHistoryProbe, notice: document.querySelector('#notice').textContent, draft: document.querySelector('#draft-status').textContent, dialogs: [...document.querySelectorAll('dialog[open]')].map(node => node.id), cards: [...document.querySelectorAll('.scene-card')].map(node => node.dataset.sceneId), history: document.querySelector('#history').textContent })), null, 2)); throw error; }); const restored = await readProject(file); assert.deepEqual(restored.manifest.scenes, before.manifest.scenes); assert.deepEqual(restored.manifest.assets, before.manifest.assets);
+    await studio.close(); studio = await openKitStudio({ cli, workspace: dir, file, report: processReport, label: 'reopen' }); await page.goto(studio.url, { waitUntil: 'networkidle0' });
+    assert.equal(await page.$eval('#object-editor', node => node.hidden), true); assert.equal((await readProject(file)).etag, restored.etag); assert.deepEqual(errors, []);
+    await writeFile(join(dir, 'composition-entry.json'), JSON.stringify({ status: 'PASS', aspect, language, realCLINew: true, realCLIStudio: true, cancelledBeforePublication: true, createRevisionDelta: 1, stableSceneID: intent.sceneId, initialObjectID: intent.objectId, automaticSelectionAndNativeReady: true, newTypeDrafts: drafted, fourTypeApplyCoverage: 'Preserved accepted object authoring scenarios', addPreviewApplyRevisionDelta: 1, neighboursAndStatePreserved: true, sourceHash, readableCaptionsWithNativeDOMIDs: true, restoredAndNewSessionReopened: true, processReport, errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
+test('composition entry resolves scalar and native drafts through Stay Discard Apply', { timeout: 120000 }, async () => {
+  const { file, dir } = await entryFixture('16:9'), studio = await startStudio(file, 0), browser = await launchBrowser(tools.chrome), page = await browser.newPage(), posts = [];
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname !== '/api/session') posts.push(new URL(request.url()).pathname); });
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en')); await page.goto(studio.url, { waitUntil: 'networkidle0' });
+    const initial = await readProject(file), initialBytes = await readFile(file);
+    await field(page, '#scene-text', 'Scalar draft'); await page.click('#add-composition'); await page.waitForSelector('#composition-draft-dialog[open]'); await page.click('#composition-draft-stay');
+    assert.equal(await page.$eval('#scene-text', node => node.value), 'Scalar draft'); assert.deepEqual(await readFile(file), initialBytes); assert.equal(posts.length, 0);
+    await page.click('#add-composition'); await page.waitForSelector('#composition-draft-dialog[open]'); await page.click('#composition-draft-discard'); await page.waitForSelector('#composition-dialog[open]'); await page.click('#composition-cancel');
+    assert.deepEqual(await readFile(file), initialBytes); assert.equal(await page.$eval('#scene-text', node => node.value), initial.manifest.scenes[0].text); assert.equal(posts.length, 0);
+    await field(page, '#scene-text', 'Scalar accepted'); await page.click('#add-composition'); await page.waitForSelector('#composition-draft-dialog[open]'); await page.click('#composition-draft-apply'); await page.waitForSelector('#composition-dialog[open]'); await page.click('#composition-cancel');
+    const scalar = await readProject(file); assert.equal(scalar.manifest.history.length, initial.manifest.history.length + 1); assert.equal(scalar.manifest.scenes.length, 1); assert.equal(scalar.manifest.scenes[0].text, 'Scalar accepted');
+    const first = await entryIntent(page); await acceptEntry(page, first); const created = await readProject(file), createdBytes = await readFile(file);
+    await page.click('#visual-add-text'); await settledEntry(page); const draftID = await page.$eval('#visual-selection-name', node => node.dataset.objectId);
+    await page.click('#add-composition'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-stay');
+    assert.equal(await page.$eval('#visual-selection-name', node => node.dataset.objectId), draftID); assert.deepEqual(await readFile(file), createdBytes);
+    await page.click('#add-composition'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await page.waitForSelector('#composition-dialog[open]'); await page.click('#composition-cancel');
+    await settledEntry(page); assert.deepEqual(await readFile(file), createdBytes); assert.equal(await page.$(`[data-object-id="${draftID}"]`), null);
+    await page.click('#visual-add-text'); await settledEntry(page); const acceptedID = await page.$eval('#visual-selection-name', node => node.dataset.objectId); await field(page, '#visual-text', 'Apply before new composition');
+    await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled); await page.click('#add-composition'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-apply'); await page.waitForSelector('#composition-dialog[open]');
+    const visual = await readProject(file); assert.equal(visual.manifest.history.length, created.manifest.history.length + 1); assert.equal(visual.manifest.scenes.at(-1).objects.find(object => object.id === acceptedID).text, 'Apply before new composition');
+    const next = await page.$eval('#composition-dialog', node => ({ sceneId: node.dataset.sceneId, objectId: node.dataset.objectId })); await acceptEntry(page, next);
+    const after = await readProject(file); assert.equal(after.manifest.history.length, visual.manifest.history.length + 1); assert.deepEqual(after.manifest.scenes.slice(0, -1), visual.manifest.scenes);
+    await writeFile(join(dir, 'composition-entry-context.json'), JSON.stringify({ status: 'PASS', scalar: ['Stay', 'Discard', 'Apply'], nativeDraft: ['Stay', 'Discard', 'Preview-Apply'], separateCreateRevision: true, neighbouringScenesPreserved: true, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); await studio.close(); }
+});
+
+test('composition entry never resends conflict lost reply malformed history or post-commit UI and I/O failure', { timeout: 120000 }, async () => {
+  const { file, dir } = await entryFixture('16:9'), studio = await startStudio(file, 0), browser = await launchBrowser(tools.chrome), page = await browser.newPage(), posts = [], errors = [], cases = [];
+  const originalRename = filesystem.rename, originalReadFile = filesystem.readFile;
+  let holdState, rewrite, cdp;
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('request', request => { if (request.method() === 'POST' && new URL(request.url()).pathname !== '/api/session') posts.push({ path: new URL(request.url()).pathname, body: request.postData(), etag: request.headers()['if-match'] }); });
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en')); await page.goto(studio.url, { waitUntil: 'networkidle0' });
+    await page.setRequestInterception(true); page.on('request', request => { if (holdState && new URL(request.url()).pathname === '/api/state') void request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify(holdState) }); else void request.continue(); });
+    const conflictIntent = await entryIntent(page); holdState = await page.evaluate(async () => (await fetch('/api/state')).json());
+    await cliEdit(file, { type: 'edit-scene', sceneId: 'opening', patch: { text: 'External CLI accepted' } }, dir); const external = await readProject(file), externalBytes = await readFile(file);
+    const conflictReply = page.waitForResponse(response => new URL(response.url()).pathname === '/api/edit'); await page.click('#composition-confirm'); assert.equal((await conflictReply).status(), 409);
+    await page.waitForFunction(() => document.querySelector('#composition-entry-status').textContent.startsWith('Project changed')); assert.deepEqual(await readFile(file), externalBytes); assert.equal(external.manifest.scenes.some(scene => scene.id === conflictIntent.sceneId), false);
+    holdState = undefined; await page.click('#composition-reconcile'); await page.waitForFunction(() => !document.querySelector('#add-composition').disabled); assert.equal(posts.length, 1); cases.push({ kind: 'actual CLI conflict', posts: 1, externalPreserved: true });
+    // A normal polling invalidation cannot publish the old confirmation either.
+    const stale = await entryIntent(page); await cliEdit(file, { type: 'edit-scene', sceneId: 'opening', patch: { text: 'Second external accepted' } }, dir);
+    await page.waitForFunction(() => document.querySelector('#composition-dialog-reload').hidden === false); assert.equal(await page.$eval('#composition-confirm', node => node.disabled), true);
+    await page.evaluate(() => document.querySelector('#composition-confirm').dispatchEvent(new Event('click'))); assert.equal(posts.length, 1); await page.click('#composition-dialog-reload'); await page.waitForFunction(() => !document.querySelector('#add-composition').disabled); assert.equal((await readProject(file)).manifest.scenes.some(scene => scene.id === stale.sceneId), false);
+    cdp = await page.createCDPSession(); cdp.on('Fetch.requestPaused', async event => {
+      try {
+        const body = await cdp.send('Fetch.getResponseBody', { requestId: event.requestId }), actual = JSON.parse(body.base64Encoded ? Buffer.from(body.body, 'base64').toString() : body.body);
+        assert.ok(actual.manifest); const replacement = rewrite === 'history' ? JSON.stringify({ ...actual, manifest: { ...actual.manifest, history: [null] } }) : '{unreadable';
+        await cdp.send('Fetch.fulfillRequest', { requestId: event.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from(replacement).toString('base64') });
+      } catch (error) { errors.push(error.message); }
+    });
+    for (const kind of ['lost-json', 'history', 'storage', 'known-io']) {
+      const before = await readProject(file), intent = await entryIntent(page), count = posts.length;
+      if (kind === 'lost-json' || kind === 'history') { rewrite = kind; await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/edit', requestStage: 'Response' }] }); }
+      if (kind === 'storage') await page.evaluate(() => {
+        const original = Storage.prototype.removeItem;
+        Storage.prototype.removeItem = function(key) { if (String(key).startsWith('studio-draft:')) { Storage.prototype.removeItem = original; throw new DOMException('Controlled accepted storage failure', 'QuotaExceededError'); } return original.call(this, key); };
+      });
+      let published = false, failures = 0;
+      if (kind === 'known-io') {
+        filesystem.rename = async (from, to) => { const result = await originalRename(from, to); if (to === resolve(file)) published = true; return result; };
+        filesystem.readFile = async (...args) => { if (published && args[0] === file && failures === 0) { failures++; throw Object.assign(new Error('Controlled entry final read failure'), { code: 'EIO' }); } return originalReadFile(...args); }; syncBuiltinESMExports();
+      }
+      const responsePromise = page.waitForResponse(response => new URL(response.url()).pathname === '/api/edit'); await page.click('#composition-confirm'); const response = await responsePromise;
+      if (kind === 'known-io') {
+        const reply = await response.json(); filesystem.rename = originalRename; filesystem.readFile = originalReadFile; syncBuiltinESMExports();
+        assert.equal(response.status(), 400); assert.equal(reply.error.code, 'INTERNAL_ERROR'); assert.equal(reply.error.stage, 'project'); assert.equal(reply.exitCode, 4); assert.match(reply.error.message, /^Manifest was committed but reading the result failed:/); assert.equal(failures, 1);
+      }
+      await page.waitForFunction(() => !document.querySelector('#composition-reconcile').hidden && !document.querySelector('#composition-reconcile').disabled);
+      if (kind === 'storage') assert.match(await page.$eval('#composition-entry-status', node => node.textContent), /saved.*interface|interface.*saved/i);
+      if (kind === 'known-io') assert.match(await page.$eval('#composition-entry-status', node => node.textContent), /Manifest was committed but reading the result failed:/);
+      const retained = await page.$eval('#composition-entry-status', node => ({ sceneId: node.dataset.sceneId, objectId: node.dataset.objectId })); assert.deepEqual(retained, intent);
+      const committed = await readProject(file); assert.equal(committed.manifest.history.length, before.manifest.history.length + 1); assert.deepEqual(committed.manifest.scenes.slice(0, -1), before.manifest.scenes); assert.equal(committed.manifest.scenes.at(-1).id, intent.sceneId); assert.equal(committed.manifest.scenes.at(-1).objects[0].id, intent.objectId);
+      for (const selector of ['#add-composition', '#add-title', '#export', '#save-scene', '#import', '#visual-add-text']) assert.equal(await page.$eval(selector, node => node.disabled), true, `${kind}: ${selector} blocked`);
+      await page.evaluate(() => { document.querySelector('#composition-confirm').dispatchEvent(new Event('click')); document.querySelector('#add-composition').dispatchEvent(new Event('click')); document.querySelector('#add-title').dispatchEvent(new Event('click')); });
+      assert.equal(posts.length, count + 1); assert.equal(JSON.parse(posts.at(-1).body).scene.id, intent.sceneId); assert.equal(posts.at(-1).etag, before.etag);
+      await cdp.send('Fetch.disable'); await page.click('#composition-reconcile'); await page.waitForFunction(id => document.querySelector('.scene-card.selected')?.dataset.sceneId === id && !document.querySelector('#add-composition').disabled, {}, intent.sceneId); await settledEntry(page);
+      assert.equal(await page.$eval('#visual-selection-name', node => node.dataset.objectId), intent.objectId); assert.equal(posts.length, count + 1); assert.equal((await readProject(file)).etag, committed.etag);
+      cases.push({ kind, posts: 1, retained, explicitReadOriginalScene: true, revisionDelta: 1, neverResent: true });
+    }
+    assert.deepEqual(errors, []); await writeFile(join(dir, 'composition-entry-reconciliation.json'), JSON.stringify({ status: 'PASS', cases, pollingStaleConfirmBlocked: true, errors, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { filesystem.rename = originalRename; filesystem.readFile = originalReadFile; syncBuiltinESMExports(); if (cdp) { await cdp.send('Fetch.disable').catch(() => {}); await cdp.detach().catch(() => {}); } await browser.close(); await studio.close(); }
+});
+
+test('composition entry respects native twelve scene and eighteen hundred frame limits without shortening neighbours', { timeout: 60000 }, async () => {
+  const browser = await launchBrowser(tools.chrome), page = await browser.newPage(), proofs = [];
+  try {
+    await page.setViewport({ width: 1440, height: 1200 }); await page.evaluateOnNewDocument(() => localStorage.setItem('ams-language', 'en'));
+    for (const kind of ['scenes', 'frames']) {
+      const { file, dir } = await entryFixture('16:9');
+      if (kind === 'scenes') await editProject(file, { type: 'batch', actions: Array.from({ length: 10 }, (_, index) => ({ type: 'add-scene', scene: { id: `limit-${index}`, type: 'kinetic_title', durationFrames: 30, text: `Limit ${index}` } })) });
+      else await editProject(file, { type: 'batch', actions: [{ type: 'edit-scene', sceneId: 'opening', patch: { durationFrames: 840 } }, { type: 'add-scene', scene: { id: 'second', type: 'kinetic_title', durationFrames: 840, text: 'Second' } }] });
+      const studio = await startStudio(file, 0), posts = [];
+      const observe = request => { if (request.method() === 'POST' && new URL(request.url()).pathname !== '/api/session') posts.push(new URL(request.url()).pathname); }; page.on('request', observe);
+      try {
+        await page.goto(studio.url, { waitUntil: 'networkidle0' }); const before = await readProject(file), intent = await entryIntent(page); await acceptEntry(page, intent);
+        const after = await readProject(file), bytes = await readFile(file); assert.equal(after.manifest.history.length, before.manifest.history.length + 1); assert.deepEqual(after.manifest.scenes.slice(0, -1), before.manifest.scenes);
+        const total = after.manifest.scenes.reduce((sum, scene) => sum + scene.durationFrames, 0); if (kind === 'scenes') assert.equal(after.manifest.scenes.length, 12); else assert.equal(total, 1800);
+        assert.equal(await page.$eval('#add-composition', node => node.disabled), true); await page.evaluate(() => document.querySelector('#add-composition').dispatchEvent(new Event('click'))); assert.equal(posts.length, 1); assert.deepEqual(await readFile(file), bytes);
+        await assert.rejects(editProject(file, { type: 'add-scene', scene: { id: 'overflow', type: 'kinetic_title', durationFrames: 120, text: 'Overflow' } }, after.etag)); assert.deepEqual(await readFile(file), bytes);
+        const proof = { kind, status: 'PASS', sceneCount: after.manifest.scenes.length, totalFrames: total, blockedUIAndNativeOverflow: true, neighbourDurationsPreserved: true, posts: 1 }; proofs.push(proof); await writeFile(join(dir, 'composition-entry-limit.json'), JSON.stringify(proof, null, 2));
+      } finally { page.off('request', observe); await studio.close(); }
+    }
+    await writeFile(join(root, 'composition-entry-limits.json'), JSON.stringify({ status: 'PASS', proofs, humanAcceptance: 'NOT RUN' }, null, 2));
+  } finally { await browser.close(); }
+});
+
 for (const aspect of ['16:9', '9:16']) test(`create four native objects with stable drafts, explicit Apply and reopen ${aspect}`, { timeout: 180000 }, async () => {
   const { file, dir, asset } = await fixture(aspect), before = await readProject(file), bytes = await readFile(file);
   const sources = async () => Object.fromEntries(await Promise.all(Object.entries((await readProject(file)).manifest.assets).map(async ([id, value]) => [id, hashBytes(await readFile(join(file, '..', value.path)))])));
@@ -59,7 +234,7 @@ for (const aspect of ['16:9', '9:16']) test(`create four native objects with sta
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { const path = new URL(request.url()).pathname; if (request.method() === 'POST') requests.push({ path, intent: request.headers()['x-ams-object-intent'], selected: request.headers()['x-ams-selected-object'], etag: request.headers()['if-match'], body: request.postData() }); });
   const settled = () => page.waitForFunction(() => document.querySelector('#stage').dataset.rendered === document.querySelector('#stage').dataset.renderRequest && !document.querySelector('#visual-x').disabled);
-  const selection = () => page.$eval('#visual-selection-name', node => node.textContent.split(' · ')[0]);
+  const selection = () => page.$eval('#visual-selection-name', node => node.dataset.objectId);
   const open = async () => { await page.goto(studio.url, { waitUntil: 'networkidle0' }); await page.click('[data-scene-id="objects"]'); await ready(page); await settled(); };
   const preview = async () => { await previewDraft(page); await page.waitForFunction(() => !document.querySelector('#save-scene').disabled); };
   try {
@@ -209,13 +384,13 @@ test('image import is a separate revision; picker conflict and unknown writes re
     const nextObjects = structuredClone(externalObjects); nextObjects[0].x += 8; await cliEdit(file, { type: 'edit-scene', sceneId: 'objects', patch: { objects: nextObjects } }, dir);
     await page.waitForFunction(() => document.querySelector('#visual-status').textContent.includes('changed externally'), { timeout: 10000 }); assert.equal(await page.$eval('#save-scene', node => node.disabled), true); assert.equal(requests.filter(item => item.path === '/api/visual/apply').length, 0);
     await page.click('#reload'); await page.waitForSelector('#visual-dialog[open]'); await page.click('#visual-dialog-discard'); await settled();
-    await imageDraft(importedID); const createdID = await page.$eval('#visual-selection-name', node => node.textContent.split(' · ')[0]); await preview();
+    await imageDraft(importedID); const createdID = await page.$eval('#visual-selection-name', node => node.dataset.objectId); await preview();
     const cdp = await page.createCDPSession(); let applyReply, importReply;
     await cdp.send('Fetch.enable', { patterns: [{ urlPattern: '*/api/visual/apply', requestStage: 'Response' }] });
     cdp.on('Fetch.requestPaused', async event => { try { const body = await cdp.send('Fetch.getResponseBody', { requestId: event.requestId }); const reply = JSON.parse(body.base64Encoded ? Buffer.from(body.body, 'base64').toString() : body.body); if (new URL(event.request.url).pathname === '/api/visual/apply') applyReply = reply; else importReply = reply; await cdp.send('Fetch.fulfillRequest', { requestId: event.requestId, responseCode: 200, responseHeaders: [{ name: 'Content-Type', value: 'application/json' }], body: Buffer.from('{unreadable').toString('base64') }); } catch (error) { errors.push(error.message); } });
     const beforeApply = await readProject(file); await page.click('#save-scene'); await page.waitForFunction(() => document.querySelector('#visual-status').textContent.includes('outcome unknown'));
     const accepted = await readProject(file); assert.equal(applyReply.committed, true); assert.equal(accepted.manifest.history.length, beforeApply.manifest.history.length + 1); assert.equal(accepted.manifest.scenes[1].objects.filter(object => object.id === createdID).length, 1);
-    assert.deepEqual(accepted.manifest.scenes[1].objects.filter(object => object.id !== createdID), nextObjects); assert.equal(await page.$eval('#visual-selection-name', node => node.textContent.split(' · ')[0]), createdID);
+    assert.deepEqual(accepted.manifest.scenes[1].objects.filter(object => object.id !== createdID), nextObjects); assert.equal(await page.$eval('#visual-selection-name', node => node.dataset.objectId), createdID);
     for (const kind of ['text', 'rect', 'ellipse', 'image']) { assert.equal(await page.$eval(`#visual-add-${kind}`, node => node.disabled), true); await page.evaluate(id => document.querySelector(id).dispatchEvent(new Event('click')), `#visual-add-${kind}`); }
     await page.evaluate(() => document.querySelector('#save-scene').dispatchEvent(new Event('click'))); assert.equal(requests.filter(item => item.path === '/api/visual/apply').length, 1);
     await (await page.$('#object-editor')).screenshot({ path: join(dir, 'created-unknown-apply.png') });
@@ -504,7 +679,7 @@ for (const aspect of ['16:9', '9:16']) test(`native object editor mouse/keyboard
 
 async function cliEdit(file, action, dir) {
   const input = join(dir, `action-${randomUUID()}.json`); await writeFile(input, JSON.stringify(action));
-  await runProcess(process.execPath, [resolve('dist/cli.js'), 'edit', file, '--action', input, '--if-match', (await readProject(file)).etag, '--json']);
+  await runProcess(process.execPath, [cli, 'edit', file, '--action', input, '--if-match', (await readProject(file)).etag, '--json']);
 }
 for (const finish of ['Escape', 'pointercancel', 'move']) test(`held pointer keeps its original ETag across external edit and ${finish}`, { timeout: 90000 }, async () => {
   const { file, scene, dir } = await fixture('16:9'), studio = await startStudio(file, 0), browser = await launchBrowser(tools.chrome), page = await browser.newPage();
