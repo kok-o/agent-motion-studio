@@ -12,6 +12,7 @@ export type Scene = {
   id: string; type: 'kinetic_title' | 'product_zoom' | 'cta' | 'video' | 'composition'; durationFrames: number;
   objects?: CompositionObject[]; background?: string;
   trimStartSeconds?: number;
+  sourceAudio?: { enabled: boolean; gainDb?: number };
   text?: string; highlight?: string; label?: string; asset?: string; caption?: string;
   fit?: 'contain' | 'cover'; focalPoint?: { x: number; y: number };
   fontSize?: number; narration?: { asset?: string; text?: string }; captions?: Caption[];
@@ -31,9 +32,10 @@ export type Manifest = {
 };
 export type OperationReceipt = { operationId: string; requestHash: string; revisionId: string };
 export type Revision = { id: string; label: string; createdAt: string; scenes: Scene[]; video: Manifest['video']; audio: Manifest['audio']; brand: Manifest['brand'] };
-export type ResolvedAsset = Asset & { absolutePath: string; hash: string; bytes: number; width?: number; height?: number; durationSeconds?: number; sourceFps?: number; rotation?: number };
+export type SourceAudioClock = { originSeconds: number; streamIndex: number; firstVideoSeconds: number; startSample: number; endSample: number };
+export type ResolvedAsset = Asset & { absolutePath: string; hash: string; bytes: number; width?: number; height?: number; durationSeconds?: number; sourceFps?: number; rotation?: number; hasAudio?: boolean; sourceClock?: { originSeconds: number; videoStartSeconds: number; audioStartSeconds: number; videoTimeBase: string; audioTimeBase: string; audioStreamIndex: number; nominalFps: number; decoderDelayFrames: number } };
 export type TextLayout = { lines: string[]; fontSize: number; lineHeight: number; x: number; y: number; width: number; height: number; align: 'left' | 'center' };
-export type ResolvedScene = Scene & { startFrame: number; endFrame: number; layout?: TextLayout; captionLayout?: TextLayout; labelLayout?: TextLayout; resolvedCaptions?: { startFrame: number; endFrame: number; text: string }[] };
+export type ResolvedScene = Scene & { startFrame: number; endFrame: number; sourceAudioClock?: SourceAudioClock; layout?: TextLayout; captionLayout?: TextLayout; labelLayout?: TextLayout; resolvedCaptions?: { startFrame: number; endFrame: number; text: string }[] };
 export type ResolvedSpec = Omit<Manifest, 'assets' | 'scenes'> & {
   width: number; height: number; totalFrames: number; projectDir: string;
   assets: Record<string, ResolvedAsset>; scenes: ResolvedScene[];

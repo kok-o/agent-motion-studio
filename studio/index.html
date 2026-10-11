@@ -58,7 +58,7 @@
             <p id="generation-source" class="note"></p><video id="generation-raw" controls playsinline muted preload="metadata"></video>
             <div class="two"><label>Начало нового источника, с<input id="candidate-trim" type="number" min="0" step="any" value="0"></label><label>Кадрирование<select id="candidate-fit"><option value="cover">Заполнить кадр</option><option value="contain">Вписать целиком</option></select></label></div>
             <div class="two"><label>Фокус X (0–1)<input id="candidate-x" type="number" min="0" max="1" step="0.05" value="0.5"></label><label>Фокус Y (0–1)<input id="candidate-y" type="number" min="0" max="1" step="0.05" value="0.5"></label></div>
-            <button id="generation-preview">Предпросмотр применения кандидата</button><video id="generation-preview-player" controls playsinline muted hidden></video><p id="generation-preview-status" class="note"></p>
+            <button id="generation-preview">Предпросмотр применения кандидата</button><video id="generation-preview-player" controls playsinline hidden></video><p id="generation-preview-status" class="note"></p>
             <label class="consent"><input id="generation-viewed" type="checkbox">Посмотрел этот preview с текущими trim/crop и принимаю замену выбранной сцены</label>
             <div class="generation-actions"><button id="generation-accept" class="primary">Принять дубль</button><button id="generation-reject">Отклонить дубль</button></div>
           </div>
@@ -80,13 +80,14 @@
         <div id="text-fields"><label>Текст<textarea id="scene-text" rows="3"></textarea></label><label id="highlight-field">Выделить слова (необязательно)<input id="scene-highlight"></label><label id="label-field">Подпись<input id="scene-label"></label></div>
         <div id="asset-fields"><label>Выбранный исходник / дубль<select id="scene-asset"></select></label><label id="caption-field">Motion-титр<textarea id="scene-caption" rows="2"></textarea></label>
           <label id="trim-field">Начало обрезки, с<input id="trim" type="number" min="0" step="any"></label>
+          <div id="source-audio-fields" hidden><label>Звук исходного видео<select id="source-audio-enabled"><option value="off">Выключен</option><option value="on">Включён</option></select></label><label>Уровень звука видео, dB<input id="source-audio-gain" type="number" min="-60" max="0" step="any" value="0"></label><p class="note">По умолчанию выключен. Preview не сохраняет настройку. Для тихого или непригодного источника явно выключите звук и соберите новый preview.</p></div>
           <label>Кадрирование<select id="fit"><option value="cover">Заполнить кадр</option><option value="contain">Вписать целиком</option></select></label>
           <div class="two"><label>Фокус X (0–1)<input id="focal-x" type="number" min="0" max="1" step="0.05"></label><label>Фокус Y (0–1)<input id="focal-y" type="number" min="0" max="1" step="0.05"></label></div>
         </div>
         <button type="submit" id="save-scene" class="primary wide">Сохранить сцену</button><p id="draft-status" class="note">Все изменения сохранены</p>
       </form>
       <button id="preview-scene" class="wide">Предпросмотр сцены</button><p id="preview-bounds" class="note"></p>
-      <video id="scene-preview" controls playsinline muted hidden></video><p id="preview-status" class="note">Только выбранная сцена, 1080p/30 fps, без звука. Проект не сохраняется. Это рендер сцены, не realtime.</p>
+      <video id="scene-preview" controls playsinline hidden></video><p id="preview-status" class="note">Предпросмотр сцены: 1080p/30 fps с локальным звуком и субтитрами проекта, без сохранения. Нажмите Play, чтобы смотреть и слушать. Звук видео включается отдельно; онлайн-озвучка Edge требует полного экспорта.</p>
       <button id="restore-scene" class="wide">Вернуть предыдущий вариант</button>
       <div class="two scene-order"><button id="move-left">← Раньше</button><button id="move-right">Позже →</button></div><button id="remove-scene" class="quiet wide">Удалить сцену из монтажа</button>
       <hr><label>Формат фильма<select id="aspect"><option value="16:9">16:9 · 1920 × 1080</option><option value="9:16">9:16 · 1080 × 1920</option></select></label><p class="note">Простые склейки. Исходники остаются доступными после правок и возврата версии.</p>

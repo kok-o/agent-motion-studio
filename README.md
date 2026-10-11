@@ -63,7 +63,7 @@ Open the **complete session URL** printed by the CLI. Keep it private. The edito
 
 1. Select scene 2, `first-pour`.
 2. Change **Выбранный исходник / дубль** (source/take) to `first-drops.mp4`; use trim start `1` second and duration `7` seconds.
-3. Click **Предпросмотр сцены** (preview scene). Watch the trimmed/cropped result before saving.
+3. Click **Предпросмотр сцены** (preview scene). Watch and listen before saving; press Play, as preview does not autoplay. Local music and file narration/captions follow the full draft timeline. Source-video audio defaults to Off; explicitly choose On and a gain to include its first audio stream. With no enabled audio source there is no audio track. Online Edge narration requires full export. See [audio and preview limits](docs/AUDIO.md).
 4. Click **Сохранить сцену** (save scene), then **Экспорт MP4**. The full film appears in the main player.
 5. Click **Вернуть предыдущий вариант** (restore previous take) and export again. The original sources remain available.
 
@@ -119,8 +119,8 @@ Default tests use a controlled provider and require no paid calls. This checkout
 
 The current checkout also supports [editable object compositions](docs/COMPOSITION.md): independently positioned/animated text, rect/ellipse graphics and local images. Agents author objects through normal scene actions. Create a project with `agent-motion-studio new --dir ./film --aspect 16:9`, open `agent-motion-studio studio ./film/project.json`, then choose **+ Composition**. Confirmation saves a separate four-second scene revision with one editable text and opens it with the object selected; Cancel saves nothing. In that Studio composition, add text, a rectangle, an ellipse or an image from accepted project sources. Select on the native Canvas or in the layer list, drag/proportionally resize, edit text/geometry and add a geometry keyframe. Base mode also edits text color/size/weight/alignment, shape fill/stroke/rect radius, and layer order. Clear an optional field to restore its default. Each Add creates one selected draft object; Preview, then explicitly Apply the exact edit as one revision. Importing a new image is a separate library revision, and Cancel keeps its source. Drafts stay in memory until Apply or Cancel; selection/scene/aspect/export transitions ask first. External edits require explicit rereading, and an unknown import or commit reply blocks further mutations. Automatically generated object IDs have readable UI captions while native IDs remain unchanged. Composition creation respects the existing 12-scene/60-second limits and requires explicit read reconciliation after an uncertain reply, without resending creation. Fixed fonts/aspects remain; font families and a full timeline are outside this slice.
 
-- Preview is silent and generated on demand. Viewing the entire film requires export.
-- Source-video audio is muted; use a file music track. Narration/captions require full export.
+- Preview is generated on demand with supported local audio and captions. Viewing the entire film requires export; active online Edge narration is excluded from scene preview.
+- Source-video audio defaults Off; explicit On uses its first validated audio stream. File narration/captions on motion scenes are supported in preview; video-scene narration/caption overlays remain unsupported.
 - 1080p/30 fps, 16:9 or 9:16, SDR BT.709, hard cuts in v2. No HDR, realtime timeline or multitrack editor.
 - 12 scenes, 24 assets, 1–60 seconds; the intended workflow is 3–4 scenes / 15–30 seconds.
 - Imports read files into RAM: video ≤512 MiB, images ≤20 MiB, audio ≤100 MiB. Keep renders sequential.

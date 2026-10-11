@@ -251,7 +251,7 @@ export type ProjectAction = OrdinaryAction
 /** Shared by accepted edits and unsaved scene previews. No persistence here. */
 export function patchScene(scene: Scene, patch: Extract<ProjectAction, { type: 'edit-scene' }>['patch']): Scene {
   if (!patch || Object.hasOwn(patch, 'id') || Object.hasOwn(patch, 'type')) throw fail('Scene id/type are stable; add a scene to change its type.');
-  if (Object.keys(patch).some(key => !['durationFrames', 'trimStartSeconds', 'text', 'highlight', 'label', 'asset', 'caption', 'fit', 'focalPoint', 'fontSize', 'narration', 'captions', 'objects', 'background'].includes(key))) throw fail('Scene patch contains unknown additional properties.');
+  if (Object.keys(patch).some(key => !['durationFrames', 'trimStartSeconds', 'sourceAudio', 'text', 'highlight', 'label', 'asset', 'caption', 'fit', 'focalPoint', 'fontSize', 'narration', 'captions', 'objects', 'background'].includes(key))) throw fail('Scene patch contains unknown additional properties.');
   if (scene.type !== 'video' && patch.trimStartSeconds !== undefined && patch.trimStartSeconds !== null) throw fail('trimStartSeconds only applies to video scenes.');
   validateActionShape('patch', patch);
   const revised = { ...scene } as Record<string, unknown>;

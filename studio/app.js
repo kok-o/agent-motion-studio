@@ -2,6 +2,7 @@ import { t, initializeI18n } from './i18n.js';
 import { initGeneration } from './generation-ui.js';
 import { initObjectEditor } from './object-editor.js';
 import { initCompositionEntry, compositionSceneCaption } from './composition-entry.js';
+import { sourceAudioFields, sourceAudioValues, sourceAudioPatch, mergeSourceAudioConflict } from './source-audio.js';
 const $ = id => document.getElementById(id);
 let state, selected, busy = false, dirty = false, jobTimer, stateTimer, formBase, conflict;
 let languageReload = false;
@@ -16,7 +17,7 @@ initializeI18n(() => {
   languageReload = true;
   return true;
 });
-const formIds = ['duration', 'scene-text', 'scene-label', 'scene-caption', 'scene-highlight', 'scene-asset', 'trim', 'fit', 'focal-x', 'focal-y'];
+const formIds = ['duration', 'scene-text', 'scene-label', 'scene-caption', 'scene-highlight', 'scene-asset', 'trim', 'fit', 'focal-x', 'focal-y', ...sourceAudioFields];
 const formValues = () => Object.fromEntries(formIds.map(id => [id, $(id).value]));
 const draftKey = () => `studio-draft:${state.projectPath}`;
 const captureDraft = () => ({ sceneId: selected, etag: state.etag, base: formBase, values: formValues(), scene: current() });
@@ -162,6 +163,7 @@ function paintScene() {
   $('scene-highlight').value = scene.highlight ?? '';
   fillSelect($('scene-asset'), Object.entries(state.manifest.assets).filter(([, asset]) => asset.type === (scene.type === 'video' ? 'video' : 'image')).map(([id, asset]) => [id, asset.name ?? id]), scene.asset);
   $('trim').value = scene.trimStartSeconds ?? 0; $('fit').value = scene.fit ?? 'cover'; $('focal-x').value = scene.focalPoint?.x ?? 0.5; $('focal-y').value = scene.focalPoint?.y ?? 0.5;
+  $('source-audio-fields').hidden = scene.type !== 'video'; for (const [id, value] of Object.entries(sourceAudioValues(scene))) $(id).value = value;
   formBase = formValues(); $('draft-status').textContent = t('Все изменения сохранены'); setSceneConstraints();
   invalidatePreview();
   generation.paintSelection();
@@ -188,15 +190,16 @@ function scenePatch() {
     Object.assign(patch, { asset: $('scene-asset').value, fit: $('fit').value, focalPoint: { x: Number($('focal-x').value), y: Number($('focal-y').value) } });
     if (scene.type === 'video') patch.trimStartSeconds = Number($('trim').value); else patch.caption = $('scene-caption').value;
   } else if (scene.type !== 'composition') { patch.text = $('scene-text').value; if (scene.type === 'cta') patch.label = $('scene-label').value; else { patch.highlight = $('scene-highlight').value || null; patch.label = $('scene-label').value || null; } }
+  const audio = sourceAudioPatch(scene, formBase, formValues()); if (audio) patch.sourceAudio = audio;
   return patch;
 }
 function changedPatch(draft, patch) {
-  const fields = { durationFrames: ['duration'], text: ['scene-text'], label: ['scene-label'], caption: ['scene-caption'], highlight: ['scene-highlight'], asset: ['scene-asset'], trimStartSeconds: ['trim'], fit: ['fit'], focalPoint: ['focal-x', 'focal-y'] };
+  const fields = { durationFrames: ['duration'], text: ['scene-text'], label: ['scene-label'], caption: ['scene-caption'], highlight: ['scene-highlight'], asset: ['scene-asset'], trimStartSeconds: ['trim'], fit: ['fit'], focalPoint: ['focal-x', 'focal-y'], sourceAudio: sourceAudioFields };
   return Object.fromEntries(Object.entries(patch).filter(([key]) => fields[key].some(id => draft.base[id] !== draft.values[id])));
 }
 async function saveScene() { if (visual.active()) { await visual.apply(); return; } await edit({ type: 'edit-scene', sceneId: selected, patch: changedPatch(captureDraft(), scenePatch()) }); }
 function applyDraft(draft) {
-  for (const id of formIds) $(id).value = draft.values[id];
+  for (const id of formIds) $(id).value = draft.values[id] ?? sourceAudioValues(current())[id] ?? '';
   formBase = draft.base; dirty = true; $('draft-status').textContent = t('Есть несохранённые изменения');
   if (state.manifest.assets[$('scene-asset').value]) $('source-preview').replaceChildren(mediaNode({ ...current(), asset: $('scene-asset').value }, true));
   invalidatePreview();
@@ -206,8 +209,8 @@ function applyDraft(draft) {
 async function showConflict(draft, fresh) {
   conflict = { draft, fresh }; rememberDraft();
   const external = fresh.manifest.scenes.find(scene => scene.id === draft.sceneId);
-  const names = { duration: t('Длительность, с'), 'scene-text': t('Текст'), 'scene-label': t('Подпись'), 'scene-caption': t('Титр'), 'scene-highlight': t('Выделение'), 'scene-asset': t('Исходник'), trim: t('Начало, с'), fit: t('Кадрирование'), 'focal-x': t('Фокус X'), 'focal-y': t('Фокус Y') };
-  const externalValues = external ? { duration: fmt(external.durationFrames / 30), 'scene-text': external.text ?? '', 'scene-label': external.label ?? '', 'scene-caption': external.caption ?? '', 'scene-highlight': external.highlight ?? '', 'scene-asset': external.asset ?? '', trim: String(external.trimStartSeconds ?? 0), fit: external.fit ?? 'cover', 'focal-x': String(external.focalPoint?.x ?? .5), 'focal-y': String(external.focalPoint?.y ?? .5) } : {};
+  const names = { duration: t('Длительность, с'), 'scene-text': t('Текст'), 'scene-label': t('Подпись'), 'scene-caption': t('Титр'), 'scene-highlight': t('Выделение'), 'scene-asset': t('Исходник'), trim: t('Начало, с'), fit: t('Кадрирование'), 'focal-x': t('Фокус X'), 'focal-y': t('Фокус Y'), 'source-audio-enabled': t('Звук исходного видео'), 'source-audio-gain': t('Уровень звука видео, dB') };
+  const externalValues = external ? { duration: fmt(external.durationFrames / 30), 'scene-text': external.text ?? '', 'scene-label': external.label ?? '', 'scene-caption': external.caption ?? '', 'scene-highlight': external.highlight ?? '', 'scene-asset': external.asset ?? '', trim: String(external.trimStartSeconds ?? 0), fit: external.fit ?? 'cover', 'focal-x': String(external.focalPoint?.x ?? .5), 'focal-y': String(external.focalPoint?.y ?? .5), ...sourceAudioValues(external) } : {};
   const table = el('table'), head = el('tr'); for (const title of [t('Поле'), t('Ваш черновик'), t('На диске')]) head.append(el('th', title)); table.append(head);
   for (const id of formIds.filter(id => draft.base[id] !== draft.values[id])) { const row = el('tr'); const display = value => id === 'scene-asset' ? fresh.manifest.assets[value]?.name ?? value : value; row.append(el('td', names[id]), el('td', display(draft.values[id])), el('td', external ? display(externalValues[id]) : t('Сцена удалена'))); table.append(row); }
   $('conflict-details').replaceChildren(table);
@@ -219,6 +222,7 @@ async function resolveConflict(useLocal) {
   if (latest.etag !== fresh.etag) { await showConflict(draft, latest); notice(t('Проект снова изменён извне. Проверьте обновлённое сравнение.'), true); return; }
   if (useLocal) {
     const patch = changedPatch(draft, scenePatch());
+    if (patch.sourceAudio) patch.sourceAudio = mergeSourceAudioConflict(patch.sourceAudio, draft.base, draft.values, fresh.manifest.scenes.find(scene => scene.id === draft.sceneId));
     if (patch.focalPoint) {
       const external = fresh.manifest.scenes.find(scene => scene.id === draft.sceneId).focalPoint ?? { x: .5, y: .5 };
       for (const axis of ['x', 'y']) if (draft.base[`focal-${axis}`] === draft.values[`focal-${axis}`]) patch.focalPoint[axis] = external[axis];
@@ -233,7 +237,7 @@ $('conflict-cancel').onclick = () => { conflict = undefined; $('conflict-dialog'
 $('conflict-dialog').oncancel = () => { conflict = undefined; };
 function invalidatePreview() {
   $('scene-preview').pause(); $('scene-preview').hidden = true;
-  $('preview-status').textContent = t('Соберите предпросмотр выбранной сцены: 1080p/30 fps, без звука, без сохранения проекта. Не realtime; проекты с озвучкой/субтитрами пока требуют полного экспорта.');
+  $('preview-status').textContent = t('Предпросмотр сцены: 1080p/30 fps с локальным звуком и субтитрами проекта, без сохранения. Нажмите Play, чтобы смотреть и слушать. Звук видео включается отдельно; онлайн-озвучка Edge требует полного экспорта.');
   const frames = Math.round(Number($('duration').value) * 30), start = current().type === 'video' ? Number($('trim').value) : 0;
   $('preview-bounds').textContent = Number.isFinite(frames) && Number.isFinite(start) ? t`${frames} кадров · ${fmt(frames / 30)} с${current().type === 'video' ? t` · источник ${fmt(start)}–${fmt(start + frames / 30)} с (правая граница исключена)` : ''}` : t('Проверьте длительность и начало.');
 }
@@ -242,7 +246,7 @@ $('preview-scene').onclick = () => task(async () => {
   const patch = scenePatch(); notice(t('Собирается только выбранная сцена из текущих полей…'));
   const result = await post('/api/preview', { type: 'edit-scene', sceneId: selected, patch });
   $('scene-preview').src = result.url; $('scene-preview').hidden = false;
-  $('preview-status').textContent = result.stale ? t('Проект изменён извне во время рендера. Это предпросмотр прежней версии; перечитайте проект.') : t`Предпросмотр готов · ${result.totalFrames} кадров · ${fmt(result.durationSeconds)} с · без звука. Черновик не сохранён.`;
+  $('preview-status').textContent = result.stale ? t('Проект изменён извне во время рендера. Это предпросмотр прежней версии; перечитайте проект.') : t`Предпросмотр готов · ${result.totalFrames} кадров · ${fmt(result.durationSeconds)} с · ${result.verification.audio ? t('со звуком') : t('без звука')}. Черновик не сохранён.`;
   notice(result.stale ? t('Предпросмотр готов, но проект изменился извне. Перечитайте проект.') : t('Предпросмотр готов. Посмотрите отрезок, затем сохраните сцену или продолжите правку.'));
 });
 $('scene-form').oninput = () => { dirty = true; if (visual.active()) visual.scalarChanged(); rememberDraft(); invalidatePreview(); $('draft-status').textContent = t('Есть несохранённые изменения'); generation.paintSelection(); };

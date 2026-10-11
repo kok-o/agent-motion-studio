@@ -8,6 +8,10 @@ import { createHash } from 'node:crypto';
 import { verifyFirstUserKit } from './verify-first-user-kit.mjs';
 import { safeError } from './kit-ui-observer.mjs';
 import { verifyInstalledObjectEditor, stageInstalledEditorScenarios, collectInstalledEditorScenarios } from './object-editor-consumer.mjs';
+import { verifyMusicPreview } from './verify-music-preview.mjs';
+import { verifyOfflinePreview } from './verify-offline-preview.mjs';
+import { verifySourceAudio } from './verify-source-audio.mjs';
+import { retainAudioPreviewEvidence } from './audio-preview-consumer.mjs';
 
 async function main() {
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
@@ -83,6 +87,17 @@ try {
   await editProject(file, { type: 'restore-scene', sceneId: 'first-pour', revisionId: edited.manifest.history.at(-1).id }, edited.etag);
   assert.deepEqual((await readProject(file)).manifest.scenes, initial.manifest.scenes); assert.deepEqual(await sources(), initialHashes);
   report.checks.previewAndRestore = { previewFrames: 210, draftNotSaved: true, otherScenesPreserved: true, sources: initialHashes }; await save();
+  const musicPreview = await verifyMusicPreview(app, join(consumer, 'music-preview'));
+  report.checks.musicPreview = { status: musicPreview.status, cases: musicPreview.cases.length, exactPCMSamplesPerChannel: musicPreview.cases[0].exactPCMSamplesPerChannel, independentTones: musicPreview.cases[0].tones, metrics: musicPreview.cases[0].metrics, humanSoundQuality: 'NOT RUN' };
+  await writeFile(join(out, 'music-preview.json'), JSON.stringify(musicPreview, null, 2)); await save();
+  const offlinePreview = await verifyOfflinePreview(app, join(consumer, 'offline-preview'));
+  report.checks.offlinePreview = { status: offlinePreview.status, cases: offlinePreview.cases.length, samples: offlinePreview.cases[0].exactPCMSamples, captions: offlinePreview.cases[0].captionProof, humanSoundQuality: 'NOT RUN' };
+  await writeFile(join(out, 'offline-preview.json'), JSON.stringify(offlinePreview, null, 2)); await save();
+  const sourceAudio = await verifySourceAudio(app, join(consumer, 'source-audio'));
+  report.checks.sourceAudio = { status: sourceAudio.status, cases: sourceAudio.cases.length, clock: sourceAudio.cases[0].sourceClock, alignment: sourceAudio.cases[0].alignment, humanSoundQuality: 'NOT RUN' };
+  await writeFile(join(out, 'source-audio.json'), JSON.stringify(sourceAudio, null, 2)); await save();
+  const retainedAudio = await retainAudioPreviewEvidence({ music: join(consumer, 'music-preview'), offline: join(consumer, 'offline-preview'), source: join(consumer, 'source-audio') }, join(out, 'audio-preview-evidence'));
+  report.checks.audioPreviewRawEvidence = { status: retainedAudio.status, files: retainedAudio.files.length, manifest: 'audio-preview-evidence/RAW_MANIFEST.json', copiedWithoutMediaRerun: true }; await save();
   const rendered = await cliRun(['render', file, '--out', join(consumer, 'export'), '--no-cache'], 'render');
   assert.equal(rendered.verification.totalFrames, 600); assert.equal(rendered.verification.audio.codec, 'aac');
   await cliRun(['verify', join(consumer, 'export/output.mp4')], 'verify');

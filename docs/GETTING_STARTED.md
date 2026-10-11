@@ -133,10 +133,10 @@ An agent environment must allow the specific CLI commands to spawn local tools, 
 ## Edit, preview, accept and export
 
 1. Select scene 2, `first-pour`. Choose **Выбранный исходник / дубль** (source/take) → `first-drops.mp4`, trim start 1 s, duration 7 s.
-2. Click **Предпросмотр сцены** (preview scene). It renders the unsaved draft silently at output resolution. Watch trim/crop; project/history stay unchanged. Changing fields makes that preview stale.
+2. Click **Предпросмотр сцены** (preview scene). It renders the unsaved draft at output resolution with supported local audio/captions. Press Play to watch trim/crop and listen; project/history stay unchanged. Source-video sound defaults Off; active online Edge narration requires full export. Changing fields makes that preview stale.
 3. Click **Сохранить сцену** (save scene), then **Экспорт MP4** (export MP4). Wait for verified output in the main player/export list. UI exports live in the project's `exports/` folder.
 4. Click **Вернуть предыдущий вариант** (restore previous take), export again, close the page and reopen. Original sources remain.
-5. For your own material use **Импорт файлов** (import files), then **В сцену** (add to scene). Imports copy immutable sources. Music uses a separate track; source-video audio is muted.
+5. For your own material use **Импорт файлов** (import files), then **В сцену** (add to scene). Imports copy immutable sources. Music uses a separate track; source-video audio defaults Off. Explicitly choose On and its gain, preview, then save to include the first source audio stream. [Audio limits](AUDIO.md).
 
 A normal CLI/API `render ... --out NEW_DIRECTORY` keeps that output and saves a separate MP4/manifest snapshot in the project's `exports/` library. Frames/cache are not duplicated. Its result includes `studioExport`; if the library cannot be written safely, the verified `--out` remains and a warning explains why the studio copy is unavailable. Completed exports appear in an open visible studio tab within about two seconds; **Перечитать проект** also refreshes the list. Unsaved form fields and earlier exports are preserved. An already selected older export stays selected; a paused latest export follows new output. Scene previews remain separate and do not enter this full-export library. Reopen the root project JSON with its assets/history; an export's manifest snapshot identifies that video version and uses the project-root assets.
 
@@ -157,6 +157,6 @@ If an agent edits while your form is dirty, **Перечитать проект*
 
 Transfer `project.json`, all accepted `assets/` including history sources, and credits/licenses. Exclude caches, `.studio` jobs, session URLs and private reports. Do not use `resolved-manifest.json` as editable input. Public example derivatives require their credits. [Compatibility](COMPATIBILITY.md) · [Independent user trial](USER_TRIAL_RU.md).
 
-1080p/30 fps, 16:9/9:16, 12 scenes, 24 assets, 1–60 seconds, 100 snapshots. Preview is silent/on demand; narration/captions need full export. v1 remains readable; accepted edits migrate to v2 with history. No HDR, realtime multitrack timeline or local neural-video inference. Keep renders sequential. Failed exports preserve previous results.
+1080p/30 fps, 16:9/9:16, 12 scenes, 24 assets, 1–60 seconds, 100 snapshots. Preview is on demand with local music, file narration/captions on motion scenes and explicitly enabled video sound. Active online Edge narration requires full export; video-scene narration/caption overlays remain unsupported. v1 remains readable; accepted edits migrate to v2 with history. No HDR, realtime multitrack timeline or local neural-video inference. Keep renders sequential. Failed exports preserve previous results.
 
 After a hard kill, inspect the PID in `<project>.edit-lock` or `<output>/.render.lock`; remove a stale lock only after verifying that process stopped. The server is loopback-only for one user. Keep diagnostic paths and personal media out of public reports.

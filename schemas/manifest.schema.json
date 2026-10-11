@@ -429,9 +429,40 @@
               ]
             }
           ]
+        },
+        "sourceAudio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "gainDb": {
+              "$ref": "#/definitions/gain"
+            }
+          }
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "video"
+              }
+            }
+          },
+          "else": {
+            "not": {
+              "required": [
+                "sourceAudio"
+              ]
+            }
+          }
+        },
         {
           "if": {
             "properties": {
