@@ -16,9 +16,9 @@ The demo records the real editor: original MP4 → scene correction → unsaved 
 
 ## Start with the supplied kit
 
-Download `agent-motion-studio-first-user-0.1.0-8e5106ad2a18.zip` from the [pre-release assets](https://github.com/kok-o/agent-motion-studio/releases/tag/v0.1.0), extract it into a new folder, and open its local `START_HERE_RU.md`. The kit includes the built runtime, permitted coffee example, credits and installation instructions. Node.js ≥22.12, Chrome/Chromium/Edge, FFmpeg and ffprobe are separate prerequisites. You do not need a source checkout or TypeScript build. [English installation guide](docs/GETTING_STARTED.md) · [Kit checksums](docs/USER_TRIAL_RU.md).
+For a supplied first-user kit, extract it into a new folder and open its single local `START_HERE_RU.md`. Its identity must match its own `KIT_MANIFEST.json` and `SHA256SUMS.txt`; verify the outer ZIP against the separately supplied checksum. The kit includes the built runtime, permitted coffee example, credits and installation instructions. Node.js ≥22.12, Chrome/Chromium/Edge, FFmpeg and ffprobe are separate prerequisites. You do not need a source checkout or TypeScript build. [English installation guide](docs/GETTING_STARTED.md).
 
-For the first independent human preview, use the supplied fixed kit `agent-motion-studio-first-user-0.1.0-8e5106ad2a18.zip` and its local `START_HERE_RU.md`. [Kit identity and the existing participant route](docs/USER_TRIAL_RU.md) include checksum details; GitHub access, a source checkout and a build are not required for that route. No independent participant or date has been recorded yet. Independent human viewing, listening, usability and setup without developer help remain **NOT RUN**; a stable release has not been declared.
+The [fixed kit and participant route from 8 October](docs/USER_TRIAL_RU.md) remain historical evidence; their archives, stamps and checksums are unchanged. A new kit has its own source identity even while the package stays `0.1.0`; this documentation does not issue or validate a new candidate. Independent human viewing, listening, usability and setup without developer help remain **NOT RUN**; a stable release has not been declared.
 
 ![DAILY RITUAL: real espresso footage and motion typography](docs/media/coffee-contact.jpg)
 
@@ -41,6 +41,8 @@ After watching the original, send two separate corrections:
 The agent uses the local renderer, previews ordinary scene corrections and exports separate versions. Ask it to reopen the saved project or restore a scene/full film through history. Keep the complete project folder with assets and credits when moving it. For an existing film, supply its `project.json` path and continue it; `new` is for a new brief. [Detailed agent workflow and API limits](docs/AGENT_WORKFLOW_RU.md).
 
 ## Try your first remix
+
+For a new object composition, Studio offers **+ Styled composition** and **Selected composition style**. The executable `calm-product`, `kinetic-poster` and `editorial` packages choose native layouts, typography and motion from explicit roles and material length. Preview/Cancel/Apply preserves copy, sources, duration and history; manual fields can be protected. [Installed CLI and limits](docs/AUTHORING_STYLES.md) · [Reproducible technical inputs](examples/authoring-styles/README.md). Restyle with existing captions is currently refused; ordinary object editing and scene preview remain available. Machine fit/bounds/hold checks do not constitute human artistic acceptance.
 
 Install **Node.js ≥22.12**, **Chrome/Chromium/Edge for rendering**, **FFmpeg with libx264/AAC**, and **ffprobe**. Keep FFmpeg/ffprobe on PATH. The app can also use `CHROME_PATH`, `FFMPEG_PATH` and `FFPROBE_PATH`. [macOS commands, HTTPS/SSH and loopback requirements](docs/GETTING_STARTED.md) · [verification scope](docs/COMPATIBILITY.md).
 
@@ -73,7 +75,7 @@ Already have a film? Open its existing `project.json` with `studio`; give that p
 
 ## Use the built runtime
 
-For a manually supplied first-user kit, open its `START_HERE_RU.md`: it includes the runtime, a permitted coffee MP4, credits and a blank human protocol. [Preparation and participant route](docs/USER_TRIAL_RU.md). The kit records its source SHA and technical self-run separately from an independent person's result.
+For a manually supplied first-user kit, open its single `START_HERE_RU.md`: it includes the runtime, a permitted coffee MP4, credits and a blank human protocol. [Installed runtime route](docs/GETTING_STARTED.md#install-a-provided-runtime-archive). The kit records its own source SHA and technical self-run separately from an independent person's result.
 
 The release preparation produces `agent-motion-studio-0.1.0.tgz`. With that file downloaded, install it in an empty folder:
 

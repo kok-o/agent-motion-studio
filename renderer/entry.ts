@@ -1,7 +1,7 @@
 import type { ResolvedScene, TextLayout } from '../src/types.js';
 import type { NativeRenderSpec, NativeRenderer } from './types.js';
 import { drawKineticFrame, kineticLayouts } from './kinetic.js';
-import { drawComposition, validateCompositionLayout } from './composition.js';
+import { drawComposition, validateCompositionLayout, fitStyleText } from './composition.js';
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
 // Export reads back every frame. Keep one software raster path instead of
 // Chrome switching the canvas backend partway through an indexed render.
@@ -162,4 +162,13 @@ function renderSheet(indices: number[]) {
   indices.forEach((frame, index) => { drawFrame(frame); const x = index % cols * thumbWidth, y = Math.floor(index / cols) * (thumbHeight + labelHeight); target.drawImage(canvas, x, y, thumbWidth, thumbHeight); target.fillStyle = '#FFFFFF'; target.font = '16px StudioSans'; target.fillText(`frame ${frame} · ${(frame / 30).toFixed(2)}s`, x + 12, y + thumbHeight + 24); });
   return sheet.toDataURL('image/jpeg', 0.92);
 }
-window.studio = { initialize, renderFrame(frameIndex: number) { drawFrame(frameIndex); return canvas.toDataURL('image/png'); }, renderSheet } satisfies NativeRenderer;
+window.studio = {
+  initialize,
+  renderFrame(frameIndex: number) { drawFrame(frameIndex); return canvas.toDataURL('image/png'); },
+  renderSheet,
+  async fitStyleText(inputs) {
+    await Promise.all(inputs.map(({object, maximum}) => document.fonts.load(`${object.weight ?? 700} ${maximum}px StudioSans`, object.text!)));
+    await document.fonts.ready;
+    return fitStyleText(ctx, inputs);
+  }
+} satisfies NativeRenderer;

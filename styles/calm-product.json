@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1, "id": "calm-product", "version": 1, "label": "Calm product",
+  "instruction": "Use the supplied product image as evidence, with a separate readable text region. Keep exact facts, copy, palette and assets. Choose a side-by-side or stacked layout from the aspect and material. Let text settle early and hold; do not invent a launch sequence or product claims.",
+  "families": ["product-side", "product-stack", "proof-band", "quiet-copy"],
+  "typography": {"headline": 86, "proof": 120, "body": 48, "minimum": 36, "weights": {"headline":700,"proof":700,"body":400}, "align": "left"},
+  "motion": {"arrival": 20, "stagger": 4, "distance": 18, "easing": "outCubic", "revealShortProof": false},
+  "readability": {"minimumHoldFrames": 45, "framesPerWord": 3, "framesPerCharacter": 0.65, "contrast": 4.5},
+  "provenance": [{"source":"Leonxlnx/cinetic","commit":"bee5d7807205d5543472c38312507f9bf366cbbf","paths":["skills/cinetic/assets/library/techniques.json","skills/cinetic/references/craft-rules.md"],"ids":["lc-negative-space-caption","ty-inplace-light-up-beats"],"adaptation":"Original 2D separated regions and bounded native opacity/y arrival; no camera, per-word spans, drift, weight600 or upstream quality claims. Timings are own 30fps defaults."}]
+}

@@ -9,6 +9,7 @@ import { root } from './check-release.mjs';
 import { sha256, verifyKit, recordKitSmoke } from './first-user-kit.mjs';
 import { observeKitPage, safeError, runWithCleanup } from './kit-ui-observer.mjs';
 import { openKitStudio, observeKitStudioHealth } from './kit-studio-process.mjs';
+import { verifyCurrentKitWorkflow } from './current-kit-consumer.mjs';
 
 export async function verifyFirstUserKit(args) {
   const report = { status: 'running', stage: 'kit integrity', testedAt: new Date().toISOString(), commands: [], checks: {}, stages: [], limitations: { independentHuman: 'NOT RUN', liveModel: 'NOT RUN', viewingAndListening: 'NOT RUN', macOSKit: 'NOT RUN', cleanOS: 'NOT RUN' } };
@@ -85,7 +86,7 @@ async function verifyKitRun({ kit, npm, evidence, report, save }) {
     await run([npm, 'init', '-y'], 'npm init -y', { json: false });
     await run([npm, 'install', '--ignore-scripts', '--omit=dev', '--no-audit', '--no-fund', join('..', manifest.runtime.file)], `npm install --ignore-scripts --omit=dev --no-audit --no-fund ../${manifest.runtime.file}`, { json: false });
     const appWithin = relative(consumer, await realpath(app)); assert.ok(!appWithin.startsWith('..') && !isAbsolute(appWithin));
-    const doctor = await cliRun(['doctor'], 'doctor --json'); assert.equal(doctor.ready, true);
+    const doctor = await run([join(dirname(npm), 'npx-cli.js'), '--no-install', 'agent-motion-studio', 'doctor', '--json'], 'npx --no-install agent-motion-studio doctor --json'); assert.equal(doctor.ready, true);
     await checkpoint('doctor', { doctor: true });
     report.environment = { os: doctor.os, node: doctor.node.version, browser: doctor.browser.version, canvas: doctor.browser.canvas, ffmpeg: doctor.ffmpeg.version.trim(), ffprobe: doctor.ffprobe.version.trim(), lowMemory: process.env.AMS_LOW_MEMORY === '1' };
     const installed = await run([join(app, 'scripts/install-agent-skill.mjs'), '--client', 'codex', '--scope', 'project'], 'node node_modules/agent-motion-studio/scripts/install-agent-skill.mjs --client codex --scope project');
@@ -151,6 +152,11 @@ async function verifyKitRun({ kit, npm, evidence, report, save }) {
     const originalFrames = await decode(join(workspace, 'baseline/output.mp4')), restoredFrames = await decode(join(workspace, 'restored/output.mp4'));
     assert.equal(originalFrames, restoredFrames); assert.equal(restoredFrames.split('\n').filter(line => /^0,/.test(line)).length, 600);
     await checkpoint('decode', { restoredAllDecodedFramesEqual: true });
+    // Extend the already installed space/Cyrillic consumer. Keep the original
+    // kit assertions above; do not repeat installation or the whole UI matrix.
+    await studio.close();
+    report.checks.currentWorkflow = await verifyCurrentKitWorkflow({ app, workspace, evidence: join(evidence, 'current-workflow'), cliRun, page });
+    await checkpoint('current style and external-history transfer', { currentWorkflowPassed: true });
     assert.deepEqual(errors, []); assert.deepEqual(await readFile(join(delivered, 'RESULTS_BLANK_RU.md')), blank);
     report.status = 'self-run-passed';
     Object.assign(report.checks, { humanProtocolBlank: true, studioStop: 'controlled SIGINT; native console NOT RUN' });

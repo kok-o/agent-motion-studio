@@ -2,12 +2,14 @@ import { t, initializeI18n } from './i18n.js';
 import { initGeneration } from './generation-ui.js';
 import { initObjectEditor } from './object-editor.js';
 import { initCompositionEntry, compositionSceneCaption } from './composition-entry.js';
+import { initStyleUI } from './style-ui.js';
 import { sourceAudioFields, sourceAudioValues, sourceAudioPatch, mergeSourceAudioConflict } from './source-audio.js';
 const $ = id => document.getElementById(id);
 let state, selected, busy = false, dirty = false, jobTimer, stateTimer, formBase, conflict;
 let languageReload = false;
-let compositionEntry;
+let compositionEntry, styleUI;
 initializeI18n(() => {
+  if (styleUI?.blocksWrites()) { notice(t('Сначала завершите предпросмотр стиля или явно перечитайте проект.'), true); return false; }
   if (compositionEntry?.blocksWrites()) { notice(t('Сначала завершите создание композиции или явно перечитайте проект.'), true); return false; }
   if (visual.active() && (dirty || visual.hasGesture() || visual.hasPicker())) { notice(t('Сначала примените или отмените черновик композиции.'), true); return false; }
   if (dirty) {
@@ -34,17 +36,17 @@ async function api(path, options = {}) {
   return result;
 }
 const post = (path, data) => api(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-function lock(value) { busy = value; document.querySelectorAll('button,input,textarea,select').forEach(node => { node.disabled = value; }); visual.constraints(); compositionEntry?.constraints(); }
+function lock(value) { busy = value; document.querySelectorAll('button,input,textarea,select').forEach(node => { node.disabled = value; }); visual.constraints(); compositionEntry?.constraints(); styleUI?.constraints(); }
 async function task(fn, entryOperation = false) {
-  if (busy || (compositionEntry?.blocksWrites() && !entryOperation)) return;
+  if (busy || ((compositionEntry?.blocksWrites() || styleUI?.blocksWrites()) && !entryOperation)) return;
   lock(true);
   try { await fn(); } catch (error) { if (error.code === 'PROJECT_CONFLICT' && visual.active()) { visual.externalChanged('changed'); } else if (error.code === 'PROJECT_CONFLICT' && dirty) { try { await showConflict(captureDraft(), await api('/api/state')); } catch (readError) { notice(readError.message, true); } } else notice(error.message, true); }
   finally { lock(false); if (state) setSceneConstraints(); }
 }
 const current = () => state.manifest.scenes.find(scene => scene.id === selected);
-const generation = initGeneration({ getState: () => state, getScene: current, isDirty: () => dirty, api, post, notice, refresh: () => refresh(), discardDraft: () => { forgetDraft(); paintScene(); }, isBusy: () => busy || compositionEntry?.blocksWrites() });
+const generation = initGeneration({ getState: () => state, getScene: current, isDirty: () => dirty, api, post, notice, refresh: () => refresh(), discardDraft: () => { forgetDraft(); paintScene(); }, isBusy: () => busy || compositionEntry?.blocksWrites() || styleUI?.blocksWrites() });
 const visual = initObjectEditor({
-  getScene: current, getManifest: () => state.manifest, getPatch: () => ({ durationFrames: Math.round(Number($('duration').value) * 30) }), validatePatch: scenePatch, isDirty: () => dirty, isBusy: () => busy || compositionEntry?.blocksWrites(), api, notice, task,
+  getScene: current, getManifest: () => state.manifest, getPatch: () => ({ durationFrames: Math.round(Number($('duration').value) * 30) }), validatePatch: scenePatch, isDirty: () => dirty, isBusy: () => busy || compositionEntry?.blocksWrites() || styleUI?.blocksWrites(), api, notice, task,
   changed: () => { dirty = true; $('draft-status').textContent = t('Есть несохранённые изменения'); generation.paintSelection(); },
   setDirty: value => { dirty = value; $('draft-status').textContent = t(value ? 'Есть несохранённые изменения' : 'Все изменения сохранены'); },
   discard: () => { forgetDraft(); paintScene(); },
@@ -57,13 +59,19 @@ async function reopenProject(preferredScene) {
   paint(); await generation.refreshLocal();
 }
 compositionEntry = initCompositionEntry({
-  getState: () => state, isBusy: () => busy, hasBlockedEdit: () => visual.isUnknown() || Boolean(conflict), isDirty: () => dirty, isVisual: () => visual.active(), resolveVisual: () => visual.resolveContext(),
+  getState: () => state, isBusy: () => busy, hasBlockedEdit: () => visual.isUnknown() || Boolean(conflict) || styleUI?.blocksWrites(), isDirty: () => dirty, isVisual: () => visual.active(), resolveVisual: () => visual.resolveContext(),
   saveScalar: () => saveScene(), reread: reopenProject, api, notice, task, entryTask: fn => task(fn, true),
   accepted: (result, sceneId) => { state = { ...state, manifest: result.manifest, etag: result.etag, diskEtag: result.etag }; forgetDraft(); visual.reset(); selected = sceneId; paint(); },
   updateControls: () => { lock(busy); if (state) setSceneConstraints(); }
 });
+styleUI = initStyleUI({
+  getState: () => state, getScene: current, isBusy: () => busy, isDirty: () => dirty, isVisual: () => visual.active(), hasBlockedEdit: () => visual.isUnknown() || Boolean(conflict) || compositionEntry.blocksWrites(),
+  resolveVisual: () => visual.resolveContext(), reread: reopenProject, api, notice, task, styleTask: fn => task(fn, true),
+  accepted: (result, sceneId) => { state = { ...state, manifest: result.manifest, etag: result.etag, diskEtag: result.etag }; forgetDraft(); visual.reset(); selected = sceneId; paint(); },
+  updateControls: () => { lock(busy); if (state) setSceneConstraints(); }
+});
 async function contextTask(fn) {
-  if (busy || compositionEntry.blocksWrites()) return;
+  if (busy || compositionEntry.blocksWrites() || styleUI.blocksWrites()) return;
   const aspectChoice = $('aspect').value;
   if (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture() || visual.hasPicker()) && !await visual.resolveContext()) { $('aspect').value = state.manifest.video.aspectRatio; return; }
   $('aspect').value = aspectChoice;
@@ -93,8 +101,9 @@ function setSceneConstraints() {
   generation.updateControls();
   visual.constraints();
   compositionEntry.constraints();
+  styleUI?.constraints();
 }
-async function refresh() { const fresh = await api('/api/state'); if (compositionEntry.blocksWrites() || (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture() || visual.hasPicker()))) { state.exports = fresh.exports; state.diskEtag = fresh.etag; visual.externalChanged(fresh.etag); compositionEntry.externalChanged(fresh.etag); paintExports(); return; } state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id; paint(); await generation.refreshLocal(); }
+async function refresh() { const fresh = await api('/api/state'); if (compositionEntry.blocksWrites() || styleUI.blocksWrites() || (visual.active() && (dirty || visual.isUnknown() || visual.hasGesture() || visual.hasPicker()))) { state.exports = fresh.exports; state.diskEtag = fresh.etag; visual.externalChanged(fresh.etag); compositionEntry.externalChanged(fresh.etag); styleUI.externalChanged(fresh.etag); paintExports(); return; } state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id; paint(); await generation.refreshLocal(); }
 async function edit(action) { await post('/api/edit', action); forgetDraft(); await refresh(); notice(t('Сохранено в project.json. Исходные материалы сохранены.')); }
 function mediaNode(scene, controls = false) {
   if (scene.type === 'composition') return el('div', scene.objects.filter(object => object.type === 'text').slice(0, 3).map(object => object.text).join('\n'), 'text-source');
@@ -252,7 +261,7 @@ $('preview-scene').onclick = () => task(async () => {
 $('scene-form').oninput = () => { dirty = true; if (visual.active()) visual.scalarChanged(); rememberDraft(); invalidatePreview(); $('draft-status').textContent = t('Есть несохранённые изменения'); generation.paintSelection(); };
 $('scene-form').onsubmit = event => { event.preventDefault(); void task(saveScene); };
 $('scene-asset').onchange = () => { const scene = { ...current(), asset: $('scene-asset').value }; $('source-preview').replaceChildren(mediaNode(scene, true)); };
-$('reload').onclick = () => { if (compositionEntry.blocksWrites()) { void compositionEntry.reconcile(); return; } if (visual.active()) { void visual.reopen(); return; } void task(async () => { if (dirty) { const fresh = await api('/api/state'); if (fresh.etag !== state.etag) await showConflict(captureDraft(), fresh); else { state.exports = fresh.exports; paintExports(); notice(t('На диске нет новых изменений. Ваш черновик остаётся в редакторе.')); } } else { await refresh(); notice(t('Проект перечитан с диска.')); } }); };
+$('reload').onclick = () => { if (styleUI.blocksWrites()) { void styleUI.reconcile(); return; } if (compositionEntry.blocksWrites()) { void compositionEntry.reconcile(); return; } if (visual.active()) { void visual.reopen(); return; } void task(async () => { if (dirty) { const fresh = await api('/api/state'); if (fresh.etag !== state.etag) await showConflict(captureDraft(), fresh); else { state.exports = fresh.exports; paintExports(); notice(t('На диске нет новых изменений. Ваш черновик остаётся в редакторе.')); } } else { await refresh(); notice(t('Проект перечитан с диска.')); } }); };
 $('restore-scene').onclick = () => selectedSceneTask(async () => { if (dirty) await saveScene(); const prior = previousScene(); if (prior) await edit({ type: 'restore-scene', sceneId: selected, revisionId: prior.id }); });
 $('remove-scene').onclick = () => selectedSceneTask(async () => { if (dirty) await saveScene(); await edit({ type: 'remove-scene', sceneId: selected }); });
 for (const [id, offset] of [['move-left', -1], ['move-right', 1]]) $(id).onclick = () => selectedSceneTask(async () => { if (dirty) await saveScene(); await edit({ type: 'move-scene', sceneId: selected, index: state.manifest.scenes.findIndex(scene => scene.id === selected) + offset }); });
@@ -279,10 +288,10 @@ async function pollExternalState() {
     if (state !== base || busy || conflict) return;
     const hasNew = fresh.exports.some(item => !state.exports.some(old => old.id === item.id));
     const followLatest = (!$('exports').value || $('exports').value === state.exports[0]?.id) && $('player').paused;
-    if (!compositionEntry.blocksWrites() && !dirty && !visual.isUnknown() && !visual.hasGesture() && !visual.hasPicker() && fresh.etag !== state.etag) {
+    if (!compositionEntry.blocksWrites() && !styleUI.blocksWrites() && !dirty && !visual.isUnknown() && !visual.hasGesture() && !visual.hasPicker() && fresh.etag !== state.etag) {
       state = fresh; selected = state.manifest.scenes.some(scene => scene.id === selected) ? selected : state.manifest.scenes[0].id;
       paint();
-    } else { state.exports = fresh.exports; state.diskEtag = fresh.etag; visual.externalChanged(fresh.etag); compositionEntry.externalChanged(fresh.etag); }
+    } else { state.exports = fresh.exports; state.diskEtag = fresh.etag; visual.externalChanged(fresh.etag); compositionEntry.externalChanged(fresh.etag); styleUI.externalChanged(fresh.etag); }
     paintExports(hasNew && followLatest);
     if (hasNew && !dirty) notice(t('Новый экспорт появился в студии.'));
   } catch { notice(t('Локальная студия остановлена или недоступна. Запустите CLI снова и откройте новую ссылку сессии. Ваш черновик сохранён в этой вкладке.'), true); }
@@ -297,7 +306,7 @@ async function pollJob() {
   } catch (error) { lock(false); notice(t`Связь с локальной студией прервана: ${error.message}. Перезапустите CLI и откройте новую ссылку сессии.`, true); }
 }
 $('export').onclick = () => contextTask(async () => { if (dirty) await saveScene(); await post('/api/export', {}); notice(t('Начался экспорт. Можно просматривать предыдущий MP4.')); jobTimer = setTimeout(pollJob, 100); });
-window.addEventListener('beforeunload', event => { if ((dirty || compositionEntry.blocksWrites()) && !languageReload) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if ((dirty || compositionEntry.blocksWrites() || styleUI.blocksWrites()) && !languageReload) { event.preventDefault(); event.returnValue = ''; } });
 try {
   if (location.hash.length > 1) { await post('/api/session', { token: location.hash.slice(1) }); history.replaceState(null, '', '/'); }
   await refresh(); notice(t('Проект открыт. Изменения сохраняются локально.'));

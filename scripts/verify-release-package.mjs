@@ -12,6 +12,7 @@ import { verifyMusicPreview } from './verify-music-preview.mjs';
 import { verifyOfflinePreview } from './verify-offline-preview.mjs';
 import { verifySourceAudio } from './verify-source-audio.mjs';
 import { retainAudioPreviewEvidence } from './audio-preview-consumer.mjs';
+import { retainStyleEvidence } from './style-evidence-consumer.mjs';
 
 async function main() {
 const root = process.cwd(), npm = process.env.npm_execpath; assert.ok(npm, 'Run through npm run verify:package');
@@ -33,6 +34,8 @@ async function run(args, label) {
   assert.equal(result.code, 0, `${label}: ${result.stderr}`); report.checks[label] = { exitCode: result.code }; await save(); return result.stdout;
 }
 try {
+  const retainedStyles = await retainStyleEvidence(root, join(out, 'style-evidence'));
+  report.checks.styleRawEvidence = { status: retainedStyles.status, files: retainedStyles.files.length, scenarios: retainedStyles.scenarios.length, manifest: 'style-evidence/RAW_MANIFEST.json', collectionOnly: true, humanArtisticAcceptance: 'NOT RUN' }; await save();
   if (latest) {
     const candidate = JSON.parse(await readFile(join(latest.directory, 'candidate.json'), 'utf8'));
     assert.equal(report.sha256, candidate.archives.find(a => a.file.endsWith('.tgz')).sha256);

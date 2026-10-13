@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1, "id": "editorial", "version": 1, "label": "Editorial",
+  "instruction": "Arrange the supplied evidence and copy on an asymmetric grid. Use static 400/700 weight hierarchy and relay attention between separate regions with native opacity/y arrivals. Choose an image-and-fact or text-column family from explicit roles and material length. Keep facts, storage order and accepted manual locks; do not add decorative objects behind text.",
+  "families": ["editorial-image", "editorial-tall", "editorial-columns", "editorial-statement"],
+  "typography": {"headline": 104, "proof": 132, "body": 46, "minimum": 36, "weights": {"headline":400,"proof":700,"body":400}, "align": "left"},
+  "motion": {"arrival": 18, "stagger": 10, "distance": 12, "easing": "inOutCubic", "revealShortProof": false},
+  "readability": {"minimumHoldFrames": 36, "framesPerWord": 3, "framesPerCharacter": 0.65, "contrast": 4.5},
+  "provenance": [{"source":"Leonxlnx/cinetic","commit":"bee5d7807205d5543472c38312507f9bf366cbbf","paths":["skills/cinetic/assets/library/techniques.json","skills/cinetic/references/copy-and-type.md"],"ids":["lc-opposite-corner-relay","ty-inplace-light-up-beats"],"adaptation":"Own asymmetric grid and staggered native arrivals, preserving text and object order. No camera breath, beat detector, word selector or upstream evidence score."}]
+}

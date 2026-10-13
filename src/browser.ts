@@ -6,6 +6,7 @@ import { assertRendererPage } from './browser-contract.js';
 import { packageRoot } from './spec.js';
 import { StudioError } from './errors.js';
 import type { ResolvedSpec, ResolvedScene } from './types.js';
+import type { StyleTextInput, StyleTextFit } from './style-types.js';
 
 export async function openRenderer(spec: ResolvedSpec, chrome: string) {
   const routes = new Map<string, { path: string; type: string }>([
@@ -50,6 +51,9 @@ export async function openRenderer(spec: ResolvedSpec, chrome: string) {
     };
     return {
       spec, captionLayouts: layout.captionLayouts,
+      async fitStyleText(inputs: StyleTextInput[]): Promise<StyleTextFit[]> {
+        return page.evaluate(data => window.studio!.fitStyleText(data), inputs);
+      },
       async frame(index: number) {
         const data = await page.evaluate(frame => (window as unknown as { studio: { renderFrame(index: number): string } }).studio.renderFrame(frame), index);
         return Buffer.from(data.slice(data.indexOf(',') + 1), 'base64');

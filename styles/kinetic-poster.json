@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1, "id": "kinetic-poster", "version": 1, "label": "Kinetic poster",
+  "instruction": "Build a clear typographic hierarchy from the supplied headline, proof and supporting copy. Use fixed readable glyph sizes, staged position/opacity and a short reveal only for an explicitly mapped short proof. Portrait material can form a vertical stack; preserve full copy and a real reading hold. Do not imitate font scaling with width tracks.",
+  "families": ["poster-stack", "poster-media", "poster-proof", "poster-pair"],
+  "typography": {"headline": 144, "proof": 192, "body": 58, "minimum": 36, "weights": {"headline":700,"proof":700,"body":400}, "align": "center"},
+  "motion": {"arrival": 12, "stagger": 6, "distance": 28, "easing": "outCubic", "revealShortProof": true},
+  "readability": {"minimumHoldFrames": 30, "framesPerWord": 3, "framesPerCharacter": 0.65, "contrast": 4.5},
+  "provenance": [{"source":"Leonxlnx/cinetic","commit":"bee5d7807205d5543472c38312507f9bf366cbbf","paths":["skills/cinetic/assets/library/techniques.json","skills/cinetic/references/motion-tokens.md"],"ids":["ty-vertical-word-stack","ty-typeon-timeboxed","ty-inplace-light-up-beats"],"adaptation":"Own stable 2D slots and native y/opacity/reveal tracks at30fps. No spring/container/mask/caret, animated color or glyph scaling. Existing text is never split or rewritten; short proof role is explicit."}]
+}

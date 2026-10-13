@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 import { resolve, join, dirname } from 'node:path';
-import { mkdir, cp, stat, readFile } from 'node:fs/promises';
+import { mkdir, cp, stat, readFile, writeFile } from 'node:fs/promises';
 import { doctor, findTools, cancelProcesses, cancelled, throwIfCancelled } from './runtime.js';
 import { render, validateForRender } from './engine.js';
 import { verifyVideo } from './media.js';
@@ -12,10 +12,11 @@ import { startStudio } from './server.js';
 import { GenerationService } from './generation.js';
 import { createReplicateProvider } from './generation-provider.js';
 import { GenerationStore } from './generation-store.js';
-import { previewScene } from './preview.js';
+import { previewScene, previewStyleAction } from './preview.js';
+import { listStylePackages, compileStyleForProject } from './styles.js';
 import { readJsonInput } from './json-input.js';
 
-const usage = 'agent-motion-studio doctor | new --dir <project> [--aspect 9:16|16:9] [--title TEXT] | state <project.json> | import <project.json> --file <media> [--if-match <etag>] | edit <project.json> --action <action.json> [--if-match <etag>] | preview <project.json> --action <action.json> --if-match <etag> --out <new-directory> | generation <capabilities|prepare|list|status|submit|resume|download|preview|accept|reject|stop|resolve-unknown|bind-store> <project.json> [--job <id>] [--request <file>] [--approval <file>] [--resolution <file>] [--draft <file>] [--preview <id>] [--if-match <etag>] [--operation-id <id>] [--out <directory>] | studio <project.json> [--port 4173] | init <template> --dir <project> | validate <manifest.json> | render <manifest.json> --out <directory> [--overwrite] [--no-cache] | verify <output.mp4> [--json]';
+const usage = 'agent-motion-studio doctor | new --dir <project> [--aspect 9:16|16:9] [--title TEXT] | state <project.json> | import <project.json> --file <media> [--if-match <etag>] | edit <project.json> --action <action.json> [--if-match <etag>] | preview <project.json> --action <action.json> --if-match <etag> --out <new-directory> | styles | style-compile <project.json> --request <request.json> --if-match <etag> --out <new-action.json> | style-preview <project.json> --request <request.json> --if-match <etag> --out <new-directory> | generation <capabilities|prepare|list|status|submit|resume|download|preview|accept|reject|stop|resolve-unknown|bind-store> <project.json> [--job <id>] [--request <file>] [--approval <file>] [--resolution <file>] [--draft <file>] [--preview <id>] [--if-match <etag>] [--operation-id <id>] [--out <directory>] | studio <project.json> [--port 4173] | init <template> --dir <project> | validate <manifest.json> | render <manifest.json> --out <directory> [--overwrite] [--no-cache] | verify <output.mp4> [--json]';
 process.on('SIGINT', () => cancelProcesses()); process.on('SIGTERM', () => cancelProcesses());
 try {
   const { values, positionals } = (() => {
@@ -37,6 +38,28 @@ try {
     else if (command === 'state') {
       if (!input) throw new StudioError('INVALID_COMMAND', 'input', 'state requires <project.json>', 2);
       result = await readProject(resolve(input));
+    }
+    else if (command === 'styles') {
+      if(input||values.request||values.out)throw new StudioError('INVALID_COMMAND','input','styles lists distributed packages without project/request/output arguments.',2);
+      result={packages:await listStylePackages(),humanArtisticAcceptance:'NOT RUN'};
+    }
+    else if(command==='style-compile'||command==='style-preview'){
+      if(!input||!values.request||!values['if-match']||!values.out)throw new StudioError('INVALID_COMMAND','input',`${command} requires PROJECT --request FILE --if-match ETAG --out NEW_PATH.`,2);
+      const compiled=await compileStyleForProject(resolve(input),await readJsonInput(values.request),values['if-match']),output=resolve(values.out);
+      if(command==='style-compile'){
+        await mkdir(dirname(output),{recursive:true});
+        try{await writeFile(output,JSON.stringify(compiled.action,null,2)+'\n',{flag:'wx'});}
+        catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')throw new StudioError('OUTPUT_EXISTS','style','Choose a fresh action path; existing bytes were kept.',2);throw error;}
+        result={...compiled,actionFile:output,acceptedProjectWritten:false};
+      }else{
+        await mkdir(dirname(output),{recursive:true});
+        try{await mkdir(output);}
+        catch(error){if((error as NodeJS.ErrnoException).code==='EEXIST')throw new StudioError('OUTPUT_EXISTS','style','Choose a fresh preview directory; existing bytes were kept.',2);throw error;}
+        const preview=await previewStyleAction(resolve(input),compiled.action,compiled.etag,output);
+        await writeFile(join(output,'action.json'),JSON.stringify(compiled.action,null,2)+'\n',{flag:'wx'});
+        await writeFile(join(output,'style-audit.json'),JSON.stringify(compiled.audit,null,2)+'\n',{flag:'wx'});
+        result={...compiled,...preview,output:join(output,'output.mp4'),actionFile:join(output,'action.json'),acceptedProjectWritten:false};
+      }
     }
     else if (command === 'import') {
       if (!input || !values.file) throw new StudioError('INVALID_COMMAND', 'input', 'import requires <project.json> and --file <media>', 2);

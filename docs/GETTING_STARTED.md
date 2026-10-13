@@ -84,7 +84,7 @@ Both reports must say `cache.status: "disabled"`. Compare full decoded frames an
 
 ## Install a provided runtime archive
 
-If you received a first-user kit, follow its `START_HERE_RU.md`; it uses this runtime route and the bundled coffee project. [Kit instructions and empty human protocol](USER_TRIAL_RU.md).
+If you received a first-user kit, follow its single `START_HERE_RU.md`; it uses this runtime route and the bundled coffee project. Verify that kit's source SHA and runtime hash against its `KIT_MANIFEST.json` and `SHA256SUMS.txt`, plus the separately supplied outer ZIP checksum. [Empty human protocol](USER_TRIAL_RESULTS_RU.md).
 
 Use this route if you already have `agent-motion-studio-0.1.0.tgz`. No npm-registry package or published release archive is promised. In an empty workspace, replace the archive path with its actual location:
 
@@ -155,7 +155,7 @@ Use local tools only; no paid calls or uploads. Do not create a new film.
 
 If an agent edits while your form is dirty, **Перечитать проект** (reload) compares both versions. **Применить мои изменённые поля** applies only your changed fields to the fresh version. **Принять внешнюю, отбросить черновик** discards your draft after your explicit choice. A second edit requires another decision; never blindly retry a stale save.
 
-Transfer `project.json`, all accepted `assets/` including history sources, and credits/licenses. Exclude caches, `.studio` jobs, session URLs and private reports. Do not use `resolved-manifest.json` as editable input. Public example derivatives require their credits. [Compatibility](COMPATIBILITY.md) · [Independent user trial](USER_TRIAL_RU.md).
+Transfer the **complete project folder**, preserving its relative layout: the root project JSON, all accepted `assets/` including history sources, hidden `.history/`, credits/licenses/provenance and accepted `exports/` with their MP4/manifest snapshots. The root JSON alone holds only the recent inline history cache. Exclude only caches, private `.studio` jobs and temporary session artifacts from the shared copy; keep the original private copy for recovery of uncertain generated operations. Change accepted JSON through the project API; do not use `resolved-manifest.json` as editable input. Reopen the transferred JSON with `studio`, without repeating `new`/`init`. Public example derivatives require their credits. [Compatibility](COMPATIBILITY.md) · [Empty human protocol](USER_TRIAL_RESULTS_RU.md).
 
 1080p/30 fps, 16:9/9:16, 12 scenes, 24 assets, 1–60 seconds, 100 snapshots. Preview is on demand with local music, file narration/captions on motion scenes and explicitly enabled video sound. Active online Edge narration requires full export; video-scene narration/caption overlays remain unsupported. v1 remains readable; accepted edits migrate to v2 with history. No HDR, realtime multitrack timeline or local neural-video inference. Keep renders sequential. Failed exports preserve previous results.
 

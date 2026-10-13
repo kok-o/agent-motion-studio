@@ -1,0 +1,46 @@
+{
+  "source": "Rieranthony/product-film-skill",
+  "commit": "fe11efc429d5903e37274d0b294e1b95745b2881",
+  "license": "MIT",
+  "licenseFile": "LICENSE",
+  "checkedSourceFiles": [
+    {
+      "repo": "Rieranthony/product-film-skill",
+      "commit": "fe11efc429d5903e37274d0b294e1b95745b2881",
+      "path": "LICENSE",
+      "blob": "78325604ab5deba4e1718604e969e88dfde63672",
+      "sha256": "b9421b7e71d950f1fe2979d1424befd73870a77b8e8c9ab453c4e2c84894423b",
+      "bytes": 1068,
+      "url": "https://github.com/Rieranthony/product-film-skill/blob/fe11efc429d5903e37274d0b294e1b95745b2881/LICENSE"
+    },
+    {
+      "repo": "Rieranthony/product-film-skill",
+      "commit": "fe11efc429d5903e37274d0b294e1b95745b2881",
+      "path": "plugins/product-film/skills/product-film/templates/BRAND.md",
+      "blob": "786cc826c840167c78d8f11be777409f71705dd3",
+      "sha256": "8c2edd875d3424087f7d131ce44bf6439e2d6a8ba4bc5a63ca6d7629d9c509c8",
+      "bytes": 3309,
+      "url": "https://github.com/Rieranthony/product-film-skill/blob/fe11efc429d5903e37274d0b294e1b95745b2881/plugins/product-film/skills/product-film/templates/BRAND.md"
+    },
+    {
+      "repo": "Rieranthony/product-film-skill",
+      "commit": "fe11efc429d5903e37274d0b294e1b95745b2881",
+      "path": "plugins/product-film/skills/product-film/reference/review.md",
+      "blob": "bbe4c92e5f683416be921032d41bd3c8e098baaa",
+      "sha256": "d5aca2151d6a50f35dbea6eaee90fe208ef1ece98ef20a7216e0670d129cb284",
+      "bytes": 2698,
+      "url": "https://github.com/Rieranthony/product-film-skill/blob/fe11efc429d5903e37274d0b294e1b95745b2881/plugins/product-film/skills/product-film/reference/review.md"
+    },
+    {
+      "repo": "Rieranthony/product-film-skill",
+      "commit": "fe11efc429d5903e37274d0b294e1b95745b2881",
+      "path": "plugins/product-film/skills/product-film/reference/story.md",
+      "blob": "939f786d909bc2f7de5ccb6603823e61ce3a5fba",
+      "sha256": "a74a1f5cb8b6cad33271e90baadd439ec5ba82c185c137465d78c20967856a19",
+      "bytes": 2544,
+      "url": "https://github.com/Rieranthony/product-film-skill/blob/fe11efc429d5903e37274d0b294e1b95745b2881/plugins/product-film/skills/product-film/reference/story.md"
+    }
+  ],
+  "adaptation": "A small original review checklist in docs/AUTHORING_STYLES.md and bundled references/styles.md: material and purpose first, explicit source/brand constraints, facts separate from emphasis, independent human review. No mandatory story/scenes, original template/prompt text, code, media, fonts, scripts or hooks are distributed/executed.",
+  "humanArtisticAcceptance": "NOT RUN"
+}

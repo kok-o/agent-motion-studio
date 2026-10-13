@@ -108,7 +108,18 @@
     "dist/studio/composition-entry.js",
     "dist/studio/native-fonts.css",
     "third-party/hyperframes",
-    "dist/studio/source-audio.js"
+    "dist/studio/source-audio.js",
+    "dist/style-types.js",
+    "dist/style-layout.js",
+    "dist/style-audit.js",
+    "dist/styles.js",
+    "dist/studio/style-ui.js",
+    "styles",
+    "docs/AUTHORING_STYLES.md",
+    "examples/authoring-styles",
+    "third-party/cinetic",
+    "third-party/product-film-skill",
+    "docs/CURRENT_KIT_START_HERE_RU.md"
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
@@ -121,7 +132,7 @@
     "verify:studio": "node scripts/verify-studio.mjs",
     "check:release": "node scripts/check-release.mjs",
     "check": "npm run build && npm test && npm run check:release",
-    "test:integration": "node --test --test-concurrency=1 tests/integration/audio.test.mjs tests/integration/brief-visual.test.mjs tests/integration/browser-contract.test.mjs tests/integration/cache.test.mjs tests/integration/composition.test.mjs tests/integration/conflict.test.mjs tests/integration/doctor.test.mjs tests/integration/edit-contract.test.mjs tests/integration/edit-catalog.test.mjs tests/integration/generated-take.test.mjs tests/integration/generation-service.test.mjs tests/integration/generation-ui.test.mjs tests/integration/h1-m7-m1-regressions.test.mjs tests/integration/i18n.test.mjs tests/integration/kinetic.test.mjs tests/integration/kit-ui-observer.test.mjs tests/integration/object-editor.test.mjs tests/integration/preview.test.mjs tests/integration/music-preview.test.mjs tests/integration/offline-preview.test.mjs tests/integration/source-audio.test.mjs tests/integration/publication.test.mjs tests/integration/renderer.test.mjs tests/integration/source-mutation.test.mjs tests/integration/studio-sync.test.mjs tests/integration/studio.test.mjs",
+    "test:integration": "node scripts/run-integration.mjs --test --test-concurrency=1 tests/integration/audio.test.mjs tests/integration/brief-visual.test.mjs tests/integration/browser-contract.test.mjs tests/integration/cache.test.mjs tests/integration/composition.test.mjs tests/integration/conflict.test.mjs tests/integration/doctor.test.mjs tests/integration/edit-contract.test.mjs tests/integration/edit-catalog.test.mjs tests/integration/generated-take.test.mjs tests/integration/generation-service.test.mjs tests/integration/generation-ui.test.mjs tests/integration/h1-m7-m1-regressions.test.mjs tests/integration/i18n.test.mjs tests/integration/kinetic.test.mjs tests/integration/kit-ui-observer.test.mjs tests/integration/object-editor.test.mjs tests/integration/preview.test.mjs tests/integration/music-preview.test.mjs tests/integration/offline-preview.test.mjs tests/integration/source-audio.test.mjs tests/integration/publication.test.mjs tests/integration/renderer.test.mjs tests/integration/source-mutation.test.mjs tests/integration/studio-sync.test.mjs tests/integration/studio.test.mjs tests/integration/styles.test.mjs tests/integration/style-server.test.mjs tests/integration/style-matrix.test.mjs tests/integration/style-ui.test.mjs",
     "test:generation": "node --test --test-concurrency=1 tests/unit/generation*.test.mjs tests/unit/project-generation.test.mjs tests/integration/generated-take.test.mjs tests/integration/generation-service.test.mjs tests/integration/generation-ui.test.mjs tests/integration/source-mutation.test.mjs",
     "test:generation:live": "node scripts/generation-live.mjs",
     "test:edge": "node --test tests/integration/edge.test.mjs",

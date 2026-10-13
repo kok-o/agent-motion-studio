@@ -1,5 +1,6 @@
 import type { CompositionObject, ResolvedScene } from '../src/types.js';
 import type { NativeRenderSpec } from './types.js';
+import type { StyleTextInput, StyleTextFit } from '../src/style-types.js';
 import { sampleObject } from '../src/composition.js';
 
 function color(value: string | undefined, spec: NativeRenderSpec) {
@@ -20,6 +21,18 @@ function lines(ctx: CanvasRenderingContext2D, object: CompositionObject, width: 
   }
   if (result.length * (object.fontSize ?? 48) * 1.25 > height) throw new Error(`TEXT_OVERFLOW: object ${object.id}; enlarge its height or shorten text.`);
   return result;
+}
+/** Uses the very same wrapping/fit implementation as native frame rendering. */
+export function fitStyleText(ctx: CanvasRenderingContext2D, inputs: StyleTextInput[]): StyleTextFit[] {
+  return inputs.map(({object, minimum, maximum}) => {
+    const width = Math.min(object.width, ...(object.keyframes ?? []).flatMap(key => key.width === undefined ? [] : [key.width]));
+    const height = Math.min(object.height, ...(object.keyframes ?? []).flatMap(key => key.height === undefined ? [] : [key.height]));
+    for (let fontSize = maximum; fontSize >= minimum; fontSize--) {
+      try { const measured = lines(ctx, {...object, fontSize}, width, height); return {objectId:object.id,fontSize,lines:measured,lineHeight:fontSize*1.25}; }
+      catch (error) { if (!(error instanceof Error) || !error.message.startsWith('TEXT_OVERFLOW')) throw error; }
+    }
+    throw new Error(`TEXT_OVERFLOW: object ${object.id} cannot fit at ${minimum}px. Allow layout/typography changes or revise the material explicitly.`);
+  });
 }
 export function validateCompositionLayout(ctx: CanvasRenderingContext2D, scene: ResolvedScene) {
   for (const object of scene.objects ?? []) if (object.type === 'text') {
